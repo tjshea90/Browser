@@ -740,4 +740,18 @@ class OwnerRulesTest {
         assertTrue("Settings can put it back", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Reset the downloads window"))
         assertTrue("the frame it floats in lets every touch through where the window is not", pop.contains("val view = FrameLayout(ctx)") && !pop.contains("view.isClickable"))
     }
+    @Test fun ownerBackButtonRequestIsActedOn() {
+        // BK10 (owner 2026-11-21: "The back button needs to be improved. Sometimes ... it takes a long time to load while it is stuck on a picture of the page ... Caching sites for instant reloading may be the answer")
+        val bg = source("geckoapp/src/main/assets/kestrel-shields/background.js")
+        assertTrue("the extension relaxes no-store for main pages only, in blocking mode, and only when the app says so", bg.contains("types: ['main_frame']") && bg.contains("if (!bkMode || d.method !== 'GET'") && bg.contains("bkMode = parts[6] === '1'"))
+        assertTrue("never in a private tab, never with a name or password in the address, never where no-store is a safety rule", bg.contains("if (d.incognito) return {}") && bg.contains("u.username || u.password || bkSensitive(u)"))
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("the page answer carries the switch as its seventh field", bridge.contains("""pictureCap() + ":" + (if (prefs().instantBack) 1 else 0)"""))
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("on by default, as the owner asked for caching", prefs.contains("""bool("instant_back", true)"""))
+        assertTrue("the owner can turn it off", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Instant Back\""))
+        assertTrue("eight pictures of the pages left, not four", source("app/src/main/kotlin/app/kestrel/browser/ui/BackPictures.kt").contains("const val MAX = 8"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("a Back picture that waits shows a loading line after 1 s and the site's name after 4 s, and both go with the picture", act.contains("postDelayed(backWaitLine, 1_000L)") && act.contains("postDelayed(backWaitNote, 4_000L)") && act.contains("removeCallbacks(backWaitLine)"))
+    }
 }

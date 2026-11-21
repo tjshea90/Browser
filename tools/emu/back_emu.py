@@ -56,8 +56,8 @@ def health(pattern):
     return [ln.split("KestrelHealth:", 1)[-1].strip() for ln in out.splitlines() if re.search(pattern, ln)]
 
 
-def round_(case, port, log, place=1800):
-    url = "http://localhost:%d/back-%s?y=%d" % (port, case, place)
+def round_(case, port, log, place=1800, prefix=""):
+    url = "http://localhost:%d%s/back-%s?y=%d" % (port, prefix, case, place)
     adb("reverse", "tcp:%d" % port, "tcp:%d" % port)
     adb("logcat", "-c")
     off0 = size(log)
@@ -81,7 +81,7 @@ def round_(case, port, log, place=1800):
     time.sleep(3.5)  # the lab closes a press 3 s after its show
     after = lines_since(log, off1)
     persisted = any("persisted=true" in l for l in after if "pageshow back-%s" % case in l)
-    got = any(("GET /back-%s" % case) in l for l in after)
+    got = any(("GET %s/back-%s" % (prefix, case)) in l for l in after)
     y500 = next((int(l.split()[-2]) for l in after if "y+500 back-%s" % case in l), None)
     y2000 = next((int(l.split()[-2]) for l in after if "y+2000 back-%s" % case in l), None)
     print("--- page's own view after Back (%s)" % case)

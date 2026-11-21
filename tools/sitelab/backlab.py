@@ -78,6 +78,8 @@ try { var ms = new MediaSource(); document.getElementById('v').src = URL.createO
 PAGES = {
     "/back-static": (lambda: tall("back-static"), "max-age=600"),
     "/back-nostore": (lambda: tall("back-nostore"), "no-store"),
+    # BK10: the same page under a sign-in path: Instant Back must leave its no-store alone (the control of the A/B)
+    "/login/back-nostore": (lambda: tall("back-nostore"), "no-store"),
     "/back-dynamic": (lambda: tall("back-dynamic", n=8, extra_script=DYNAMIC_SCRIPT, auto_delay=1300), "no-store"),
     "/back-loading": (lambda: tall("back-loading", extra_body='<img src="/slow?s=90" width="1" height="1" alt="">'), "max-age=600"),
     "/back-mse": (lambda: tall("back-mse", n=40, extra_body=MSE_BODY, extra_script=MSE_SCRIPT), "max-age=600"),

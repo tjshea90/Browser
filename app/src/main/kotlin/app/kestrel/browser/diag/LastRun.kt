@@ -294,5 +294,8 @@ object LastRun {
     private fun stamp(ms: Long): String = if (ms <= 0) "?" else SimpleDateFormat("yyyy-MM-dd HH:mm:ss 'UTC'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
 
     /** Test hook: forget this process's state so a test can start a fresh "run". */
+    /** LD1: did the run before this one end badly (a crash, a kill, a freeze)? The live diagnostics send sooner after one. */
+    fun previousEndedBadly(): Boolean = synchronized(lock) { previousAbnormal }
+
     internal fun resetForTest() { synchronized(lock) { dir = null; previous = null; previousAbnormal = false; events.clear(); flushQueued = false; state = "starting" } }
 }

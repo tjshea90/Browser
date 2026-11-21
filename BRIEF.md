@@ -13,7 +13,7 @@ conditional filter-list refresh and the daily release check, never reload backgr
 ## Owner facts (authoritative)
 - Anything typed in the address bar that is not an address is searched on **Google** (default engine = first entry of `Prefs.ENGINES`).
 - Licensed third-party products/sources are allowed (personal, non-commercial; the owner obtains permissions) - still record each licence in `docs/FILTER-LISTS.md`.
-- Explicitly NO news, AI, rewards, wallet/web3, VPN, sync/accounts, Tor, telemetry, or other bloat. Brave-like Shields + security hardening only. No Brave name/logo.
+- Explicitly NO news, AI, rewards, wallet/web3, VPN, sync/accounts, Tor, vendor telemetry, or other bloat. Exception, owner decision 2026-11-21 (LD1): live diagnostics to the owner's PRIVATE repo, scrubbed, with the owner's token and a master off switch (research/LIVE_DIAG.md). Brave-like Shields + security hardening only. No Brave name/logo.
 - Wants it fast, snappy, lightweight. Prefers longer sessions and more usage if the product is better, but wants usage spent efficiently.
 - **GitHub Actions builds and releases every APK** (2026-11-11: "From now on, use github actions to build and release apks and release them on github"), with the
   checkpoint/save system of the owner's other repos (Launcher, Portfolio).

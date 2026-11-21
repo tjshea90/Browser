@@ -638,4 +638,57 @@ class MediaListFramesTest {
         late.applyStream(master, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0)
         assertEquals(1, late.usableCount())
     }
+    // ---- RVW5: numbered parts of a stream served as plain .mp4 files (measured on abcnews.com's live stream with tools/sitelab/realfinder.js)
+
+    private val LIVE = "https://abcnews-livestreams.akamaized.net/out/v1/b95119c72ad7477ca49c4d9dfd1271d5/abcn-live-08-mp-channel_video_3_"
+
+    @Test fun aRunOfNumberedMp4PartsIsNotAListOfVideos() {
+        val l = MediaList()
+        l.add(hls("https://abcnews-livestreams.akamaized.net/out/v1/b95119c72ad7477ca49c4d9dfd1271d5/abcn-live-08-cmaf-manifest/abcn-live-08-index.m3u8"))
+        for (n in 5979705..5979709) l.add(file("${LIVE}$n.mp4?m=1758051957", 1_126_881L))
+        assertEquals("only the playlist is offered", 1, l.usable().size)
+        assertEquals(1, l.usableCount())
+        assertEquals(5, l.size.minus(1))
+        assertTrue(l.usable().none { it.kind == MediaKind.FILE })
+    }
+
+    @Test fun twoNumberedFilesAreStillTwoFilesAndOnlyTheThirdMakesARun() {
+        val l = MediaList()
+        l.add(file("${LIVE}5979705.mp4", 9_000_000)); l.add(file("${LIVE}5979706.mp4", 9_000_000))
+        assertEquals("two are two videos", 2, l.usable().size)
+        l.add(file("${LIVE}5979707.mp4", 9_000_000))
+        assertEquals("three consecutive numbers are a run: all three are parts", 0, l.usable().size)
+        val late = file("${LIVE}5979790.mp4", 9_000_000)
+        l.add(late)
+        assertTrue("the run goes on: the next part (near the others) is a part at once", late.part)
+        val far = file("${LIVE}5990000.mp4", 9_000_000)
+        l.add(far)
+        assertFalse("a number far from the run is a file of its own", far.part)
+    }
+
+    @Test fun qualityNamesYearsAndSeparateFilmsAreNeverTakenForParts() {
+        val l = MediaList()
+        for (h in listOf(720, 1080, 1440, 2160)) l.add(file("https://c.test/v/movie_$h.mp4", 50_000_000))          // four digits: a quality, not a counter
+        for (y in listOf(2019, 2020, 2021)) l.add(file("https://c.test/v/film_$y.mp4", 60_000_000))
+        for (id in listOf(1048576, 2097152, 3145728)) l.add(file("https://c.test/m/$id.mp4", 70_000_000))              // five or more digits but far apart: separate films
+        assertEquals(10, l.usable().size)
+        assertTrue(l.usable().none { it.part })
+    }
+
+    @Test fun aPartThePersonLongPressedIsKeptInTheList() {
+        val l = MediaList()
+        for (n in 5979705..5979707) l.add(file("${LIVE}$n.mp4", 1_100_000))
+        assertEquals(0, l.usable().size)
+        l.touch("${LIVE}5979706.mp4")
+        assertEquals("what the person pressed is theirs to save", listOf("${LIVE}5979706.mp4"), l.usable().map { it.url })
+    }
+
+    @Test fun theSerialNameIsReadFromTheLastLongNumberBeforeTheExtensionOnly() {
+        val a = SerialName.of("https://cdn.test/x/y/live_video_3_5979705.mp4?m=17")!!
+        assertEquals(5979705L, a.no)
+        assertEquals(a.family, SerialName.of("https://cdn.test/x/y/live_video_3_5979706.MP4")!!.family.replace(".mp4", ".mp4"))
+        assertNull("no long number", SerialName.of("https://cdn.test/x/clip_1080.mp4"))
+        assertNull("the number is not right before the extension", SerialName.of("https://cdn.test/x/clip_5979705_hd.mp4"))
+        assertNull("no directory", SerialName.of("mp4"))
+    }
 }

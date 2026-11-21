@@ -557,7 +557,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -628,6 +628,8 @@ open class BrowserActivity : Activity(), DockListener {
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
+        app.kestrel.browser.diag.LiveDiag.setExtraFacts { liveDiagExtraFacts() }
+        app.kestrel.browser.diag.LiveDiag.onFront { liveDiagSnapshot() }  // LD1: 2 minutes after the app is in front, IF the switch is on, a token is saved and the schedule allows (<= 4 a day)
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
         if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
         if (!artNoted) Io.main.postDelayed({ noteArtStatus() }, 30_000)  // LAB5: is this install compiled with the baseline profile yet? (one Health line per run)
@@ -1534,7 +1536,14 @@ open class BrowserActivity : Activity(), DockListener {
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
         showRestoring(t, false, "", b.picture, 0x33) // stays until the page is painted AND back at its place (backCheck, 20 s at most): taking it away earlier would show the page the owner just left, or the top of this one
         backCover = BackCover(t, b.savedY)
+        // BK10 (owner: "stuck on a picture of the page"): a picture that looks like the page but does not answer looks frozen. After 1 s a thin line runs along the top edge (the page is loading), after 4 s a note says which site
+        backWaitHost = if (t.isPrivateTab) "" else (UrlParts.hostOf(t.url) ?: "")
+        Io.main.removeCallbacks(backWaitLine); Io.main.removeCallbacks(backWaitNote)
+        Io.main.postDelayed(backWaitLine, 1_000L); Io.main.postDelayed(backWaitNote, 4_000L)
     }
+    private var backWaitHost = ""
+    private val backWaitLine = Runnable { if (backCover != null) restoreOverlay.setWait(true, "") }
+    private val backWaitNote = Runnable { if (backCover != null) restoreOverlay.setWait(true, if (backWaitHost.isNotEmpty()) "Still loading $backWaitHost" else "Still loading") }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
     internal fun goForward(t: Tab) { armBackPicture(t, +1); t.session?.goForward() }
@@ -1544,6 +1553,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (t !== current || t.session == null) return
         val st = t.gecko.state
         if (st == null) { Health.log("tabs", "back-arm", "no state"); return }
+        // BK10: the copy of the history must describe the page on screen, or the picture of the wrong page would cover the right one (the engine's copy arrives a moment after a commit)
+        if (!BackScrollRules.sameAddress(if (st.currentIndex in 0 until st.size) st[st.currentIndex].uri else null, t.url)) { Health.count("back.stale-state"); Health.log("tabs", "back-arm", "stale state (index ${st.currentIndex} of ${st.size}): no picture"); return }
         val i = st.currentIndex + delta
         if (i !in 0 until st.size) { Health.log("tabs", "back-arm", "index $i of ${st.size}"); return }
         val url = st[i].uri ?: return
@@ -2542,6 +2553,27 @@ open class BrowserActivity : Activity(), DockListener {
         return "Tab previews: ${tabs.size} tabs, ${withPic.size} with a preview, $wrong for the WRONG page (must be 0); late pictures thrown away because the tab had moved on: ${Health.counter("tabs.thumb.dropped")}"
     }
 
+    /**
+     * LD1: the text the live diagnostics send along with the journal: the Diagnostics facts WITHOUT the event ring (the journal already holds the whitelisted events). Built on the UI thread; LiveDiag scrubs every
+     * line. Lines that name the page in front are left out while a private tab is in front.
+     */
+    private fun liveDiagSnapshot(): String {
+        val inPrivate = current?.isPrivateTab == true
+        val facts = engineFacts().filter { !(inPrivate && (it.startsWith("Firefox's own tracking protection, this page") || it.contains("this page"))) }
+        return try { Health.report(this, facts, 0) } catch (e: Throwable) { "" }
+    }
+
+    /** LD2: numbers only this activity and the player know (screen-update counts, the player's counters, tab counts). No text. Read on the UI thread, only while the live-diagnostics switch is on. */
+    private fun liveDiagExtraFacts(): Map<String, Long> {
+        val m = LinkedHashMap<String, Long>()
+        m["slowFrames"] = slowFrames.toLong(); m["worstFrameMs"] = worstFrameMs
+        val n = app.kestrel.browser.web.NativePlayerStats
+        m["plays"] = n.plays.toLong(); m["playErrors"] = n.errors.toLong(); m["framesShown"] = n.framesShown; m["framesDropped"] = n.framesDropped
+        m["playStalls"] = n.stalls.toLong(); m["playStalledMs"] = n.stalledMs; m["linkKbps"] = n.linkBps / 1000L; m["decoderHw"] = when (n.decoderHardware) { true -> 1L; false -> 0L; else -> -1L }
+        m["tabs"] = tabs.size.toLong(); m["liveTabs"] = tabs.count { it.session != null }.toLong()
+        return m
+    }
+
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
@@ -2587,6 +2619,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (::miniNav.isInitialized) { out.add(miniNav.glideLine()); out.add(miniNav.fieldLine()) }
         out.add(ShieldsBridge.statsLine())
         out.add(app.kestrel.browser.web.SiteFixes.statusLine())
+        out.add(filePicks.line())
+        out.add(app.kestrel.browser.diag.LiveDiag.statusLine())    // LD1
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
@@ -2675,6 +2709,7 @@ open class BrowserActivity : Activity(), DockListener {
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
+        override fun liveDiagSnapshot(): String = this@BrowserActivity.liveDiagSnapshot()
         override fun lastLookOff() { val c = applicationContext; if (lookTab != null) hideRestoring("look-off"); Io.exec { LastLook.clearAll(c) } }
         override fun tidyStorage() { runStorageTidy(true) }
         override fun forgetGlide() {
@@ -3127,7 +3162,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
-        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); backCover = null
+        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); Io.main.removeCallbacks(backWaitLine); Io.main.removeCallbacks(backWaitNote); backCover = null
         if (lookTab != null) { Health.count("look.hide"); Health.log("tabs", "look-hide", "tab=${lookTab?.id} why=$why") }
         restoringTab = null
         restoreOverlay.hide()
@@ -3515,13 +3550,50 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== files, permissions
 
+    /** ATT1: what the file chooser has done (Diagnostics). */
+    internal val filePicks = app.kestrel.core.prompt.FilePickStats()
+
+    private fun pickerCanHandle(i: Intent): Boolean = try { packageManager.queryIntentActivities(i, 0).isNotEmpty() } catch (e: Exception) { true }   // (a check that cannot be made must not stop the picker)
+
+    /** ATT1: a page asked for a whole folder (`webkitdirectory`): Kestrel attaches files only. The page is answered at once instead of being left waiting. */
+    internal fun refuseFolder() {
+        filePicks.asked("a whole folder"); filePicks.folder()
+        Health.log("filepick", "folder-refused", "the page asked for a whole folder")
+        toast("This page asked for a whole folder. Kestrel can attach files only.")
+    }
+
     internal fun pickFiles(mimeTypes: Array<String>?, multiple: Boolean, done: (List<Uri>) -> Unit) {
         pendingFilePick?.invoke(emptyList())
         pendingFilePick = done
-        val i = Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
-        val types = mimeTypes?.filter { it.isNotBlank() && it.contains('/') }?.takeIf { it.isNotEmpty() }
-        if (types != null) i.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
-        try { startActivityForResult(Intent.createChooser(i, "Choose file"), REQ_FILE) } catch (e: Exception) { pendingFilePick = null; done(emptyList()) }
+        val types = app.kestrel.core.prompt.FilePickRules.mimeTypes(mimeTypes)
+        filePicks.asked((if (multiple) "several files" else "one file") + ", " + (if (types == null) "no filter" else "${types.size} kind(s)"))
+        Health.log("filepick", "asked", "multiple=$multiple accept=${mimeTypes?.size ?: 0} filter=${types?.size ?: 0}")
+        fun intentFor(action: String): Intent {
+            val i = Intent(action).addCategory(Intent.CATEGORY_OPENABLE).setType(if (types != null && types.size == 1) types[0] else "*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
+            if (types != null && types.size > 1) i.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+            return i
+        }
+        val get = intentFor(Intent.ACTION_GET_CONTENT)
+        val open = intentFor(Intent.ACTION_OPEN_DOCUMENT)
+        val viaGet = pickerCanHandle(get)
+        if (!viaGet && !pickerCanHandle(open)) {
+            // nothing on this device can choose a file: say so (it used to open an empty chooser, or nothing, and the page waited for ever)
+            filePicks.noPicker(); Health.log("filepick", "no-handler", "neither GET_CONTENT nor OPEN_DOCUMENT has an app")
+            pendingFilePick = null
+            toast("No app on this tablet can pick a file. Install a file manager.")
+            done(emptyList())
+            return
+        }
+        val how = if (viaGet) "GET_CONTENT" else "OPEN_DOCUMENT"
+        try {
+            startActivityForResult(if (viaGet) Intent.createChooser(get, "Choose file") else open, REQ_FILE)
+            filePicks.opened(how); Health.log("filepick", "opened", how)
+        } catch (e: Exception) {
+            filePicks.failed(e.toString()); Health.log("filepick", "open-failed", e.toString().take(100))
+            pendingFilePick = null
+            toast("Could not open the file picker.")
+            done(emptyList())
+        }
     }
 
     @Deprecated("framework callback")
@@ -3540,7 +3612,9 @@ open class BrowserActivity : Activity(), DockListener {
                 if (clip != null) for (k in 0 until clip.itemCount) clip.getItemAt(k).uri?.let { uris.add(it) }
             }
             // content:// only: a rogue picker app could answer with file:///data/data/<this app>/... and the page would upload the browser's own files
-            cb?.invoke(uris.filter { it.scheme == "content" }.distinct())
+            val given = uris.filter { it.scheme == "content" }.distinct()
+            filePicks.result(given.size, resultCode); Health.log("filepick", "result", "code=$resultCode files=${given.size} dropped=${uris.size - given.size} answered=${cb != null}")
+            cb?.invoke(given)
         }
     }
 
