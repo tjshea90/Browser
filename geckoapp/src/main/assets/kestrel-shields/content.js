@@ -179,6 +179,33 @@
       send();
     } catch (e) { /* never break the page */ }
   }
+  // GL1 (owner 2026-11-21: "some elements of pages are not drawn ... an invisible line, and under the line is blank"; on pornhub the loading circle over a video was cut off with Shields on and whole with Shields off): once the page has loaded,
+  // count how many elements each of THIS site's element-hiding rules (the first 150 of the injected CSS: the site's own come first) matches, and tell the extension the rules that matched, with the number: [selector, count, hides 1|0]. The
+  // selectors are the public lists' own text, no page content. Idle, once, 3.5 s after the load, never longer than 40 ms in all (a slow page is skipped), at most 8 rules sent. The app shows them in the page report, so a blank area has a named rule.
+  function startHidCount(css) {
+    try {
+      var go = function () {
+        setTimeout(function () {
+          try {
+            var plain = String(css).replace(/\/\*[\s\S]*?\*\//g, ''), re = /([^{}]+)\{([^}]*)\}/g, m, n = 0, hit = [], t0 = (window.performance && performance.now) ? performance.now() : 0;
+            while ((m = re.exec(plain)) !== null && n < 150) {
+              n++;
+              var sel = m[1].replace(/^\s+|\s+$/g, '');
+              if (!sel || sel.length > 200) continue;
+              var c = 0;
+              try { c = document.querySelectorAll(sel).length; } catch (e) { c = 0; }
+              if (c > 0) hit.push([sel.slice(0, 90), Math.min(c, 99999), /display\s*:\s*none/i.test(m[2]) ? 1 : 0]);
+              if (t0 && performance.now() - t0 > 40) break;
+            }
+            if (!hit.length) return;
+            hit.sort(function (a, b) { return b[1] - a[1]; });
+            browser.runtime.sendMessage({ k: 'jhid', n: n, m: hit.slice(0, 8) }).catch(function () { /* no background page */ });
+          } catch (e) { /* a page must never feel this */ }
+        }, 3500);
+      };
+      if (document.readyState === 'complete') go(); else window.addEventListener('load', go, false);
+    } catch (e) { /* ignore */ }
+  }
   try {
     var host = location.hostname;
     if (!host) return;
@@ -192,6 +219,7 @@
       }
       if (!css) return;
       inject(css, '1');
+      startHidCount(css);
       if (top && css.indexOf('/*kg*/') === 0) startTokens(host);
       var kp = css.indexOf('/*kp*/');
       if (kp >= 0 && kp < 12) startProcedural(host);

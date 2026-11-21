@@ -402,7 +402,7 @@ class ShieldsBridge(
         val page = m.optString("p")
         if (page.isEmpty() || tabForPage(page) == null || pageIsPrivate(page)) return
         fun list(k: String): List<String> { val a = m.optJSONArray(k) ?: return emptyList(); val out = ArrayList<String>(a.length()); for (i in 0 until minOf(a.length(), 40)) out.add(a.optString(i).take(200)); return out }
-        pageReports.add(app.kestrel.core.diag.PageReport(page.take(200), m.optInt("n"), m.optInt("nb"), list("b"), list("f"), list("e"), System.currentTimeMillis()))
+        pageReports.add(app.kestrel.core.diag.PageReport(page.take(200), m.optInt("n"), m.optInt("nb"), list("b"), list("f"), list("e"), System.currentTimeMillis(), list("h")))
     }
 
     companion object {

@@ -196,7 +196,7 @@ function shortUrl(u) {
 }
 function newLog(tabId, url) {
   pageLog.delete(tabId); // a new page: the old lines are history
-  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], hid: [], sent: 0, key: '' });
   if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
   var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
 }
@@ -207,10 +207,10 @@ function reportLater(tabId) {
 function sendReport(tabId) {
   var L = pageLog.get(tabId);
   if (!L || L.sent >= 3) return;
-  var key = L.reqs + '|' + L.nb + '|' + L.failed.length + '|' + L.errs.length;
+  var key = L.reqs + '|' + L.nb + '|' + L.failed.length + '|' + L.errs.length + '|' + L.hid.length;
   if (key === L.key) return; // nothing new since the last one
   L.key = key; L.sent++;
-  send({ k: 'rep', p: L.page, n: L.reqs, nb: L.nb, b: L.blocked, f: L.failed, e: L.errs }).catch(function () {});
+  send({ k: 'rep', p: L.page, n: L.reqs, nb: L.nb, b: L.blocked, f: L.failed, e: L.errs, h: L.hid }).catch(function () {});
 }
 function logBlocked(d) {
   if (d.requestId !== undefined) { blockedIds.add(d.requestId); if (blockedIds.size > 300) blockedIds.delete(blockedIds.values().next().value); }
@@ -255,6 +255,21 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     if (out === undefined && r !== undefined) out = r;
   }
   return out;
+});
+// GL1: content.js says which of the site's element-hiding rules matched elements on the page ([selector, count, hides 1|0], at most 8): kept in the page log as short words and sent with the page report
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'jhid' || !sender || !sender.tab || !Array.isArray(m.m)) return undefined;
+  var L = pageLog.get(sender.tab.id);
+  if (!L || L.hid.length >= 12) return undefined;
+  for (var i = 0; i < m.m.length && i < 8 && L.hid.length < 12; i++) {
+    var e = m.m[i];
+    if (!Array.isArray(e) || typeof e[0] !== 'string') continue;
+    var c = +e[1];
+    if (!(c >= 1 && c <= 99999)) continue;
+    L.hid.push(e[0].replace(/[\u0000-\u001f]/g, ' ').slice(0, 90) + ' x' + Math.floor(c) + (e[2] === 1 ? '' : ' (style)'));
+  }
+  reportLater(sender.tab.id);
+  return undefined;
 });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
 onMsg(function (m, sender) {
