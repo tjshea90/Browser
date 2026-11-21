@@ -53,7 +53,7 @@ test('LD4: one report per load: phases, paints, request counts by kind and the s
   const m = reports(got)[0];
   assert.equal(m.k, 'pt'); assert.equal(m.h, 'site.example');
   assert.equal(m.pt, 0, 'a full report'); assert.equal(m.hid, 0);
-  assert.ok(m.load > 0, 'load ' + m.load); assert.ok(m.dcl > 0); assert.ok(m.fcp > 0, 'first paint ' + m.fcp); assert.ok(m.fb >= 0 && m.ttfb >= 0);
+  assert.ok(m.load > 0, 'load ' + m.load); assert.ok(m.dcl > 0); assert.ok(m.fcp > 0, 'first paint ' + m.fcp); assert.ok(m.fb >= 0); assert.ok(m.ttfb >= -1 && (m.ttfb < 0 || m.ttfb <= m.fb + 1), 'ttfb ' + m.ttfb + ' fb ' + m.fb);   // -1 = not reported (the CI browser gives a page answered by the test's own route no request-start time, seen 2026-11-21); when given it cannot exceed the time to the first byte
   assert.ok(m.rn >= 5, 'requests ' + m.rn);                       // a.js, big.js, s.css, x.json, y.json
   assert.ok(m.js >= 2 && m.css >= 1 && m.xhr >= 2, JSON.stringify(m));
   assert.equal(m.sl[0][0], 'slow.example'); assert.equal(m.sl[0][1], 'js'); assert.ok(m.sl[0][2] >= 600, 'slow ms ' + m.sl[0][2]);
