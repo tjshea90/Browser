@@ -1,23 +1,22 @@
-# CHECKPOINT 2812 — read me first, then TASKS.md
+# CHECKPOINT 2813 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T16:15:21Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `8d9aff18` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T16:16:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `92e24c3b` (this checkpoint is the commit after it)
 
 ## Just done
-LD3 docs + TASKS ticks (a-d) written; digest prints sends automatic/manual + runs + thinned; CLAUDE.md says how to read the diagnostics and where the clone is
+ALPHA84 release note written (docs/handoff/ALPHA84_RELEASE_NOTE.txt); platform android-37.0 installed with sdkmanager (documented fresh-container fix); gate run for :geckoapp:testDebugUnitTest + :app:lintDebug started in background (log in the session scratchpad gate2.log, ends with GRADLE_EXIT=n)
 
 ## Do this next
-Full gate then release: ./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :geckoapp:compileDebugKotlin (background, poll log for GRADLE_EXIT, check XML not the tail), :app:lintDebug; then bump geckoapp/build.gradle.kts to versionCode 185 / 0.3.0-alpha84, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA84_RELEASE_NOTE.txt, bash ship.sh gecko "note", ONE dispatch (app=gecko full_build=true), wait, record-release with the identical note; then LD3e answer to the owner
+HEARTBEAT trigger trig_01LyJ9xdLZhzt46J8vWq4DgX (delete when alpha84 is recorded). Next: read gate2 result from the XML (never trust a piped exit); if green: set geckoapp/build.gradle.kts versionCode 185 / versionName 0.3.0-alpha84, bash tools/sync-ext-version.sh, bash ship.sh gecko "<note file text, identical later in record-release>", ONE android.yml dispatch (app=gecko full_build=true note), wait, git ls-remote --tags, get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha84 "<same note>"; then tick LD3e and answer the owner in plain words
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M CLAUDE.md
-     M TASKS.md
-     M research/LIVE_DIAG.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  c4318ee7 ckpt 2812: LD3 docs + TASKS ticks (a-d) written; digest prints sends automatic/manual +
   7369e028 ckpt 2811: LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned
   bb443992 ckpt 2810: LD3d tools done: private.sh + diag_digest.py find the clone in any letter ca
   2015daad ckpt 2809: LD3 audit written into research/LIVE_DIAG.md from the 4 real uploads: manual
@@ -27,7 +26,6 @@ Full gate then release: ./gradlew --offline -q :core:test :app:testDebugUnitTest
   805cabb9 ckpt 2805: gated kestrel-g-v0.3.0-alpha83 (gecko code 184) and pushed it: handoff self-
   6eac0f1a ckpt 2804: LD2e: full gate green (:core:test :app:testDebugUnitTest :geckoapp:compileDe
   d2831830 ckpt 2803: LD2a-d built and tested: app LiveDiag (tables fed after switch+whitelist, fa
-  9ebf9afd ckpt 2802: LD2 core written + tested (33 tests in core livediag): DiagStats (event hist
 ```
 
 (1 automatic checkpoint(s) since the last deliberate one — the
