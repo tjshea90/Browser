@@ -1,21 +1,22 @@
-# CHECKPOINT 2778 — read me first, then TASKS.md
+# CHECKPOINT 2779 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T01:42:21Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `a3a89687` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T02:00:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `11c69d86` (this checkpoint is the commit after it)
 
 ## Just done
-alpha79 run 44849629774: test-jvm failed ONCE on PhoneBackendTest.aPhoneThatIsKilledInTheMiddleOfAVideoFinishesItAfterTheRestart (PhoneBackendTest.kt:94, the test's own 40 s await timed out on the shared runner; unrelated to the file-chooser change; passes locally and on alpha76-78). No tag/Release exists. rerun_failed_jobs requested for the SAME run (not a new dispatch). Noted in research/ATT1_FILE_CHOOSER.md.
+alpha79 RELEASED AND RECORDED (kestrel-g-v0.3.0-alpha79, gecko code 180, run 44849629774 attempt 2 all jobs green; attempt 1 failed only on the flaky PhoneBackendTest, FLK1 in TASKS; APK 96.6 MB + sha256 + .dm, BUILDLOG.md line pushed). ATT1: file-chooser hardening shipped, NOT proven on the tablet.
 
 ## Do this next
-REL79d: mcp__github__actions_list list_workflow_jobs 44849629774 (filter latest) until test-jvm + build-gecko are success (run_attempt 2), then tag kestrel-g-v0.3.0-alpha79 exists, get_release_by_tag shows the APK, bash tools/record-release.sh kestrel-g-v0.3.0-alpha79 "$(cat docs/handoff/ALPHA79_RELEASE_NOTE.txt)", then answer the owner (ATT1). If test-jvm fails AGAIN on the same test: harden PhoneBackendTest (longer await timeout) in its own commit, then re-dispatch ONLY if still no tag. DO NOT run a second dispatch while this run can still finish
+NOTHING is running. Waiting for the owner: (1) does attaching a file on Gemini work on alpha79? If not, send the Diagnostics line 'File chooser (attach a file on a page): ...' (asked / opened / no picker app / nothing chosen / files given / last) and say whether Settings > Back up and restore > Restore shows a file chooser. (2) the YouTube controls report (YTC1/YTC2, alpha78): which Settings switch makes them stay. Read research/ATT1_FILE_CHOOSER.md and research/YTC1_YOUTUBE_CONTROLS.md. Open: FLK1 (harden PhoneBackendTest in its own commit), INBOX/OUTBOX capture OFF (private clone missing, add_repo denied twice), a lab scene with a file input (tools/emu/soak.py) would prove the chooser on the real engine
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M research/ATT1_FILE_CHOOSER.md
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  5a64fefc ckpt 2778: alpha79 run 44849629774: test-jvm failed ONCE on PhoneBackendTest.aPhoneThat
   a3a89687 ckpt 2777: REL79b: alpha79 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   e04b99e6 ckpt 2776: gated kestrel-g-v0.3.0-alpha79 (gecko code 180) and pushed it: handoff self-
   79a107c9 ckpt 2775: ATT1: file-chooser hardening coded + tested (core FilePickRulesTest + OwnerR
@@ -25,5 +26,4 @@ REL79d: mcp__github__actions_list list_workflow_jobs 44849629774 (filter latest)
   74fab19a ckpt 2771: gated kestrel-g-v0.3.0-alpha78 (gecko code 179) and pushed it: handoff self-
   afb6d504 ckpt 2770: YTC2: cause NOT proven. Read every tap path again (ControlsMachine, tap matc
   2ffbb683 ckpt 2769: YTC2 written into TASKS.md in the owner's words: alpha77 did not change the 
-  36547fc5 ckpt 2768: alpha77 RELEASED AND RECORDED (kestrel-g-v0.3.0-alpha77, gecko code 178, run
 ```
