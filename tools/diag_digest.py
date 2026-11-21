@@ -351,6 +351,66 @@ def load_analysis(batches, r):
         print('  The tablet (newest file): ' + ', '.join(got))
 
 
+def video_analysis(batches):
+    """VD1: which sites had their videos held back by the press-to-play rule, refused by the format policy or failed, from the `video gate|codec-no|error` lines (host names only; research/VIDEO_NOLOAD.md has the causes)."""
+    by = defaultdict(lambda: {'held': 0, 'kept': 0, 'refused': 0, 'opened': 0, 'ruleOn': 0, 'ruleOff': 0, 'size': 0, 'mode': 0, 'fps': 0, 'last': '', 'err': Counter()})
+    for b in batches:
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            m = re.search(r' video (gate|codec-no|error) (\S+) (.*)$', e)
+            if not m:
+                continue
+            kind, host, rest = m.group(1), m.group(2), m.group(3)
+            kv = dict(re.findall(r'(\w+)=(\S+)', rest))
+            d = by[host]
+            def n(k):
+                try:
+                    return int(kv.get(k, 0))
+                except ValueError:
+                    return 0
+            if kind == 'gate':
+                d['held'] += n('held'); d['kept'] += n('kept'); d['refused'] += n('refused'); d['opened'] += n('opened')
+                if kv.get('rule') == 'on':
+                    d['ruleOn'] += 1
+                else:
+                    d['ruleOff'] += 1
+            elif kind == 'codec-no':
+                d['size'] += n('size'); d['mode'] += n('mode'); d['fps'] += n('fps'); d['last'] = kv.get('last', d['last'])
+            else:
+                d['err']['code %s %s' % (kv.get('code', '?'), kv.get('src', '?'))] += 1
+    print('\n== VIDEO PROBLEMS by site (what the press-to-play rule, the format policy and the media elements did; %d site(s)) ==' % len(by))
+    if not by:
+        print('  (no `video gate|codec-no|error` lines yet: the tablet needs alpha87 or newer, and a site whose video does not load; then reload that site and upload)')
+        return
+    for host, d in sorted(by.items(), key=lambda kv: -(kv[1]['held'] + kv[1]['kept'] + kv[1]['refused'] + kv[1]['size'] + kv[1]['mode'] + kv[1]['fps'] + sum(kv[1]['err'].values())))[:10]:
+        errs = sum(d['err'].values())
+        gate = d['held'] + d['kept'] + d['refused']
+        fmt = d['size'] + d['mode'] + d['fps']
+        why = []
+        if gate and d['ruleOn'] and errs + d['opened'] == 0:
+            why.append('cause 1: the press-to-play rule held/refused videos here and nobody pressed one: turn on "Videos may start by themselves" for this site (Shields panel) and reload; if it plays, that is the fix')
+        elif gate and d['ruleOn']:
+            why.append('cause 1 likely: the rule acted on this site (%d held, %d kept from fetching, %d plays refused); test with the per-site switch' % (d['held'], d['kept'], d['refused']))
+        if gate and d['ruleOff'] and errs:
+            why.append('the rule was OFF for this site and elements still failed: the rule is not the cause here')
+        if fmt and errs:
+            why.append('cause 3: the format policy said no (size %d, H.264-only %d, 30 fps %d, last %s) and elements failed: relax that setting for a test' % (d['size'], d['mode'], d['fps'], d['last'] or '-'))
+        elif fmt:
+            why.append('the format policy said no %d time(s) (last %s) but nothing failed: the site found another format' % (fmt, d['last'] or '-'))
+        for k in d['err']:
+            if k.startswith('code 4'):
+                why.append('%s: "no usable source" (format, DRM or a blocked file: see causes 3, 4, 5)' % k)
+            elif k.startswith('code 2'):
+                why.append('%s: network error while loading (the hotspot, cause 6)' % k)
+            elif k.startswith('code 3'):
+                why.append('%s: the decoder could not play it (hardware limit, VD1 codec lines)' % k)
+        print('  %-28s gate: held %d, kept %d, refused %d, opened by a press %d (rule on in %d, off for the site in %d); format no: size %d, H.264-only %d, 30 fps %d; errors: %s' % (
+            host[:28], d['held'], d['kept'], d['refused'], d['opened'], d['ruleOn'], d['ruleOff'], d['size'], d['mode'], d['fps'], ', '.join('%s x%d' % kv for kv in d['err'].most_common(4)) or 'none'))
+        for w in why[:4]:
+            print('      -> ' + w)
+
+
 def brief(r, batches):
     if not batches:
         return ''
@@ -469,6 +529,7 @@ def main(argv):
     if not sh:
         print('  (none)')
     load_analysis(batches, r)
+    video_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
         rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]
