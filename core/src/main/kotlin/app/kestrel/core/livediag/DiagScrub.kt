@@ -18,9 +18,9 @@ object DiagScrub {
     private val URL = Regex("""(?i)\b(?:https?|wss?|ftp)://[^\s"'<>)\]},;|]+""")
     private val LOCAL = Regex("""(?i)\b(?:file|content|blob|data|javascript|intent|view-source|moz-extension|resource):[^\s"'<>)\]},;|]*""")
     private val EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
-    private val PHONE = Regex("""(?<![\d.])\+?\d{1,3}[ .-]?\(?\d{2,4}\)?[ .-]\d{3,4}[ .-]?\d{3,4}(?!\d)""")
-    private val CARDISH = Regex("""(?<!\d)(?:\d[ -]?){13,19}(?!\d)""")
-    private val KEY_VALUE = Regex("""(?i)\b(password|passwd|pwd|passcode|pin|secret|token|api[_-]?key|apikey|auth|authorization|cookie|session|sessionid|sid|bearer)\b(\s*[:=]\s*|\s+)("[^"]*"|'[^']*'|[^\s,;&]+)""")
+    private val PHONE = Regex("""(?<![\d.])(?:\+\d{1,3}[ .-]?)?\(?\d{2,4}\)?[ .-]\d{3,4}[ .-]\d{3,4}(?!\d)""")
+    private val CARDISH = Regex("""(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)""")
+    private val KEY_VALUE = Regex("""(?i)\b(password|passwd|pwd|passcode|pin|secret|token|api[_-]?key|apikey|auth|authorization|cookie|session|sessionid|sid)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&]+)""")
     private val BEARER = Regex("""(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}""")
     private val TOKENS = Regex("""\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{12,}|AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*)""")
     private val PEM = Regex("""-----BEGIN [A-Z ]+-----""")
@@ -67,13 +67,13 @@ object DiagScrub {
     fun line(raw: String): String? {
         if (raw.isBlank()) return null
         var s = raw.filter { it == '\t' || it >= ' ' }.take(MAX_LINE * 3)
+        s = URL.replace(s) { m -> site(m.value) }                                   // first: a link is judged whole (a token in its query makes the site sensitive) before anything is cut out of it
+        s = LOCAL.replace(s, LOCAL_TAG)
+        s = EMAIL.replace(s, "<email>")
         s = PEM.replace(s, "<secret>")
         s = TOKENS.replace(s, "<secret>")
         s = BEARER.replace(s, "Bearer <secret>")
         s = KEY_VALUE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + "<redacted>" }
-        s = EMAIL.replace(s, "<email>")
-        s = URL.replace(s) { m -> site(m.value) }
-        s = LOCAL.replace(s, LOCAL_TAG)
         s = CARDISH.replace(s) { m -> if (looksLikeCard(m.value.filter { it.isDigit() })) "<card>" else m.value }
         s = PHONE.replace(s, "<phone>")
         s = HOSTISH.replace(s) { m ->
