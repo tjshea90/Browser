@@ -16,9 +16,7 @@ class RealSiteCosmeticProbeTest {
             println("PROBE host=$host specific-css-bytes=${css.length}")
             println("PROBE css[$host]=" + css.replace("\n", " ").take(6000))
             println("PROBE scriptlets[$host]=" + fs.scriptletsFor(host).joinToString(" ; ").take(4000))
-            println("PROBE procedural[$host]=" + fs.proceduralRules(host).joinToString(" ; ").take(2000))
+            println("PROBE procedural[$host]=" + fs.proceduralFor(host).joinToString(" ; ").take(2000))
         }
-        for (u in listOf("https://www.pornhub.com/", "https://ei.phncdn.com/x.js", "https://cdn1d-static-shared.phncdn.com/x.css", "https://ev-h.phncdn.com/hls/videos/a/index.m3u8", "https://www.pornhub.com/video/get_media?s=x"))
-            println("PROBE url=$u")
     }
 }
