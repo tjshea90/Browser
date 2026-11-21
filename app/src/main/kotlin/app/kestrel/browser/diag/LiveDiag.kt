@@ -277,33 +277,62 @@ object LiveDiag {
 
     private fun file(): File? = dir?.let { File(it, "livediag.journal") }
     private fun statsFile(): File? = dir?.let { File(it, "livediag.stats") }
+    private fun weekFile(): File? = dir?.let { File(it, "livediag.week") }
 
     private fun load() {
         try {
             val f = file() ?: return
-            if (!f.isFile) return
-            val lines = f.readLines(Charsets.UTF_8).takeLast(MAX_JOURNAL)
-            synchronized(lock) { journal.clear(); for (l in lines) DiagScrub.line(l)?.let { journal.addLast(it) } }   // a stored line is scrubbed again on the way in
+            if (f.isFile) journal.restore(f.readLines(Charsets.UTF_8).takeLast(MAX_JOURNAL).mapNotNull { DiagScrub.line(it) })   // a stored line is scrubbed again on the way in
         } catch (e: Exception) { /* a damaged journal is just empty */ }
         try { statsFile()?.takeIf { it.isFile }?.let { stats.load(it.readText(Charsets.UTF_8)) } } catch (e: Exception) { /* damaged tables are just empty */ }
+        try {
+            weekFile()?.takeIf { it.isFile }?.let { w ->
+                val t = w.readText(Charsets.UTF_8)
+                roll.load(t)
+                rollSince = t.lineSequence().firstOrNull { it.startsWith("T\t") }?.substringAfter('\t')?.trim()?.toLongOrNull() ?: 0L
+            }
+        } catch (e: Exception) { /* a damaged week is just empty */ }
+        if (rollSince <= 0L) rollSince = System.currentTimeMillis()
+        if (System.currentTimeMillis() - rollSince > WEEK_MS) { roll.reset(); rollSince = System.currentTimeMillis() }
+        markRun("start")
         status = describe()
+    }
+
+    /** LD3: the journal's lines carry only seconds since the process started, and a file holds several runs one after the other. This line says WHEN a run began (real time, build), so Claude can tell the runs apart and date them. */
+    private fun markRun(why: String) {
+        if (!enabled) return
+        val up = try { SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime() } catch (e: Throwable) { 0L }
+        val stamp = String.format(Locale.US, "+%.3fs", maxOf(up, 0L) / 1000.0)
+        DiagScrub.line("$stamp run $why utc=${utc(System.currentTimeMillis())} build=$versionName code=$versionCode")?.let { journal.add("run $why", it) }
     }
 
     private fun save() {
         if (!enabled) return
         try {
             val f = file() ?: return
-            val text = synchronized(lock) { journal.joinToString("\n") }
-            f.writeText(text, Charsets.UTF_8)
+            f.writeText(journal.toList().joinToString("\n"), Charsets.UTF_8)
             statsFile()?.writeText(stats.save(), Charsets.UTF_8)
+            weekFile()?.writeText("T\t" + rollSince + "\n" + roll.save(), Charsets.UTF_8)
         } catch (e: Exception) { /* storage full: the next flush tries again */ }
     }
 
-    /** Everything this feature keeps on the tablet is removed: the journal in memory and its file. (The token is the person's to forget: [forgetToken].) */
-    fun erase() {
-        synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }
+    /** What was sent joins the rolling week (a week old week starts again); the table of the next upload starts empty. */
+    private fun foldIntoWeek() {
+        val now = System.currentTimeMillis()
+        if (rollSince <= 0L || now - rollSince > WEEK_MS) { roll.reset(); rollSince = now }
+        roll.mergeFrom(stats)
         stats.reset()
-        try { file()?.delete(); statsFile()?.delete() } catch (e: Exception) { /* gone */ }
+    }
+
+    /** The week the advisor reads: the past uploads of this week plus what has not been sent yet. A new table, nothing shared. */
+    private fun weekView(): DiagStats = DiagStats().also { it.mergeFrom(roll); it.mergeFrom(stats) }
+
+    /** Everything this feature keeps on the tablet is removed: the journal in memory and its file, the tables and the week. (The token is the person's to forget: [forgetToken].) */
+    fun erase() {
+        journal.clear()
+        synchronized(lock) { sinceFlush = 0 }
+        stats.reset(); roll.reset(); rollSince = 0L
+        try { file()?.delete(); statsFile()?.delete(); weekFile()?.delete() } catch (e: Exception) { /* gone */ }
         status = describe()
     }
 
@@ -326,6 +355,7 @@ object LiveDiag {
             m["phonePaired"] = if (!a.getString("phone_code", "").isNullOrEmpty()) 1L else 0L
             val last = a.getLong("upd_last", 0L); if (last > 0L) m["filterAgeDays"] = (System.currentTimeMillis() - last) / 86_400_000L
         }
+        try { m["uptimeS"] = maxOf(SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime(), 0L) / 1000L } catch (e: Throwable) { /* missing */ }
         m["liveFailsInRow"] = (sp?.getInt("fails", 0) ?: 0).toLong()
         m["prevRunEndedBadly"] = if (LastRun.previousEndedBadly()) 1L else 0L
         try { extraFacts?.invoke()?.let { m.putAll(it) } } catch (e: Throwable) { /* the activity's numbers are optional */ }
@@ -350,7 +380,8 @@ object LiveDiag {
     /** The suggestions the tablet's advisor would make right now (Settings shows them). Nothing at all, and nothing computed, while the switch is off. */
     fun advice(): List<Advice> {
         if (!enabled) return emptyList()
-        return Advisor.advise(settingsMap(), stats.kindCounts(), stats.sites(), facts())
+        val week = weekView()                                  // LD3: a week, not one upload: "this site is slow" needs more than three page loads
+        return Advisor.advise(settingsMap(), week.kindCounts(), week.sites(), facts())
     }
 
     /** One tap: make the change a suggestion names (only the keys the advisor may change, within their range). True when it was done. */
@@ -366,8 +397,9 @@ object LiveDiag {
     }
 
     /** Tests only: what is kept right now, and a clean slate. */
-    internal fun journalForTest(): List<String> = synchronized(lock) { journal.toList() }
-    internal fun resetForTest() { Io.main.removeCallbacks(sendTask); synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }; stats.reset(); enabled = true; hasToken = false; sendQueued = false; snapshotSupplier = null; extraFacts = null; sp = null; appSp = null; appCtx = null; dir = null }
+    internal fun journalForTest(): List<String> = journal.toList()
+    internal fun weekForTest(): DiagStats = weekView()
+    internal fun resetForTest() { Io.main.removeCallbacks(sendTask); journal.clear(); synchronized(lock) { sinceFlush = 0 }; stats.reset(); roll.reset(); rollSince = 0L; enabled = true; hasToken = false; sendQueued = false; inFront = false; uploading.set(false); snapshotSupplier = null; extraFacts = null; sp = null; appSp = null; appCtx = null; dir = null }
     internal fun queuedForTest(): Boolean = sendQueued
     internal fun statsForTest(): DiagStats = stats
 
@@ -378,7 +410,7 @@ object LiveDiag {
     private fun describe(note: String? = null): String {
         val p = sp ?: return "Live diagnostics: not started"
         if (!enabled) return "Live diagnostics: OFF - nothing is recorded, nothing is sent, nothing is kept"
-        val n = synchronized(lock) { journal.size }
+        val n = journal.size()
         val last = p.getLong("lastSentAt", 0L)
         return "Live diagnostics: ON, " + (if (hasToken) "token saved" else "no token yet (nothing leaves the tablet without one)") + ", $n events waiting" +
             (if (last > 0) ", last sent " + utc(last) + " (" + p.getInt("lastLines", 0) + " lines)" else ", nothing sent yet") + (if (note != null) "; $note" else "")
