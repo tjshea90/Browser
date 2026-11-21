@@ -61,5 +61,5 @@ class FilePickStats {
 
     fun picked(verdict: String) { lastPick = verdict.take(200) }
 
-    fun line(): String = "File chooser (attach a file on a page): asked $asked, opened $opened, no picker app $noPicker, nothing chosen $cancelled, files given to the page $gave, whole-folder asks refused $folders, failed $failed; last: $last"
+    fun line(): String = "File chooser (attach a file on a page): asked $asked, opened $opened, no picker app $noPicker, nothing chosen $cancelled, files given to the page $gave, whole-folder asks refused $folders, failed $failed; last: $last" + (if (lastPick.isEmpty()) "" else "; the last picked file: $lastPick")
 }
