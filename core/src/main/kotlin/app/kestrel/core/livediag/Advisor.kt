@@ -40,6 +40,10 @@ object Advisor {
         fun sec(ms: Long) = (ms / 100) / 10.0
         val out = ArrayList<Advice>()
 
+        // PERF2 (owner 2026-11-21: "everything is running laggy including typing and YouTube"; both uploads of that day say powerSave=1): Android's Battery Saver slows the processor and background work; nothing in the browser can make up for it
+        if (v("powerSave") == 1L) out.add(Advice("battery-saver", 3, "Android Settings > Battery", "Battery Saver", "on", "turn it off while you use the tablet",
+            null, null, "Android's Battery Saver was on when this was sent: it slows the processor (this tablet has four slow cores already) and holds background work back, which shows as lag in typing, scrolling and video, whatever the browser does"))
+
         // memory: the engine was killed or crashed
         val kills = n("gecko onKill") + n("gecko onCrash")
         val tk = i("tabs_kept", 0)
