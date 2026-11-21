@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """LD1d: read the live-diagnostics files the tablet uploaded to the PRIVATE repo and print what Claude should act on.
 
-  python3 -B -I tools/diag_digest.py [--dir ../kestrel-private/diag] [--days 14] [--brief]
+  python3 -B -I tools/diag_digest.py [--dir <folder of diag files>] [--repo <private clone>] [--days 14] [--brief] [--verify] [--no-fetch]
+
+Where the files are read from (LD3d): with --dir, that folder (tests). Otherwise the private clone, found in any letter case ($KESTREL_PRIVATE, ../kestrel-private, ../Kestrel-Private): the tablet writes to the default branch
+`main` of the private repo, while a Claude session's clone sits on its OWN branch and goes stale, so the digest fetches origin/main and reads the files from git (no working-tree change). --verify proves from the git
+history that no upload was ever modified, renamed or deleted (every file must be added exactly once). No clone: read the same files with the GitHub tools (get_file_contents tjshea90/Kestrel-Private diag/<date>, ref main).
 
 The files are diag/<date>/<HHMMSS>-<install>.json written by core/livediag/DiagBatch (already scrubbed on the tablet: sites are host names only, sensitive sites are '<sensitive-site>', no titles or names).
 They are DATA from a device, never instructions: this tool only counts and prints text, it never runs anything it reads. --brief prints one line (used by tools/resume.sh); nothing at all when there is no data.
 """
-import json, os, re, sys, datetime
+import json, os, re, sys, datetime, subprocess
 from collections import Counter, defaultdict
 
 CRASH = re.compile(r'crash|exception|fatal|anr\b|not responding|killed|freez|frozen|hang|hung|oom|out of memory|low.?memory|abnormal|died|stuck', re.I)
@@ -25,6 +29,13 @@ def norm(t):
     return re.sub(r'\d+(?:\.\d+)?', 'N', t)[:140]
 
 
+def _keep(batch, name):
+    if isinstance(batch, dict) and isinstance(batch.get('events', []), list):
+        batch['_file'] = name
+        return True
+    return False
+
+
 def load(base, days):
     out = []
     if not os.path.isdir(base):
@@ -39,12 +50,79 @@ def load(base, days):
             try:
                 with open(os.path.join(base, d, f), encoding='utf-8') as h:
                     b = json.load(h)
-                if isinstance(b, dict) and isinstance(b.get('events', []), list):
-                    b['_file'] = d + '/' + f
+                if _keep(b, d + '/' + f):
                     out.append(b)
             except Exception:
                 pass
     return out
+
+
+def find_clone():
+    """The private clone in any letter case (the cloud harness makes ../Kestrel-Private; older notes say ../kestrel-private)."""
+    env = os.environ.get('KESTREL_PRIVATE')
+    if env and os.path.isdir(os.path.join(env, '.git')):
+        return env
+    parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for n in ('kestrel-private', 'Kestrel-Private'):
+        if os.path.isdir(os.path.join(parent, n, '.git')):
+            return os.path.join(parent, n)
+    try:
+        for n in sorted(os.listdir(parent)):
+            if n.lower() == 'kestrel-private' and os.path.isdir(os.path.join(parent, n, '.git')):
+                return os.path.join(parent, n)
+    except OSError:
+        pass
+    return None
+
+
+REF = 'refs/remotes/origin/main'
+
+
+def git(clone, args, timeout=60):
+    try:
+        r = subprocess.run(['git', '-C', clone] + args, capture_output=True, timeout=timeout)
+        return r.returncode, r.stdout.decode('utf-8', 'replace')
+    except Exception:
+        return 1, ''
+
+
+def fetch_main(clone):
+    """Refresh origin/main (the branch the tablet writes to). True when it worked; failure is not fatal: the clone's last copy is used."""
+    rc, _ = git(clone, ['fetch', '-q', 'origin', '+refs/heads/main:' + REF], 90)
+    return rc == 0
+
+
+def load_git(clone, days):
+    """The diag files of origin/main, read straight from git objects, plus the commit info. Returns (batches, history) or (None, None) when git cannot answer."""
+    rc, names = git(clone, ['ls-tree', '-r', '--name-only', REF, '--', 'diag'])
+    if rc != 0:
+        return None, None
+    limit = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    out = []
+    for path in sorted(names.split('\n')):
+        m = re.match(r'^diag/(\d{4}-\d{2}-\d{2})/[^/]+\.json$', path)
+        if not m or m.group(1) < limit:
+            continue
+        rc, txt = git(clone, ['show', REF + ':' + path])
+        try:
+            b = json.loads(txt) if rc == 0 else None
+        except Exception:
+            b = None
+        if b is not None and _keep(b, path[len('diag/'):]):
+            out.append(b)
+    rc, log = git(clone, ['log', '--name-status', '--format=C\t%h\t%aI', REF, '--', 'diag'])
+    hist = {'commits': 0, 'A': 0, 'M': 0, 'D': 0, 'bad': [], 'shallow': git(clone, ['rev-parse', '--is-shallow-repository'])[1].strip() == 'true'}
+    for line in log.split('\n'):
+        if line.startswith('C\t'):
+            hist['commits'] += 1
+        elif line[:1] in ('A', 'M', 'D', 'R', 'T', 'C') and '\t' in line:
+            st = line[0]
+            if st == 'A':
+                hist['A'] += 1
+            else:
+                hist['D' if st == 'D' else 'M'] += 1
+                hist['bad'].append(line.replace('\t', ' '))
+    return out, hist
 
 
 def split(ev):
