@@ -140,15 +140,15 @@ object CrashNote {
     /** Rewrites one `.extra` (JSON, or the older key=value lines) so that only [KEEP_KEYS] remain; true when something was removed. */
     internal fun cleanExtra(f: File): Boolean {
         val text = f.readText().take(200_000)
-        val out: String
+        var out = ""
         var removed = false
-        try {
-            val j = org.json.JSONObject(text)
+        val json = try { org.json.JSONObject(text) } catch (e: Exception) { null }
+        if (json != null) {
             val k = org.json.JSONObject()
-            val it = j.keys()
-            while (it.hasNext()) { val key = it.next(); if (key in KEEP_KEYS) k.put(key, j.get(key)) else removed = true }
+            val names = json.keys()
+            while (names.hasNext()) { val key = names.next(); if (key in KEEP_KEYS) k.put(key, json.get(key)) else removed = true }
             out = k.toString()
-        } catch (e: Exception) {
+        } else {
             val keep = ArrayList<String>()
             for (l in text.lines()) { val i = l.indexOf('='); if (i > 0 && l.substring(0, i) in KEEP_KEYS) keep.add(l) else if (l.isNotBlank()) removed = true }
             out = keep.joinToString("\n")
