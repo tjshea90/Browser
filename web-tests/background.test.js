@@ -1991,3 +1991,35 @@ test('LD4: a page-timing report is checked in the background page, carries the p
   await tick(10);
   assert.equal(h.of('pt').length, 2, 'only the top frame of a tab may report');
 });
+
+test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {
+  const h = await onPage();
+  h.message({ k: 'vgt', n: [0, 0, 0, 0, 0, 0, 0] }, 1, undefined, 0);                 // nothing held or refused: nothing to tell about a page
+  h.message({ k: 'vgt', n: [2, 1, 0, 1, 0, 3, 5] }, 1, undefined, 0);
+  await tick(10);
+  const g = h.of('vgh');
+  assert.equal(g.length, 1);
+  assert.equal(g[0].p, PAGE); assert.deepEqual(Array.from(g[0].n), [2, 1, 0, 1, 0, 3, 5]); assert.equal(g[0].f, 1);
+  for (let i = 0; i < 10; i++) h.message({ k: 'vgt', n: [1, 0, 0, 0, 0, 0, 1] }, 1, undefined, 0);
+  await tick(10);
+  assert.equal(h.of('vgh').length, 6, 'at most six per tab and page');
+  h.message({ k: 'vcx', a: 9, s: 0, m: 0, f: 0, w: '' }, 1, undefined, 0);
+  h.message({ k: 'vcx', a: 9, s: 1, m: 0, f: 2, w: 'avc 60fps <b>' }, 1, undefined, 0);
+  await tick(10);
+  const c = h.of('vch');
+  assert.equal(c.length, 1);
+  assert.equal(c[0].p, PAGE); assert.equal(c[0].s, 1); assert.equal(c[0].f, 2); assert.equal(c[0].w, 'avc 60fps b');
+  h.message({ k: 'verr', c: 4, ns: 3, rs: 0, s: 'blob', f: 1, e: 'v' }, 1, undefined, 0);
+  h.message({ k: 'verr', c: 99, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q' }, 1, undefined, 2);
+  await tick(10);
+  const e = h.of('verr');
+  assert.equal(e.length, 2);
+  assert.equal(e[0].p, PAGE); assert.equal(e[0].c, 4); assert.equal(e[0].s, 'blob'); assert.equal(e[0].f, 1);
+  assert.equal(e[1].c, 0); assert.equal(e[1].ns, 0); assert.equal(e[1].rs, 0); assert.equal(e[1].s, 'none'); assert.equal(e[1].f, 0); assert.equal(e[1].e, 'v', 'an address, a wild number or a letter is never passed on');
+  for (let i = 0; i < 20; i++) h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, 1, undefined, 0);
+  await tick(10);
+  assert.ok(h.of('verr').length <= 8, 'rationed: ' + h.of('verr').length);
+  h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, -1);
+  await tick(10);
+  assert.ok(h.of('verr').length <= 8, 'no tab: nothing');
+});
