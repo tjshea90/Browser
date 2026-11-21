@@ -1319,6 +1319,39 @@ class Soak:
         self.record({"kind": "dm", "name": "downloads-ui-at-start", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
 
     # ---- VS1: a vidsrc-style embed (movie page -> player frame -> CDN that wants the PLAYER's Referer, playlists as .txt, parts as .jpg, AES) on the real engine
+    def back_scene(self):
+        """BK10 (owner 2026-11-21: Back is slow and sits on a picture; "caching sites for instant reloading may be the answer"): does Instant Back really make the engine keep a page that sends Cache-Control: no-store?
+        The Back lab server (tools/sitelab/backlab.py) serves a tall page; each round opens it, scrolls it to y=1800, taps a link, presses Back and reads what the page itself saw (pageshow persisted? a new GET?).
+        static = the baseline (a cacheable page: kept), nostore = a no-store page with Instant Back ON (the default: expected KEPT or answered by a cache, no new GET), login/nostore = the SAME page under a sign-in
+        path, which Instant Back must leave alone (expected loaded again from the network: the control)."""
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log = os.path.join(self.out, "backlab.log")
+        srv = subprocess.Popen([sys.executable, "-I", os.path.join(root, "tools", "sitelab", "backlab.py"), "8089", log], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(3)
+            sys.path.insert(0, os.path.join(root, "tools", "emu"))
+            import back_emu
+            back_emu.PKG = self.a.pkg
+            rows = {}
+            for name, case, prefix in (("static", "static", ""), ("nostore-instant-back", "nostore", ""), ("nostore-sign-in-path-control", "nostore", "/login")):
+                try:
+                    r = back_emu.round_(case, 8089, log, 1800, prefix)
+                except Exception as e:
+                    self.issue("medium", "back", "BK10 %s: the round failed (%r)" % (name, e)); continue
+                rows[name] = r
+                self.record({"kind": "back", "name": name, "status": "ok", "persisted": r["persisted"], "new_get": r["network"], "place_kept": r["ok"], "left_at": r["left_at"], "y500": r["y500"], "y2000": r["y2000"]})
+            st = rows.get("static"); ni = rows.get("nostore-instant-back"); co = rows.get("nostore-sign-in-path-control")
+            if st and not st["persisted"]:
+                self.issue("low", "back", "BK10 baseline: a cacheable page was not kept by the engine (the emulator may be too slow to tell): the A/B below is not trustworthy")
+            if ni and ni["network"]:
+                self.issue("high", "back", "BK10: with Instant Back ON a no-store page was still loaded AGAIN FROM THE NETWORK on Back (the header change did not reach the engine's cache)")
+            if co and not co["network"]:
+                self.issue("medium", "back", "BK10 control: the no-store page under a sign-in path was NOT loaded again from the network: Instant Back changed a page it must leave alone, or the control is wrong")
+            say("BK10 back: static persisted=%s | instant-back nostore persisted=%s new_get=%s | sign-in control persisted=%s new_get=%s" % (st and st["persisted"], ni and ni["persisted"], ni and ni["network"], co and co["persisted"], co and co["network"]))
+        finally:
+            try: srv.terminate()
+            except Exception: pass
+
     def vs_scene(self):
         """VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, 'it can't find the video to download', his other app can): four ways an embed delivers its stream, each opened on its movie page. For each:
         does the app's finder list the stream (before and after the one tap a click-to-play player needs), and does one pick download a real file? tools/sitelab/vidlab_srv.py serves the pages and the stream."""
@@ -4555,7 +4588,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "new", "tb", "new2"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "back", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4627,6 +4660,8 @@ def main():
             s.lastrun_round(); s.vs_scene(); s.ql_scene()    # (one boot for the checks of this session: CR1f/g the Last run note after a freeze and a kill, with the memory of every process; VS1 / VS2 / VP2 the finder and the capture; QL1; the lab runs one job at a time per branch)
         if a.suite == "dm":
             s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
+        if a.suite == "back":
+            s.back_scene()                                   # (BK10: Instant Back on the real engine: a no-store page kept by Back, and the sign-in-path control)
         if a.suite == "vs":
             s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
         if a.suite in ("tb", "new2"):
