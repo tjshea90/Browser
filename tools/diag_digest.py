@@ -54,11 +54,29 @@ def split(ev):
 
 def analyse(batches):
     r = {'crash': Counter(), 'slow': Counter(), 'play': Counter(), 'compat': Counter(), 'hosts': Counter(), 'slowhost': defaultdict(list),
-         'installs': set(), 'versions': Counter(), 'dropped': 0, 'events': 0}
+         'installs': set(), 'versions': Counter(), 'dropped': 0, 'events': 0,
+         'advice': Counter(), 'advice_days': defaultdict(set), 'kinds': Counter(), 'sitetab': {}, 'device': {}, 'settings': {}}
     for b in batches:
         r['installs'].add(str(b.get('install', '?')))
         r['versions'][str(b.get('app', '?'))] += 1
         r['dropped'] += int(b.get('dropped', 0) or 0)
+        day = str(b.get('at', ''))[:10]
+        for a in b.get('advice', []) if isinstance(b.get('advice', []), list) else []:
+            if isinstance(a, str):
+                key = re.sub(r'\d+(?:\.\d+)?', 'N', a)[:200]
+                r['advice'][key] += 1; r['advice_days'][key].add(day)
+                r.setdefault('advice_sample', {})[key] = a
+        if isinstance(b.get('kinds'), dict):
+            for k, v in b['kinds'].items():
+                if isinstance(v, int): r['kinds'][str(k)] += v
+        if isinstance(b.get('sites'), list):
+            for x in b['sites']:
+                if isinstance(x, dict) and isinstance(x.get('site'), str):
+                    t = r['sitetab'].setdefault(x['site'], {'loads': 0, 'failed': 0, 'worst': 0, 'medsum': 0, 'n': 0})
+                    t['loads'] += int(x.get('loads', 0) or 0); t['failed'] += int(x.get('failed', 0) or 0); t['worst'] = max(t['worst'], int(x.get('worstMs', 0) or 0))
+                    t['medsum'] += int(x.get('medianMs', 0) or 0) * int(x.get('loads', 0) or 0); t['n'] += int(x.get('loads', 0) or 0)
+        if isinstance(b.get('device'), dict): r['device'] = b['device']          # the newest file's numbers win (files are read oldest first)
+        if isinstance(b.get('settings'), dict): r['settings'] = b['settings']
         lines = [('snap',) + split(x) for x in b.get('snapshot', []) if isinstance(x, str)] + [('ev',) + split(x) for x in b.get('events', []) if isinstance(x, str)]
         for kind, layer, event, detail in lines:
             text = detail if layer == '?' else layer + ' ' + event + ' ' + detail     # a snapshot line is plain text, an event line starts '+12.3s layer event'
@@ -88,8 +106,9 @@ def brief(r, batches):
     sh = sorted(((sum(v) / len(v), k, len(v)) for k, v in r['slowhost'].items() if len(v) >= 2), reverse=True)
     if sh:
         worst = ', slowest site %s (avg %.1f s, %d loads)' % (sh[0][1], sh[0][0], sh[0][2])
-    return 'LIVE DIAG: %d file(s) from %d device(s), newest %s; %d crash/freeze line kinds, %d playback, %d compat%s. Read: python3 -B -I tools/diag_digest.py' % (
-        len(batches), len(r['installs']), last or '?', len(r['crash']), len(r['play']), len(r['compat']), worst)
+    adv = ' %d settings suggestion(s) to tell the owner;' % len(r['advice']) if r['advice'] else ''
+    return 'LIVE DIAG: %d file(s) from %d device(s), newest %s;%s %d crash/freeze line kinds, %d playback, %d compat%s. Read: python3 -B -I tools/diag_digest.py' % (
+        len(batches), len(r['installs']), last or '?', adv, len(r['crash']), len(r['play']), len(r['compat']), worst)
 
 
 def show(title, c, n=8):
@@ -124,6 +143,11 @@ def main(argv):
         return 0
     print('LIVE DIAGNOSTICS DIGEST: %d file(s), %d device(s), %d events, %d dropped on the tablet; app versions %s; newest %s' % (
         len(batches), len(r['installs']), r['events'], r['dropped'], dict(r['versions']), max(b.get('at', '') for b in batches)))
+    print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
+    for k, v in r['advice'].most_common(10):
+        print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
+    if not r['advice']:
+        print('  (none: the advisor found nothing, or the files are version 1)')
     show('Crashes, freezes, kills (fix first)', r['crash'])
     sh = sorted(((sum(v) / len(v), max(v), len(v), k) for k, v in r['slowhost'].items()), reverse=True)
     print('\n== Slow page loads by site (avg s, worst s, loads) ==')
@@ -131,6 +155,17 @@ def main(argv):
         print('  %5.1f %5.1f %3d  %s' % (avg, worst, n, k))
     if not sh:
         print('  (none)')
+    if r['sitetab']:
+        print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
+        rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]
+        for k, t in rows:
+            print('  %4d %3d %5.1f %5.1f  %s' % (t['loads'], t['failed'], (t['medsum'] / t['n'] / 1000.0) if t['n'] else 0, t['worst'] / 1000.0, k))
+    if r['kinds']:
+        print('\n== Event kinds over all files (count) ==\n  ' + ', '.join('%s %d' % kv for kv in r['kinds'].most_common(14)))
+    if r['device']:
+        print('\n== Device numbers in the newest file ==\n  ' + ', '.join('%s=%s' % kv for kv in sorted(r['device'].items())))
+    if r['settings']:
+        print('\n== Settings the owner changed (newest file) ==\n  ' + ', '.join('%s=%s' % kv for kv in sorted(r['settings'].items())))
     show('Video playback problems', r['play'])
     show('Compatibility, blocking and page errors', r['compat'])
     snap = [x for b in batches[-1:] for x in b.get('snapshot', []) if isinstance(x, str) and x.startswith('Counters:')]
