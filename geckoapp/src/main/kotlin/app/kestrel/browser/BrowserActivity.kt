@@ -3691,7 +3691,37 @@ open class BrowserActivity : Activity(), DockListener {
             // content:// only: a rogue picker app could answer with file:///data/data/<this app>/... and the page would upload the browser's own files
             val given = uris.filter { it.scheme == "content" }.distinct()
             filePicks.result(given.size, resultCode); Health.log("filepick", "result", "code=$resultCode files=${given.size} dropped=${uris.size - given.size} answered=${cb != null}")
+            if (given.isNotEmpty() && current?.isPrivateTab != true && !PrivateGuard.active()) { val look = given.take(3); Io.exec { for (u in look) pickedFacts(u) } }   // IMG1: what Android sees in the file (never a name; nothing while a private tab exists)
             cb?.invoke(given)
+        }
+    }
+
+    /**
+     * IMG1 (owner 2026-11-21: "I'm trying to upload screenshots to claude and it says can't process images"): what a picked file looks like to Android, off the UI thread: the type, the size, whether the picture's header can be read, whether the name has an
+     * extension and how much room the cache has (the engine copies the file there for the page). One `filepick picked` line and the Diagnostics sentence; no name, no path (core FilePickFacts). Opening the file also proves the picker's permission still holds.
+     */
+    private fun pickedFacts(u: Uri) {
+        try {
+            val cr = contentResolver
+            var bytes = -1L; var ext = false
+            cr.query(u, arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val si = c.getColumnIndex(android.provider.OpenableColumns.SIZE); if (si >= 0 && !c.isNull(si)) bytes = c.getLong(si)
+                    val ni = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (ni >= 0 && !c.isNull(ni)) ext = c.getString(ni).let { n -> n.lastIndexOf('.') in 1 until n.length - 1 }
+                }
+            }
+            val type = cr.getType(u) ?: ""
+            var w = 0; var h = 0
+            if (type.isEmpty() || type.startsWith("image/")) cr.openInputStream(u)?.use { st ->
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeStream(st, null, o); w = maxOf(o.outWidth, 0); h = maxOf(o.outHeight, 0)
+            }
+            val f = app.kestrel.core.prompt.FilePickFacts.Picked(type, bytes, w, h, ext, cacheDir.usableSpace shr 20)
+            filePicks.picked(app.kestrel.core.prompt.FilePickFacts.verdict(f))
+            Health.log("filepick", "picked", app.kestrel.core.prompt.FilePickFacts.logLine(f))
+        } catch (e: Exception) {
+            filePicks.picked("Android could not open the picked file (" + e.javaClass.simpleName + "): the picker or its permission is the problem, not the page")
+            Health.log("filepick", "picked-failed", e.javaClass.simpleName)
         }
     }
 
