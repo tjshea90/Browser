@@ -1,13 +1,15 @@
-# CHECKPOINT 2634 — read me first, then TASKS.md
+# CHECKPOINT 2644 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T16:22:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-5531c47b-hl1gzo` · **builds on:** `55e756fd` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T22:16:06Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-5531c47b-hl1gzo` · **builds on:** `3b88d8d1` (this checkpoint is the commit after it)
 
 ## Just done
-kestrel-g-v0.3.0-alpha66 (gecko code 167) is SHIPPED AND RECORDED (run 44125112190 green, Release has the APK, BUILDLOG.md line written): do NOT dispatch or ship it again. After it, on this branch only: the vendored keyboard engine copy was re-synced to the Keyboard repo commit 4644951 (KEYBOARD_PIN updated, check-keyboard-core.sh passes): the Android 10 "text reports arrive inside the edit call" fix in InputController (matters only for an editor in the keyboard's own app, so Kestrel's own page-field keyboard behaves as before). Not released: the next Kestrel release carries it.
+gated kestrel-g-v0.3.0-alpha68 (gecko code 169) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-Nothing is running for this lane. Wait for the owner: tablet test of alpha66 (the panel bar opens the Swoop keyboard floating when Swoop is the chosen keyboard; Settings > Use the Swoop keyboard from the panel). The next release: bump versionCode/versionName, bash ship.sh gecko "<note>", ONE dispatch of android.yml, record-release.sh only after the run is green.
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-5531c47b-hl1gzo, inputs {"app":"gecko","full_build":"true","note":"alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha68), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha68 "alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."
+NEVER ship kestrel-g-v0.3.0-alpha68 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,17 +18,17 @@ Nothing is running for this lane. Wait for the owner: tablet test of alpha66 (th
 
 ## Last ten checkpoints
 ```
-  60f8deca ckpt 2633: alpha65 SHIPPED and RECORDED (run 44120758574 all 7 jobs green, Release kest
-  f7d26151 ckpt 2632: alpha65 run is android.yml run 44120758574 (run_number 216, started 16:00:17
-  0fa23623 ckpt 2631: alpha65 DISPATCHED ONCE (compile at install = LAB6: release script publishes
-  d32b8cf2 ckpt 2630: gated kestrel-g-v0.3.0-alpha65 (gecko code 166) and pushed it: handoff self-
-  a6159180 ckpt 2629: OWNER SAID GO on LAB6 (compile at install through the updater). Recorded in 
-  20e28803 ckpt 2628: LAB5 PASS COMPLETE. alpha64 shipped 11:52Z (https://github.com/tjshea90/Brow
-  cda703be ckpt 2627: alpha64 SHIPPED + RECORDED (Release kestrel-g-v0.3.0-alpha64, run 4407646379
-  e5e2e612 ckpt 2626: alpha64 DISPATCHED ONCE at 11:42Z: android.yml run 44076463792 (app=gecko fu
-  d9efb312 ckpt 2625: gated kestrel-g-v0.3.0-alpha64 (gecko code 165) and pushed it: handoff self-
-  4692623b ckpt 2624: RELEASE PREP (not shipped): versionCode 165 / versionName 0.3.0-alpha64 in g
+  e38fb0d8 ckpt 2643: alpha67 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha67 code 168, run
+  765d1c8a ckpt 2642: alpha67 DISPATCHED ONCE (android.yml app=gecko full_build=true, ref ccr-e89b
+  d8340975 ckpt 2641: gated kestrel-g-v0.3.0-alpha67 (gecko code 168) and pushed it: handoff self-
+  fd0ea0b5 ckpt 2640: Diagnostics line 'start oat' added (BrowserActivity.oatSizes: sizes of oat/<
+  63fdb931 ckpt 2639: LAB7 CONFIRMATION lab run DISPATCHED ONCE: android.yml run 44137227924 (run_
+  ebd3854a ckpt 2638: LAB7 first lab run 44126148207 READ (research/LAB7_RESULTS.md next): (1) the
+  5b6a24c8 ckpt 2637: LAB7 CORRECTED lab run DISPATCHED ONCE: android.yml run 44126148207 (run_num
+  e40a5b70 ckpt 2636: LAB7 lab run 44125632537 CANCELLED ON PURPOSE and replaced by a corrected on
+  3206d5dd ckpt 2635: LAB7 lab run DISPATCHED ONCE (android.yml app=lab lab_suite=aot lab_profile=
+  eaa4e46d ckpt 2634: LAB7a+b lab code written and dry-run against a fake adb (aotlab.py breadth_c
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(15 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
