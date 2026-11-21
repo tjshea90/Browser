@@ -62,7 +62,7 @@ def find_clone():
     env = os.environ.get('KESTREL_PRIVATE')
     if env and os.path.isdir(os.path.join(env, '.git')):
         return env
-    parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))      # tools/ -> repo -> its parent folder
     for n in ('kestrel-private', 'Kestrel-Private'):
         if os.path.isdir(os.path.join(parent, n, '.git')):
             return os.path.join(parent, n)
