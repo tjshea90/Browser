@@ -103,7 +103,7 @@ object ImeLayout {
         }
         val toSymbols = KeySpec("?123", Key.ToSymbols, WIDE_KEY)
         val bottomRow = when (kind) {
-            FieldKind.URL -> bottom(toSymbols, listOf(ch("/")), listOf(ch("."), ch(".com", WIDE_KEY)))
+            FieldKind.URL, FieldKind.OMNIBOX -> bottom(toSymbols, listOf(ch("/")), listOf(ch("."), ch(".com", WIDE_KEY)))
             FieldKind.EMAIL -> bottom(toSymbols, listOf(ch("@")), listOf(ch("."), ch(".com", WIDE_KEY)))
             else -> bottom(toSymbols, listOf(ch(",")), listOf(ch(".")))
         }

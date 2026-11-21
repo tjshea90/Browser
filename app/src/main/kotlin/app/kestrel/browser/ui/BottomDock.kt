@@ -104,6 +104,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
             setSelectAllOnFocus(true)
             isSaveEnabled = false
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            privateImeOptions = app.kestrel.browser.SwoopLink.OMNIBOX_OPTION      // owner request 17: the Swoop keyboard gives this box its browser layout and still learns
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
             setOnEditorActionListener { _, id, ev ->
                 if (id == EditorInfo.IME_ACTION_GO || (ev != null && ev.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)) {
