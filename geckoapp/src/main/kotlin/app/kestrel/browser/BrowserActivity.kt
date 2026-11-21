@@ -1551,6 +1551,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (t !== current || t.session == null) return
         val st = t.gecko.state
         if (st == null) { Health.log("tabs", "back-arm", "no state"); return }
+        // BK10: the copy of the history must describe the page on screen, or the picture of the wrong page would cover the right one (the engine's copy arrives a moment after a commit)
+        if (!BackScrollRules.sameAddress(if (st.currentIndex in 0 until st.size) st[st.currentIndex].uri else null, t.url)) { Health.count("back.stale-state"); Health.log("tabs", "back-arm", "stale state (index ${st.currentIndex} of ${st.size}): no picture"); return }
         val i = st.currentIndex + delta
         if (i !in 0 until st.size) { Health.log("tabs", "back-arm", "index $i of ${st.size}"); return }
         val url = st[i].uri ?: return
