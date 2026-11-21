@@ -80,6 +80,18 @@ class PrivateTabsTest {
         assertEquals("nothing was queued", false, LiveDiag.queuedForTest().also { })
     }
 
+    @Test fun theDiagnosticsLineSaysWhetherTheSafetyNetIsOnAndCarriesNothingPrivate() {
+        assertTrue(PrivateGuard.line(), PrivateGuard.line().contains("the safety net is idle"))
+        PrivateGuard.setOpen(true)
+        Health.log("cosmetic", "css", "$canary top=true len=1")
+        assertTrue(PrivateGuard.line(), PrivateGuard.line().contains("the safety net is ON"))
+        assertFalse(PrivateGuard.line(), PrivateGuard.line().contains("canary"))
+        PrivateGuard.setOpen(false); now += 30_000
+        assertTrue(PrivateGuard.line(), PrivateGuard.line().contains("still ON for 90 s"))
+        now += 100_000
+        assertTrue(PrivateGuard.line().contains("idle"))
+    }
+
     @Test fun theCrashNoteNamesNoSiteWhileAPrivateTabExists() {
         PrivateGuard.setOpen(true)
         Health.log("gecko", "page-start", "https://$canary/watch?v=1")

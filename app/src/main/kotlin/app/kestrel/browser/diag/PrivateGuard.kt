@@ -31,5 +31,16 @@ object PrivateGuard {
         return t
     }
 
+    /** The Diagnostics line: is the safety net on, and what it did (two counts, nothing from a page). */
+    fun line(): String {
+        val left = window.msLeft(clock())
+        val state = when {
+            left < 0L -> "a private tab is open: the safety net is ON (no site name goes into the event list, the live diagnostics build and send nothing)"
+            left > 0L -> "the last private tab closed less than two minutes ago: the safety net is still ON for ${left / 1000} s"
+            else -> "no private tab: the safety net is idle"
+        }
+        return "Private tabs: $state; lines that had a site name masked so far ${Health.counter("private.masked")}, live-diagnostic sends held back ${Health.counter("private.holds")}"
+    }
+
     internal fun resetForTest() { window = PrivateWindow(); clock = { SystemClock.elapsedRealtime() } }
 }
