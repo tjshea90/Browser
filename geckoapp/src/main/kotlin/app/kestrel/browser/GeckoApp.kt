@@ -33,6 +33,7 @@ class GeckoApp : Application() {
         if (getProcessName() == packageName) { app.kestrel.browser.download.DownloadController.setFetcher(1, app.kestrel.browser.net.GeckoFetcher(app.kestrel.browser.download.UrlConnectionFetcher())) }
         if (getProcessName() == packageName) app.kestrel.browser.diag.CrashNote.install(this) // AX2: an uncaught exception leaves a note the next Diagnostics shows
         if (getProcessName() == packageName) app.kestrel.browser.diag.LastRun.begin(this) // CR1: reads how the last run ended (IO thread) and starts this run's note
+        if (getProcessName() == packageName) app.kestrel.browser.diag.LiveDiag.init(this) // LD1: the owner's switch is read here; off = nothing is recorded
         if (getProcessName() == packageName) app.kestrel.browser.diag.StartTimeline.appCreated()
         if (getProcessName() == packageName) ProcessLife.init(this)
         if (getProcessName() == packageName) Engine.start(this) // background thread: filter snapshot + Public Suffix List (malware list, per-site Shields)

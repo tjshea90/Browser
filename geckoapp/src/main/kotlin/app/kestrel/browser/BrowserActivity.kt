@@ -628,6 +628,7 @@ open class BrowserActivity : Activity(), DockListener {
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
+        app.kestrel.browser.diag.LiveDiag.onFront { liveDiagSnapshot() }  // LD1: 2 minutes after the app is in front, IF the switch is on, a token is saved and the schedule allows (<= 4 a day)
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
         if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
         if (!artNoted) Io.main.postDelayed({ noteArtStatus() }, 30_000)  // LAB5: is this install compiled with the baseline profile yet? (one Health line per run)
@@ -2551,6 +2552,16 @@ open class BrowserActivity : Activity(), DockListener {
         return "Tab previews: ${tabs.size} tabs, ${withPic.size} with a preview, $wrong for the WRONG page (must be 0); late pictures thrown away because the tab had moved on: ${Health.counter("tabs.thumb.dropped")}"
     }
 
+    /**
+     * LD1: the text the live diagnostics send along with the journal: the Diagnostics facts WITHOUT the event ring (the journal already holds the whitelisted events). Built on the UI thread; LiveDiag scrubs every
+     * line. Lines that name the page in front are left out while a private tab is in front.
+     */
+    private fun liveDiagSnapshot(): String {
+        val inPrivate = current?.isPrivateTab == true
+        val facts = engineFacts().filter { !(inPrivate && (it.startsWith("Firefox's own tracking protection, this page") || it.contains("this page"))) }
+        return try { Health.report(this, facts, 0) } catch (e: Throwable) { "" }
+    }
+
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
@@ -2597,6 +2608,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(ShieldsBridge.statsLine())
         out.add(app.kestrel.browser.web.SiteFixes.statusLine())
         out.add(filePicks.line())
+        out.add(app.kestrel.browser.diag.LiveDiag.statusLine())    // LD1
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
@@ -2685,6 +2697,7 @@ open class BrowserActivity : Activity(), DockListener {
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
+        override fun liveDiagSnapshot(): String = this@BrowserActivity.liveDiagSnapshot()
         override fun lastLookOff() { val c = applicationContext; if (lookTab != null) hideRestoring("look-off"); Io.exec { LastLook.clearAll(c) } }
         override fun tidyStorage() { runStorageTidy(true) }
         override fun forgetGlide() {

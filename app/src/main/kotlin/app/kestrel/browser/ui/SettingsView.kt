@@ -39,6 +39,8 @@ interface SettingsListener {
     /** Settings > Back up & restore (owner AA3-7): write the backup file now / pick a backup file to bring back. */
     fun backupNow() {}
     fun restoreFromFile() {}
+    /** Settings > Live diagnostics > Send now (LD1): the Diagnostics text as it is now (called on the UI thread); the caller scrubs every line before anything is stored or sent. */
+    fun liveDiagSnapshot(): String = ""
 }
 
 /** Settings: plain scrolling rows, no AndroidX preference library. */
@@ -204,6 +206,8 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         if (app.kestrel.browser.Flavor.secureDnsBuiltIn) info("Encrypted DNS", "This browser encrypts its DNS lookups itself (DNS over HTTPS through Cloudflare, so the mobile carrier cannot read or tamper with them) and quietly falls back to the tablet's normal DNS if that service cannot be reached. On a phone hotspot that fallback is the carrier's DNS, which can read the names you look up, and nothing tells you when it happens. For the strictest protection also set Private DNS for the whole tablet: Settings → Network & internet → Advanced → Private DNS, for example dns.quad9.net.")
         else info("Private DNS", "This browser cannot encrypt DNS lookups by itself. For that, set it for the whole tablet: Settings → Network & internet → Advanced → Private DNS (for example dns.quad9.net or dns.adguard-dns.eu).")
 
+        if (app.kestrel.browser.Flavor.hasLiveDiag) liveDiagSection()
+
         section("Back up & restore")
         info("What it keeps", "Bookmarks, history, your settings, the per-site Shields choices and your open tabs. Not cookies, logins or private tabs.")
         button("Back up now", "Saves one file in Downloads. Do this before you uninstall Kestrel; Downloads is not erased with the app") { l.backupNow() }
@@ -278,6 +282,42 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
     private fun info(title: String, value: String) {
         val (row, _) = rowBase(title, value)
         row.setOnLongClickListener { true }
+    }
+
+    /**
+     * LD1 (owner 2026-11-21): the live diagnostics for Claude. ONE master switch; off = nothing recorded, nothing kept, nothing sent. The plain-words rules are on the rows themselves so the owner can read what is
+     * and is never sent without leaving Settings. The token is the owner's own GitHub token for the one private repository (typed here once; never in the APK, the repo or a backup).
+     */
+    private fun liveDiagSection() {
+        val ld = app.kestrel.browser.diag.LiveDiag
+        section("Live diagnostics (for Claude)")
+        toggle("Live diagnostics", "On: while you browse, the browser notes crashes, freezes, slow page loads, pages that do not work and video problems, and sends a small scrubbed file to your PRIVATE GitHub repository at most 4 times a day, so Claude can fix what really goes wrong on this tablet. Off: nothing is recorded, what was kept is erased now, and nothing is ever sent.", ld.isEnabled()) { ld.setEnabled(it); rebuild() }
+        info("What is never recorded or sent", "Passwords, anything you type, cookies, page text, page titles, file or video names, card numbers, e-mail addresses, phone numbers, tokens. Web addresses are cut down to the site name (never the path or what follows it). Banking, health, mail, government and sign-in sites are not named at all. Private tabs are never named. Nothing is sent without the token below, and nothing is sent unless the repository is private.")
+        info("Status", ld.statusLine())
+        if (!ld.isEnabled()) return
+        button("GitHub token", if (ld.hasToken()) "Saved on this tablet only. Tap to replace it or forget it." else "Required for sending. Tap to type it (one time).") { liveDiagTokenDialog() }
+        if (ld.hasToken()) button("Send now", "Sends what is waiting to the private repository right away (normally it sends by itself, at most 4 times a day, while you use the browser)") { liveDiagSendNow() }
+        button("Erase what is stored here", "Deletes the events kept on the tablet that have not been sent yet. What was already sent stays in your private repository until you delete it there.") { ld.erase(); rebuild() }
+    }
+
+    private fun liveDiagTokenDialog() {
+        val ld = app.kestrel.browser.diag.LiveDiag
+        val input = android.widget.EditText(ctx).apply { hint = "github_pat_..."; setSingleLine(); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val b = AlertDialog.Builder(ctx).setTitle("GitHub token").setView(input)
+            .setMessage("On github.com: Settings > Developer settings > Fine-grained tokens > Generate. Repository access: only " + app.kestrel.browser.diag.LiveDiag.REPO + ". Permission: Contents = Read and write. Nothing else. Paste it here once. It stays in this app's private storage; it is not in backups and never shown again.")
+            .setPositiveButton("Save") { _, _ ->
+                if (ld.saveToken(input.text.toString())) rebuild()
+                else AlertDialog.Builder(ctx).setTitle("That is not a GitHub token").setMessage("A fine-grained token starts with github_pat_ and is one long word with no spaces. Copy it again from GitHub.").setPositiveButton("OK", null).show()
+            }.setNegativeButton("Cancel", null)
+        if (ld.hasToken()) b.setNeutralButton("Forget the token") { _, _ -> ld.forgetToken(); rebuild() }
+        b.show()
+    }
+
+    private fun liveDiagSendNow() {
+        val wait = AlertDialog.Builder(ctx).setTitle("Sending").setMessage("This takes a few seconds. Please keep the hotspot on.").setCancelable(false).show()
+        app.kestrel.browser.diag.LiveDiag.sendNow({ l.liveDiagSnapshot() }) { text ->
+            app.kestrel.browser.Io.main.post { wait.dismiss(); AlertDialog.Builder(ctx).setTitle("Live diagnostics").setMessage(text).setPositiveButton("OK", null).show(); rebuild() }
+        }
     }
 
     private fun pairDialog(thenOn: Boolean = false) {

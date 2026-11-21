@@ -39,7 +39,6 @@ object LiveDiag {
     @Volatile private var hasToken = false
     private var sp: SharedPreferences? = null
     private var dir: File? = null
-    private var snapshot: (() -> String)? = null
     private val journal = ArrayDeque<String>()
     private val lock = Any()
     private var dropped = 0
@@ -48,14 +47,14 @@ object LiveDiag {
     @Volatile private var repoChecked = 0L
     @Volatile private var status = "not started"
 
-    /** Called once at start-up. [snapshotText] builds the Diagnostics text (UI thread). */
-    fun init(ctx: Context, snapshotText: () -> String) {
+    /** Called once at start-up (the UI process only). */
+    fun init(ctx: Context) {
         val c = ctx.applicationContext
         sp = c.getSharedPreferences("livediag", Context.MODE_PRIVATE)
         dir = c.filesDir
-        snapshot = snapshotText
         enabled = sp!!.getBoolean("on", true)
         hasToken = !sp!!.getString("token", "").isNullOrEmpty()
+        try { @Suppress("DEPRECATION") val pi = c.packageManager.getPackageInfo(c.packageName, 0); versionName = pi.versionName ?: "?"; versionCode = pi.versionCode } catch (e: Exception) { /* the batch then says ? */ }
         if (enabled) Io.exec { load() } else erase()
         status = describe()
     }
@@ -246,5 +245,4 @@ object LiveDiag {
     private var versionName = "?"; private var versionCode = 0
     private fun appVersion() = versionName
     private fun appCode() = versionCode
-    fun setBuild(name: String, code: Int) { versionName = name; versionCode = code }
 }
