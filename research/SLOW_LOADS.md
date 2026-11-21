@@ -34,3 +34,9 @@ Evidence = the 4 real uploads in tjshea90/Kestrel-Private diag/2026-11-21 (alpha
 
 ## 4. What LD4b records (one line per page load, never for a private tab, hosts only, sensitive sites never named)
 `page timing host=... nt dns con tls ttfb fcp lcp dcl load rn rc kb r1 r3 rsum h2 h1 h3 js css img xhr lag=max/total/ticks nodes scr fr slow=host:kind:ms,... | shields net avail cpu tabs`: separates network (dns, con, ttfb, slow requests, r1/r3), page JavaScript (lag, nodes, scr), Shields (rn, shields) and the tablet's state (avail, cpu, tabs). Counts and milliseconds only; no path, query, title or text.
+
+## 5. What shipped in alpha85 against this list, and what comes next
+- Shipped: the instrument (section 4), the digest's verdict per site, the advisor rules. Nothing in the engine's settings was changed: with no measurement of WHERE the 28 s go, any such change would be a guess, and every earlier guess is already in gecko-prefs.txt.
+- How to read the first answer: after one day of normal use, `python3 -B -I tools/diag_digest.py` > LOAD ANALYSIS. Verdict CPU-bound -> hypothesis 1 (look at what competes: the parent's `Gecko` thread, extension plumbing, Classifier Update); NETWORK-bound -> hypothesis 2 or 3 (first byte vs slow requests, and which hosts); SHIELDS-heavy or a large Shields A/B gap -> hypothesis 4. The owner can make the A/B himself: load claude.ai three times with Shields up, switch Shields off for the site, load it three times.
+- Next steps by verdict (each its own TASKS row when it applies): CPU-bound with a saturated parent main thread -> a Network-lab switch that drops the extension's three bookkeeping listeners (completed, error, send-headers) to measure the plumbing; CPU-bound in the content process -> per-scriptlet cost counters; NETWORK-bound before the first byte -> the tunnel (LinkMeter) and warm connections; slow third-party requests -> name them in the lists.
+
