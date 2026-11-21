@@ -984,12 +984,15 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
 // and the places where `no-store` is a safety rule (mail, banking, payment, sign-in, account and health addresses: bkSensitive). The app switches the whole thing off in Settings (bkMode).
 var bkRelaxed = new Map();   // requestId of main pages made cacheable here (so the sniffer does not report them as uncacheable too)
 var BK_LABELS = /^(?:mail|webmail|email|bank|banking|login|signin|sign-in|signon|accounts?|myaccount|auth|sso|secure|pay|payments?|checkout|wallet|billing|id|identity|passwords?|vault|admin|portal|health|patient|medical|tax|payroll)$/;
+// whole labels of well-known finance, payment, health-insurance and mail brands whose names say nothing (chase.com): exact matches only, so "purchase.example" is not caught. A best effort, not a list of every bank; the path and
+// address rules below and the switch in Settings are the other safety nets.
+var BK_BRANDS = /^(?:chase|wellsfargo|citi|citibank|capitalone|amex|americanexpress|discover|schwab|fidelity|vanguard|etrade|robinhood|sofi|zelle|revolut|stripe|intuit|turbotax|hrblock|quickbooks|wise|kaiser|anthem|cigna|aetna|unitedhealthcare|uhc|medicare|mychart|gmail|fastmail|zoho|hey|aol|yandex|mailbox|tuta|tutanota|protonmail|proton)$/;
 var BK_HOST = /(?:bank|banc|credit|loan|mortgage|insur|medic|clinic|paypal|venmo|crypto|coinbase|binance|proton|tutanota|outlook|hotmail|icloud|cashapp|payroll)/;
 var BK_PATH = /(?:^|\/)(?:log-?in|log-?out|log-?on|sign-?in|sign-?out|sign-?up|register|account|accounts|myaccount|checkout|cart|payment|payments|billing|password|passwd|oauth2?|authorize|auth|sso|verify|2fa|otp|callback|settings|profile|admin|wp-admin|inbox|mail|banking|wallet|transfer|security)(?:\/|$|\.|\?)/i;
 var BK_QUERY = /[?&](?:password|passwd|token|code|otp|access_token|id_token|session|sid|auth)=/i;
 function bkSensitive(u) {
   var host = String(u.hostname || '').toLowerCase(), labels = host.split('.'), i;
-  for (i = 0; i < labels.length; i++) if (BK_LABELS.test(labels[i])) return true;
+  for (i = 0; i < labels.length; i++) if (BK_LABELS.test(labels[i]) || BK_BRANDS.test(labels[i])) return true;
   var last = labels[labels.length - 1], second = labels.length > 1 ? labels[labels.length - 2] : '';
   if (last === 'gov' || last === 'mil' || last === 'edu' || second === 'gov' || second === 'edu') return true;
   if (BK_HOST.test(host)) return true;
