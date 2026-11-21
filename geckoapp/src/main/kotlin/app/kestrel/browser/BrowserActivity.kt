@@ -1426,6 +1426,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun syncPrivateAnchor() {
         val need = tabs.any { it.isPrivateTab }
         PrivateGuard.setOpen(need)                                                // PV1: the last private tab gone starts the two minutes in which late events are still masked
+        if (!need) Shields.endPrivate()                                           // PV1: a Shields change made from a private tab is taken back (it was never saved)
         if (need && privateAnchor == null) {
             try {
                 val a = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
