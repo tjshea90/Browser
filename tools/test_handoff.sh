@@ -331,7 +331,9 @@ ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 fra
       '+60.0s video codec-no sixty.example.org size=0 mode=0 fps=4 last=avc_60fps',
       '+61.0s video error sixty.example.org code=4 net=3 ready=0 src=blob frame=top el=v',
       '+70.0s video gate exempt.example.net held=0 kept=0 refused=2 opened=0 frame=top rule=off-for-site',
-      '+71.0s video error exempt.example.net code=2 net=3 ready=0 src=http frame=top el=v']
+      '+71.0s video error exempt.example.net code=2 net=3 ready=0 src=http frame=top el=v',
+      '+80.0s filepick picked type=image/png kb=811 size=600x973 decodes=1 ext=1 freeMb=300',
+      '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40']
 now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha87', 'code': 188, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
      'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics'], 'events': ev}
@@ -339,6 +341,8 @@ json.dump(b, open(d + '/120000-abc123.json', 'w'))
 PY
 check "digest VIDEO PROBLEMS names the site the press-to-play rule held back and points at the per-site switch" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/vd1/diag" > "$T/vd1/out.txt"; grep -E "reels.example.com .*held 2, kept 6, refused 17" "$T/vd1/out.txt" && grep -q "cause 1: the press-to-play rule held/refused videos here" "$T/vd1/out.txt"'
 check "digest VIDEO PROBLEMS ties a refused frame rate plus a failed element to the format policy, and says the rule is not the cause where the site was exempt" 'grep -q "cause 3: the format policy said no (size 0, H.264-only 0, 30 fps 4, last avc_60fps)" "$T/vd1/out.txt" && grep -q "the rule was OFF for this site and elements still failed" "$T/vd1/out.txt" && grep -q "code 2 http: network error" "$T/vd1/out.txt"'
+check "digest FILE PICKS counts the empty file and the unreadable picture and blames the file, not the page" 'grep -q "FILE PICKS.*2 file" "$T/vd1/out.txt" && grep -q "empty files 1, pictures Android cannot read 1" "$T/vd1/out.txt" && grep -q "the FILE or the tablet is a cause" "$T/vd1/out.txt"'
+check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
 
 echo "handoff self-test: $PASS passed, $FAIL failed"

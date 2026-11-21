@@ -411,6 +411,41 @@ def video_analysis(batches):
             print('      -> ' + w)
 
 
+def filepick_analysis(batches):
+    """IMG1: what the files picked for a page looked like to Android (`filepick picked type= kb= size=WxH decodes= ext= freeMb=`): says whether a file or the page is to blame for a refused upload."""
+    rows = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' filepick picked ' in e:
+                kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' filepick picked ', 1)[1]))
+                rows.append(kv)
+            elif isinstance(e, str) and ' filepick picked-failed ' in e:
+                rows.append({'failed': e.split(' filepick picked-failed ', 1)[1].strip()[:40]})
+    print('\n== FILE PICKS (what the files attached to pages looked like to Android; %d file(s)) ==' % len(rows))
+    if not rows:
+        print('  (no `filepick picked` lines yet: needs alpha87 or newer and one attached file in a normal tab)')
+        return
+    def n(kv, k, d=0):
+        try:
+            return int(kv.get(k, d))
+        except ValueError:
+            return d
+    failed = [r for r in rows if 'failed' in r]
+    ok = [r for r in rows if 'failed' not in r]
+    types = Counter(r.get('type', '?') for r in ok)
+    print('  types: ' + ', '.join('%s x%d' % kv for kv in types.most_common(5)) + ('; Android could not even open %d file(s) (%s)' % (len(failed), failed[0]['failed']) if failed else ''))
+    empty = sum(1 for r in ok if n(r, 'kb') == 0)
+    nodec = sum(1 for r in ok if str(r.get('type', '')).startswith('image/') and n(r, 'decodes') == 0)
+    noext = sum(1 for r in ok if n(r, 'ext', 1) == 0)
+    frees = [n(r, 'freeMb', -1) for r in ok if n(r, 'freeMb', -1) >= 0]
+    big = max([n(r, 'kb') for r in ok] or [0])
+    print('  empty files %d, pictures Android cannot read %d, names without an extension %d, biggest %d KB, least free room in the app cache %s MB' % (empty, nodec, noext, big, min(frees) if frees else '-'))
+    if empty or nodec or (frees and min(frees) < 50):
+        print('      -> the FILE or the tablet is a cause (an empty or unreadable file, or the cache is nearly full): fix that before blaming the page')
+    elif ok:
+        print('      -> the files look fine to Android: if a site still says it cannot process them, the page, the engine\'s canvas protection (FPP) or the site is the cause (research/IMG1_UPLOAD.md)')
+
+
 def brief(r, batches):
     if not batches:
         return ''
@@ -530,6 +565,7 @@ def main(argv):
         print('  (none)')
     load_analysis(batches, r)
     video_analysis(batches)
+    filepick_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
         rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]
