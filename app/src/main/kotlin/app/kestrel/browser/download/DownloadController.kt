@@ -18,6 +18,7 @@ import app.kestrel.core.courier.FETCHER_LAN
 import app.kestrel.core.courier.LanFetcher
 import app.kestrel.core.courier.LocalDownloads
 import app.kestrel.core.courier.PhoneBackend
+import app.kestrel.core.download.HttpSemantics
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_APP_PRIVATE
@@ -316,7 +317,7 @@ object DownloadController {
                 try {
                     status = resp.status
                     // the size of the whole file: the end of "Content-Range: bytes 0-0/48213", or the plain length of a reply that ignored Range
-                    total = (if (resp.status == 206) resp.header("Content-Range")?.substringAfterLast('/')?.trim()?.toLongOrNull() else if (resp.status == 200) resp.header("Content-Length")?.trim()?.toLongOrNull() else null) ?: -1L
+                    total = HttpSemantics.probeTotal(resp.status, resp.header("Content-Range"), resp.header("Content-Length"), resp.header("Content-Type")) // RVW4: a web page at an address that only ends like a video is no file
                     if (resp.status == 200 || resp.status == 206) {
                         val want = (to - from + 1).coerceAtMost(8L * 1024 * 1024).toInt()
                         val out = java.io.ByteArrayOutputStream()

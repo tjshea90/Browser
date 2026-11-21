@@ -1,4 +1,6 @@
+import java.io.File
 import java.util.Properties
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // Kestrel G: the same Kestrel UI / data / filter engine as :app, but pages are drawn by Firefox's engine (GeckoView) instead of the tablet's
@@ -25,6 +27,48 @@ val geckoAbi = (findProperty("geckoAbi") as String?) ?: "armeabi-v7a"
 val omniStored = (findProperty("omniStored") as String?) != "false"
 val libsInApk = (findProperty("libsInApk") as String?) == "true"
 
+// NL1 (research/REVIEW_2026-11-22_NEWLEVERS.md): Mozilla's "Web Compatibility Interventions" extension (webcompat@mozilla.org, MPL-2.0), the site fixes stock Firefox for Android carries and the engine itself does not.
+// It is fetched at build time from Mozilla's Maven (only its assets are unpacked; the library's classes never enter the app), so no third-party code is committed. Keep the version at the engine's major (geckoVersion).
+// The Remote Settings listener is replaced by an empty one: the interventions baked into the build are used and no new background traffic starts (they are renewed with the monthly engine bump).
+val webcompatVersion = "160.0.1"
+val webcompatAar: Configuration by configurations.creating { isTransitive = false; isCanBeConsumed = false }
+
+abstract class PrepareWebcompat : DefaultTask() {
+    @get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY) abstract val aar: ConfigurableFileCollection
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction fun unpack() {
+        val root = out.get().asFile
+        root.deleteRecursively()
+        val prefix = "assets/extensions/webcompat/"
+        val base = File(root, "webcompat").canonicalFile
+        ZipFile(aar.singleFile).use { zip ->
+            for (e in zip.entries().asSequence()) {
+                if (e.isDirectory || !e.name.startsWith(prefix)) continue
+                val rel = e.name.removePrefix(prefix)
+                // build-time leftovers of Mozilla's tree, never read by the extension
+                if (rel.contains("__pycache__") || rel.startsWith(".deps/") || rel.endsWith(".md") || rel.endsWith(".py") || rel.endsWith(".toml") || rel.endsWith(".mozbuild") || rel == "jar.mn" || rel == "intervention_schema.json") continue
+                val f = File(base, rel).canonicalFile
+                require(f.path.startsWith(base.path + File.separator)) { "unsafe path in the archive: ${e.name}" }
+                f.parentFile.mkdirs()
+                zip.getInputStream(e).use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+            }
+        }
+        val listener = File(base, "lib/remote_settings_update_check.js")
+        check(listener.isFile && File(base, "manifest.json").isFile && File(base, "run.js").isFile) { "feature-webcompat no longer has the expected layout: re-check research/REVIEW_2026-11-22_NEWLEVERS.md NL1" }
+        listener.writeText("/* Kestrel: no Remote Settings listener (no new background traffic); the interventions baked into this build are used. See research/REVIEW_2026-11-22_NEWLEVERS.md NL1. */\nfunction listenForRemoteSettingsUpdates() {}\n")
+    }
+}
+
+val prepareWebcompat = tasks.register<PrepareWebcompat>("prepareWebcompat") {
+    aar.from(webcompatAar)
+    out.set(layout.buildDirectory.dir("generated/webcompat-assets"))
+}
+
+androidComponents {
+    onVariants { variant -> variant.sources.assets?.addGeneratedSourceDirectory(prepareWebcompat, PrepareWebcompat::out) }
+}
+
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
     // GeckoView 160 is built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
@@ -34,8 +78,8 @@ android {
         applicationId = "app.kestrel.browser.gecko"  // installs BESIDE the WebView build (app.kestrel.browser)
         minSdk = 29
         targetSdk = 36
-        versionCode = 175
-        versionName = "0.3.0-alpha74"
+        versionCode = 176
+        versionName = "0.3.0-alpha75"
         ndk { abiFilters += geckoAbi } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
     }
 
@@ -116,6 +160,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     // LAB5: already inside the APK (GeckoView pulls it in at runtime: it installs the baseline profile 5 s after the first frame); declared so the app can read ProfileVerifier (has Android compiled this install with the profile yet? Health line `start art`)
     implementation("androidx.profileinstaller:profileinstaller:1.4.0")
+    webcompatAar("org.mozilla.components:feature-webcompat:$webcompatVersion@aar")
     implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoVersion") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS
