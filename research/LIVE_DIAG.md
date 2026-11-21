@@ -49,3 +49,30 @@ core `Advisor` is a pure rule set (11 rules, `AdvisorTest`): engine kills/crashe
 
 ### OFF = asleep (LD2c)
 Off: `observe` returns at its first line (one volatile read), no table is fed, `facts()` / `settingsMap()` / `advice()` return nothing and read nothing, no timer is left (the 2-minute delayed send is cancelled: `sleep()` calls `removeCallbacks`), an upload that was already asking GitHub whether the repo is private checks the switch again before it sends a byte, and everything kept (journal, tables, their files) is erased. On again: recording starts from nothing. Test `offIsAsleepEveryEntryPointDoesNothingAndNothingStaysWaiting` runs every entry point with the switch off and advances the clock past the delay.
+
+## LD3 audit (owner, 2026-11-21, after alpha83): is it working, is the data enough, does an upload ever overwrite, can Claude read it
+
+Evidence = the 4 REAL files the tablet uploaded to tjshea90/Kestrel-Private (diag/2026-11-21/: 072850 alpha81 v1, 081049 + 085654 + 151240 alpha83 v2), read 2026-11-21.
+
+### 1. Working?  YES for the manual path, NOT PROVEN for the automatic path
+- Four real uploads reached the private repo (4 commits, message "diag"): token, private-repo check, base64 PUT, scrub, v2 schema all work end to end.
+- All four ended with "win focus false" = the "Sending" dialog of Settings > Send now: ALL FOUR WERE MANUAL. No unattended send has been seen. Reading the code found why one might never come: `onFront` queues ONE check 2 minutes after onResume; if the schedule says "sent recently" the check is not re-armed, so a long session in front (45 min in the real data) sends nothing until the next resume.
+- Manual "Send now" counted against the automatic 4-a-day cap, so four test presses used up the whole day.
+- Privacy on real data: the alpha83 files hold no address path, query, IP, e-mail or token (scan: only a keyboard package name matches). The alpha81 file still had a phone-link IP and a sign-in path: exactly the two alpha82/83 scrub fixes.
+
+### 2. Comprehensive?  Mostly yes; four real defects found in the real data
+- Present: page loads per site (paint / done / ok / blocked), cold start phases, memory + heap, CPU by process, UI stalls with a stack, tab sleeps, Back presses, Real-video frames, decoder list, network profile, last-run end cause, device facts, settings changed, event histogram.
+- DEFECT A (journal trim): the journal keeps 800 lines, a file carries the newest 600, and after a send the OLDEST 600 were removed. With 609 lines that re-sent the 9 newest lines in the next file (seen: file 3 repeats 9 lines of file 2) and silently lost the 9 oldest, while `dropped` stayed 0.
+- DEFECT B (noise crowds out news): 196 "video quality", 101 "tabs look-saved", 32 "video info-blob" lines were 75 % of one file; a crash line would be pushed out of the 800 by them. The counts survive in `kinds`, the lines do not.
+- DEFECT C (no clock): event stamps are seconds since that process started; files hold several runs back to back with no marker, so Claude cannot order or date them.
+- DEFECT D (advisor sees one upload): the tables are cleared after every send and the advisor only reads them, so "3 loads at 12 s or more" can almost never happen (real: 3 loads in the newest window, 28 s for claude.ai, advice []). The digest sees all files, the tablet's own Suggested rows do not.
+- Gap not fixed here: real scrolling smoothness is only a counter (frames.jank, pull.down); the page-scroll meter is a Settings switch that is off.
+
+### 3. Does an upload overwrite the last one?  NO
+- Each upload is a NEW file diag/<date>/<HHMMSS>-<install>.json written with the GitHub contents PUT WITHOUT a `sha`: GitHub refuses to replace an existing path without the old sha (422), so the API itself makes the call create-only. The app never sends DELETE.
+- Proven on the real history: git log --name-status over diag/ shows 4 commits, 4 distinct paths, status A (added) only, no M, no D.
+- Hole closed in LD3: a name clash in the same second (double tap on Send now) used to count as a failure and back the sender off for a day; now a clash retries with a suffix, and one upload runs at a time.
+
+### 4. Can Claude read what was sent?  YES, two ways, but the shipped tool did not find the files
+- Way 1 (no clone needed): GitHub MCP get_file_contents / list_commits on tjshea90/Kestrel-Private, ref main (tested 2026-11-21: lists the 4 files with sizes equal to the clone).
+- Way 2: the clone. The cloud harness clones the repo to ../Kestrel-Private (capital K, P) and checks out the SESSION branch; tools/diag_digest.py and tools/private.sh looked for ../kestrel-private (lowercase, Linux is case sensitive), so the digest printed "No live-diagnostics files" while 4 files existed. Also the tablet writes to the default branch main, so a session branch goes stale. Fix (LD3d): one resolver that finds the clone in any case, and the digest reads origin/main from git objects after a fetch.
