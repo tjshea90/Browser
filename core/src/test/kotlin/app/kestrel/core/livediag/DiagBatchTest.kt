@@ -11,7 +11,7 @@ class DiagBatchTest {
 
     @Test fun theFileIsPlainJsonWithEveryLineEscaped() {
         val j = b.toJson()
-        assertTrue(j.startsWith("{\n \"v\": 1,")); assertTrue(j.contains("\"install\": \"ab12cd34\"")); assertTrue(j.contains("\"dropped\": 3"))
+        assertTrue(j.startsWith("{\n \"v\": 2,")); assertTrue(j.contains("\"install\": \"ab12cd34\"")); assertTrue(j.contains("\"dropped\": 3"))
         assertTrue(j.contains("\"quote \\\" and back\\\\slash\""))
         assertEquals("\"a\\nb\\u0001\"", DiagBatch.q("a\nb\u0001"))
         assertTrue(DiagBatch("i", "v", 1, 29, "m", "t", emptyList(), emptyList(), 0).toJson().contains("\"snapshot\": []"))

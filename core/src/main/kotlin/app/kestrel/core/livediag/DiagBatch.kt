@@ -12,14 +12,35 @@ class DiagBatch(
     val events: List<String>,
     /** Lines that were left out (too many, or dropped because they still looked like a secret): said, so a gap is not a mystery. */
     val dropped: Int,
+    /** LD2a (v2): what the owner changed in Settings (key -> value), plain numbers about the device, the event histogram, the per-site table and the suggestions the tablet's advisor made. All optional: a v1 reader ignores them. */
+    val settings: Map<String, String> = emptyMap(),
+    val device: Map<String, Long> = emptyMap(),
+    val kinds: Map<String, Long> = emptyMap(),
+    val sites: List<SiteStat> = emptyList(),
+    val advice: List<String> = emptyList(),
 ) {
     /** The file's text: plain JSON built by hand (no library), one line per array element. */
     fun toJson(): String {
         val sb = StringBuilder(2048)
-        sb.append("{\n \"v\": 1,\n \"install\": ").append(q(installId)).append(",\n \"app\": ").append(q(appVersion)).append(",\n \"code\": ").append(versionCode)
+        sb.append("{\n \"v\": 2,\n \"install\": ").append(q(installId)).append(",\n \"app\": ").append(q(appVersion)).append(",\n \"code\": ").append(versionCode)
             .append(",\n \"android\": ").append(androidApi).append(",\n \"model\": ").append(q(model)).append(",\n \"at\": ").append(q(atUtc)).append(",\n \"dropped\": ").append(dropped)
-        sb.append(",\n \"snapshot\": ["); list(sb, snapshot); sb.append("],\n \"events\": ["); list(sb, events); sb.append("]\n}\n")
+        sb.append(",\n \"settings\": "); map(sb, settings.mapValues { DiagBatch.q(it.value) })
+        sb.append(",\n \"device\": "); map(sb, device.mapValues { it.value.toString() })
+        sb.append(",\n \"kinds\": "); map(sb, kinds.mapValues { it.value.toString() })
+        sb.append(",\n \"sites\": ["); for ((i, x) in sites.withIndex()) { sb.append(if (i == 0) "\n  " else ",\n  ").append("{\"site\": ").append(q(x.site)).append(", \"loads\": ").append(x.loads).append(", \"failed\": ").append(x.failed).append(", \"medianMs\": ").append(x.medianDoneMs).append(", \"worstMs\": ").append(x.worstDoneMs).append(", \"paintMs\": ").append(x.avgPaintMs).append('}') }
+        if (sites.isNotEmpty()) sb.append("\n ")
+        sb.append("],\n \"advice\": ["); list(sb, advice)
+        sb.append("],\n \"snapshot\": ["); list(sb, snapshot); sb.append("],\n \"events\": ["); list(sb, events); sb.append("]\n}\n")
         return sb.toString()
+    }
+
+    /** A JSON object whose values are already JSON text; keys are escaped. */
+    private fun map(sb: StringBuilder, m: Map<String, String>) {
+        sb.append('{')
+        var first = true
+        for ((k, v) in m) { sb.append(if (first) "\n  " else ",\n  ").append(q(k)).append(": ").append(v); first = false }
+        if (!first) sb.append("\n ")
+        sb.append('}')
     }
 
     private fun list(sb: StringBuilder, l: List<String>) { for ((i, x) in l.withIndex()) { sb.append(if (i == 0) "\n  " else ",\n  ").append(q(x)) }; if (l.isNotEmpty()) sb.append('\n').append(' ') }
