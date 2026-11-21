@@ -311,7 +311,7 @@ for i in range(3): ev.append(line('far.example.net', 20000, 9000, 800, 120, 4, s
 for i in range(3): ev.append(line('huge.example.org', 24000, 800, 1000, 2500, 0, shields='up'))
 for i in range(2): ev.append(line('huge.example.org', 12000, 800, 900, 2500, 0, shields='down'))
 ev.append(line('busy.example.com', 5000, 100, 4000, 10, 0, hid=1))
-now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha85', 'code': 186, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
      'device': {'extReqCalls': 2425, 'extReqUs': 3948000, 'judgeAvgUs': 1242, 'judgeMaxUs': 53000, 'judgeOver2ms': 279, 'judged': 2423, 'memAvailMb': 420, 'cpuParentAvg': 24, 'cpuTabAvg': 70, 'coldPaint': 6456, 'manualSend': 0},
      'snapshot': ['Kestrel diagnostics'], 'events': ev}
