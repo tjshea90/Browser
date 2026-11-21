@@ -48,7 +48,7 @@ class LiveDiagTest {
 
     @Test fun anEventIsScrubbedBeforeItIsKept() {
         LiveDiag.observe("page", "slow", "load of https://www.example.com/watch/42?t=30s took 9.1 s, session=abc123def456, mail me at someone@example.org")
-        val j = LiveDiag.journalForTest()
+        val j = kept()
         assertEquals(1, j.size)
         assertTrue(j[0], j[0].contains("example.com"))
         assertFalse(j[0], j[0].contains("/watch/42"))
@@ -59,7 +59,7 @@ class LiveDiagTest {
     @Test fun aSensitiveSiteIsNeverNamed() {
         LiveDiag.observe("page", "slow", "load of https://www.example.com/account/42 took 9.1 s")
         LiveDiag.observe("page", "slow", "load of https://login.examplebank.com/home took 4 s")
-        val j = LiveDiag.journalForTest()
+        val j = kept()
         assertEquals(2, j.size)
         for (l in j) { assertTrue(l, l.contains("<sensitive-site>")); assertFalse(l, l.contains("example")) }
     }
@@ -68,12 +68,12 @@ class LiveDiagTest {
         LiveDiag.observe("secretlayer", "x", "anything at all")
         LiveDiag.observe("media", "name-clues", "Some Film Title (2024) 1080p")
         LiveDiag.observe("tabs", "title-changed", "My Private Document Title")
-        assertEquals(emptyList<String>(), LiveDiag.journalForTest())
+        assertEquals(emptyList<String>(), kept())
     }
 
     @Test fun aWhitelistedEventIsKept() {
         LiveDiag.observe("video", "stall", "stall 4.2 s on cdn.example.net")
-        assertEquals(1, LiveDiag.journalForTest().size)
+        assertEquals(1, kept().size)
     }
 
     @Test fun turningItOffErasesTheJournalAndItsFile() {
