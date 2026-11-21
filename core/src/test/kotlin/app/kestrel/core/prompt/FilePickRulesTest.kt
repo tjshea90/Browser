@@ -54,4 +54,11 @@ class FilePickRulesTest {
         val del = src("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
         assertTrue("a whole-folder ask is answered, not left waiting", del.contains("FilePrompt.Type.FOLDER") && del.contains("refuseFolder"))
     }
+
+    @Test fun theDiagnosticsLineCarriesWhatTheLastPickedFileLookedLike() {
+        val st = FilePickStats()
+        assertFalse(st.line(), st.line().contains("the last picked file"))
+        st.picked(FilePickFacts.verdict(FilePickFacts.Picked("image/png", 830_000, 600, 973, true, 300)))
+        assertTrue(st.line(), st.line().contains("the last picked file: an ordinary picture (image/png, 600x973, 811 KB)"))
+    }
 }
