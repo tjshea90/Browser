@@ -1,21 +1,22 @@
-# CHECKPOINT 2864 — read me first, then TASKS.md
+# CHECKPOINT 2869 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T23:50:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `567047ef` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T23:52:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `24415c3e` (this checkpoint is the commit after it)
 
 ## Just done
-PERF2c lag evidence from the owner's NEW upload (234658, alpha87, Send now): (1) powerSave=1 in BOTH alpha86 and alpha87 uploads = Android Battery Saver was ON; Advisor rule + Diagnostics words added; (2) the app read back the page picture every 4-6 s while scrolling (27 'tabs look-saved', kestrel-io 35% CPU, readback is a synchronous compositor call): scroll-settled look now every 30 s, never during a video or battery saver; (3) pornhub video errors in the upload: code 9/4 are mostly the hover PREVIEW videos (media PARSED_DATA_CACHED), the main player's spin gives no error -> alpha88 stall probe. Tests not yet run for the lag changes
+alpha88 RELEASED and recorded (run 44962198254 green, Release has the APK). alpha89 prepared: lag fixes (scroll-settled look every 30 s, never video/battery saver; Battery Saver advice+Diagnostics words), pornhub layout-rule exceptions (CosmeticFixes), note docs/handoff/ALPHA89_RELEASE_NOTE.txt; gate g7.log running
 
 ## Do this next
-Next: run :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin (g7) + web-tests unaffected; PERF2a exception table for pornhub's geometry rules (div.container margin-top, .video-wrapper > #player ~ .hd.clear): the owner A/B proved the cosmetic rules cut the circle; then ship alpha89; alpha88 run must be recorded first (send_later trig_01CcoH9KEMy1roPiSc9Ki1Fu 23:54Z)
+Next: g7.log GRADLE_EXIT=0 (core+app tests, gecko compile, lint; CosmeticFixesTest uses the real default.kfs) -> bump 190 / 0.3.0-alpha89, sync-ext-version, ship.sh gecko with the ALPHA89 note, ONE dispatch, verify, record-release; answer owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  4bec7a6a ckpt 2864: PERF2c lag evidence from the owner's NEW upload (234658, alpha87, Send now):
   306d0ccc ckpt 2861: Owner follow-up written to TASKS.md as PERF2a-c: hiding off = whole circle (
   bf872eae ckpt 2860: alpha88 (code 189) gated and shipped to GitHub: ONE dispatch made about 23:3
   6f8657d1 ckpt 2859: gated kestrel-g-v0.3.0-alpha88 (gecko code 189) and pushed it: handoff self-
@@ -25,8 +26,7 @@ Next: run :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin (g7) + 
   8a2a9b11 ckpt 2849: alpha87 first dispatch (run 44958961031) FAILED in test-js on GitHub: pageti
   3811af55 ckpt 2848: Owner follow-up on pornhub (VD2c, in TASKS.md): Shields ON cuts off the load
   7579817e ckpt 2847: alpha87 (code 188) gated and pushed, ONE android.yml dispatch made at about 
-  85221da4 ckpt 2846: gated kestrel-g-v0.3.0-alpha87 (gecko code 188) and pushed it: handoff self-
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
