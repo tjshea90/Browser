@@ -1,13 +1,13 @@
-# CHECKPOINT 2828 — read me first, then TASKS.md
+# CHECKPOINT 2829 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T18:30:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `845117ff` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T19:34:35Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `ede36761` (this checkpoint is the commit after it)
 
 ## Just done
-alpha85 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha85 (gecko code 186, run 44934161819 green, APK + sha256 + dm in the Release, BUILDLOG line pushed). LD4a-e ticked; LD4 stays open: LD4f (owner test: a day of browsing, then LOAD ANALYSIS) and LD4g (next steps by verdict)
+PV1 written into TASKS.md in the owner's words (private tabs: nothing saved at any time, nothing sent anywhere; confirm, and fix if not). alpha85 is released and recorded; nothing else running
 
 ## Do this next
-Nothing is running. Waiting for the owner to install alpha85 and browse normally (claude.ai, YouTube, once with Shields off for claude.ai); then python3 -B -I tools/diag_digest.py: LOAD ANALYSIS + INTEGRITY + 'Sends: N automatic' (LD3f). Next code step depends on the verdict (research/SLOW_LOADS.md section 5). Also open: YTC1/YTC2, ATT1, FLK1 PhoneBackendTest flake (failed once under gate load, passes alone), PB8, LD3g ideas
+PV1a: audit. Enumerate sinks by grep: every Health.log with a host/url, SharedPreferences/file writes, history/session/lastlook/thumbnail/downloads/video rows/crash dumps/LiveDiag, network calls (warm, phone helper, update, live diag, DoH); check each against tab.isPrivateTab; write research/PRIVATE_TABS.md rows; then fix + safety net (PrivateHosts set scrubbed from Health/LiveDiag/Diagnostics) + tests
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Nothing is running. Waiting for the owner to install alpha85 and browse normally
 
 ## Last ten checkpoints
 ```
+  ede36761 ckpt 2828: alpha85 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/
   0f2cd29a ckpt 2827: alpha85 gated (core 1991 incl. FLK1 flake passing alone, app 478, lint 0 err
   b9f6b0b0 ckpt 2826: gated kestrel-g-v0.3.0-alpha85 (gecko code 186) and pushed it: handoff self-
   495ef4db ckpt 2825: pre-ship: alpha85: the live diagnostics now explain WHY a page is slow, whic
@@ -25,5 +26,4 @@ Nothing is running. Waiting for the owner to install alpha85 and browse normally
   ca1f0fe2 ckpt 2821: LD4b extension side done: pagetime.js (ES5, top frame, document_start, laten
   029be5ca ckpt 2820: LD4b core done: DiagScrub caps (event 480, snapshot lines 1600: the CPU/Bloc
   0b7be92b ckpt 2819: LD4a done: research/SLOW_LOADS.md written from the real uploads: claude.ai 1
-  a6b43548 ckpt 2818: LD4 written into TASKS.md in the owner's words (richer live diagnostics + cl
 ```
