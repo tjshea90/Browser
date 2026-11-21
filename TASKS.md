@@ -1080,3 +1080,11 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [x] LD2d tools/diag_digest.py: advice grouped with how often and on how many days, trend, and a plain-words "tell the owner" block DONE 2026-11-21: tools/diag_digest.py v2 (SETTINGS TO CHANGE first) + test_handoff 74/74
   - [ ] LD2e tests + whole suite green; ship alpha83 per REL-STANDING (it ALSO carries the two scrub fixes of alpha82: alpha82 was gated and prepared but NOT dispatched, to save Actions minutes - do not dispatch it); answer the owner in plain words (what is new, how Suggested changes work, off = asleep, not run on the tablet)
 
+
+## Owner message 2026-11-21 (after alpha83): verify the live diagnostics end to end {claude/peaceful-darwin-4sbmdz 2026-11-21}
+- [ ] LD3 (owner, verbatim) "1) make sure the new live diagnostics system is working 2) see if the live diagnostics system is providing comprehensive data that can help tune and optimize the app 3) make sure each diagnostic upload is not deleting or overwriting the last upload 4) make sure claude can read the diagnostics already sent to github"
+  - [ ] LD3a WORKING: the private repo already holds 4 real uploads (diag/2026-11-21/*.json): read them, run tools/diag_digest.py, check the upload path in LiveDiag.kt really sends (schema, private-repo check, error handling), say what is proven and what is not
+  - [ ] LD3b COMPREHENSIVE: judge the real data against what is needed to tune the app (startup, page load, scroll, video, memory, crashes, settings); list blind spots, fix the ones with a small safe change + test
+  - [ ] LD3c NO OVERWRITE: every upload is a NEW file (unique name, create-only, never a PUT with an existing sha, collision handled by a new name); a test pins it; check the 4 real files are distinct and none was replaced (git history of kestrel-private)
+  - [ ] LD3d CLAUDE CAN READ: a fresh Claude session can read the files (../Kestrel-Private clone name/case, add_repo, MCP get_file_contents fallback); tools/resume.sh + diag_digest.py find the clone whatever its case; document in research/LIVE_DIAG.md + CLAUDE.md
+  - [ ] LD3e tests green, ship per REL-STANDING if code changed, answer the owner in plain words (what works, what was NOT run on the tablet), re-list open items
