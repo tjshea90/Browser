@@ -394,6 +394,17 @@ onMsg(function (m, sender) {
     vcx.reports++; vcx.asked += vn(m.a); vcx.size += vn(m.s); vcx.mode += vn(m.m); vcx.fps += vn(m.f);
     vcx.last = String(m.w || '').replace(/[^a-z0-9 x@.]/g, '').slice(0, 30);
     markStats();
+    // VD1: the same answers WITH the page, when something was refused (at most six per tab and page)
+    if (tabId >= 0 && vn(m.s) + vn(m.m) + vn(m.f) > 0 && vhAllow('c|' + tabId + '|' + (tabTop.get(tabId) || ''), 6))
+      send({ k: 'vch', p: tabTop.get(tabId) || '', a: vn(m.a), s: vn(m.s), m: vn(m.m), f: vn(m.f), w: vcx.last }).catch(function () {});
+    return undefined;
+  }
+  if (m.k === 'verr') { // VD1: videoprobe.js says a media element failed: a code, the element's two states and where its file comes from (a kind of source, never an address); checked here, the app adds the site
+    if (tabId < 0) return undefined;
+    var veC = function (x, hi) { x = +x; return x >= 0 && x <= hi ? Math.floor(x) : 0; };
+    var veS = { none: 1, blob: 1, hls: 1, dash: 1, http: 1 };
+    if (!vhAllow('e|' + tabId + '|' + (tabTop.get(tabId) || ''), 8)) return undefined;
+    send({ k: 'verr', p: tabTop.get(tabId) || '', c: veC(m.c, 9), ns: veC(m.ns, 3), rs: veC(m.rs, 4), s: veS[m.s] === 1 ? m.s : 'none', f: m.f === 1 ? 1 : 0, e: m.e === 'a' ? 'a' : 'v' }).catch(function () {});
     return undefined;
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
