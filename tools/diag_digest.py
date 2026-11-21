@@ -176,6 +176,71 @@ def analyse(batches):
     return r
 
 
+def dedupe(batches):
+    """Files made before the LD3 journal fix re-sent up to a window of lines already in the previous file of the same install (seen in the real data: 9 lines). Count each line once."""
+    prev = {}
+    for b in batches:
+        ev = [e for e in b.get('events', []) if isinstance(e, str)]
+        old = prev.get(str(b.get('install', '?')), set())
+        keep = [e for e in ev if e not in old]
+        b['_resent'] = len(ev) - len(keep)
+        b['events'] = keep
+        prev[str(b.get('install', '?'))] = set(ev)
+
+
+def file_checks(batches):
+    """Facts checkable from the files alone: the name matches the time inside, no two files claim the same name."""
+    bad, seen = [], set()
+    for b in batches:
+        f = b['_file']
+        at = str(b.get('at', ''))
+        m = re.match(r'^(\d{4}-\d{2}-\d{2})/(\d{6})-', f)
+        if m and (not at.startswith(m.group(1)) or at[11:19].replace(':', '') != m.group(2)):
+            bad.append('%s: name does not match its own time %s' % (f, at))
+        if f in seen:
+            bad.append('%s: two files with the same name' % f)
+        seen.add(f)
+    return bad
+
+
+def num(rx, text, group=1):
+    m = re.search(rx, text)
+    return m.group(group) if m else None
+
+
+def perf_rows(batches):
+    """One row of tuning numbers per file, read from the snapshot lines the Diagnostics screen already writes."""
+    rows = []
+    for b in batches:
+        snap = [x for x in b.get('snapshot', []) if isinstance(x, str)]
+        txt = '\n'.join(snap)
+        cold = num(r'(?m)^Cold start \(ms since the process started\): (.*)$', txt) or ''
+        cs = dict(re.findall(r'(\w+) (\d+)', cold))
+        mem = re.search(r'(?m)^Memory: total (\d+) MB, available (\d+) MB.*?app heap (\d+)/(\d+) MB', txt)
+        cpu = re.search(r'parent avg (\d+) / peak (\d+)', txt)
+        back = re.search(r'(?m)^Back: (\d+) presses, (\d+)% kept', txt)
+        vid = re.search(r'(?m)^Real video: (\d+) looks at (\d+) site\(s\), (\d+) min watched, (\d+) frames, dropped ([\d.]+) %', txt)
+        jank = num(r'frames\.jank=(\d+)', txt)
+        rows.append({'file': b['_file'], 'app': str(b.get('app', '?')).replace('0.3.0-', ''), 'up': num(r'app running (\d+) ?s', txt),
+                     'paint': cs.get('paint'), 'runtime': cs.get('runtime'), 'activity': cs.get('activity'),
+                     'avail': mem.group(2) if mem else None, 'heap': ('%s/%s' % (mem.group(3), mem.group(4))) if mem else None,
+                     'cpu': ('%s/%s' % (cpu.group(1), cpu.group(2))) if cpu else None, 'jank': jank,
+                     'back': ('%s/%s%%' % (back.group(1), back.group(2))) if back else None,
+                     'video': ('%s min, %s%% dropped' % (vid.group(3), vid.group(5))) if vid and int(vid.group(3)) > 0 else None})
+    return rows
+
+
+def run_endings(batches):
+    """From the newest file only (every file repeats the last 7 days of run history): how earlier runs ended."""
+    if not batches:
+        return Counter()
+    c = Counter()
+    for x in batches[-1].get('snapshot', []):
+        if isinstance(x, str) and x.strip().startswith('Cause:'):
+            c['ended by an install (first start after an update)' if 'FIRST START' in x else 'ended from outside with no crash note' if 'NO crash note' in x else 'other cause'] += 1
+    return c
+
+
 def brief(r, batches):
     if not batches:
         return ''
@@ -185,7 +250,7 @@ def brief(r, batches):
     if sh:
         worst = ', slowest site %s (avg %.1f s, %d loads)' % (sh[0][1], sh[0][0], sh[0][2])
     adv = ' %d settings suggestion(s) to tell the owner;' % len(r['advice']) if r['advice'] else ''
-    return 'LIVE DIAG: %d file(s) from %d device(s), newest %s;%s %d crash/freeze line kinds, %d playback, %d compat%s. Read: python3 -B -I tools/diag_digest.py' % (
+    return 'LIVE DIAG: %d file(s) from %d device(s), newest %s;%s %d crash/freeze line kinds, %d playback, %d compat%s. Read: python3 -B -I tools/diag_digest.py (--verify proves nothing was overwritten)' % (
         len(batches), len(r['installs']), last or '?', adv, len(r['crash']), len(r['play']), len(r['compat']), worst)
 
 
@@ -198,18 +263,39 @@ def show(title, c, n=8):
 
 
 def main(argv):
-    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'kestrel-private', 'diag')
-    days, short = 14, False
+    base, repo, days, short, verify, fetch = None, None, 14, False, False, True
     i = 0
     while i < len(argv):
         if argv[i] == '--dir':
             i += 1; base = argv[i]
+        elif argv[i] == '--repo':
+            i += 1; repo = argv[i]
         elif argv[i] == '--days':
             i += 1; days = int(argv[i])
         elif argv[i] == '--brief':
             short = True
+        elif argv[i] == '--verify':
+            verify = True
+        elif argv[i] == '--no-fetch':
+            fetch = False
         i += 1
-    batches = load(base, days)
+    batches, hist, source, note = [], None, '', ''
+    if base is not None:
+        batches = load(base, days); source = os.path.normpath(base)
+    else:
+        clone = repo or find_clone()
+        if clone:
+            if fetch and not short:
+                if not fetch_main(clone):
+                    note = 'could not fetch origin/main (offline?): showing what this clone already has. '
+            batches, hist = load_git(clone, days)
+            source = 'origin/main of ' + os.path.basename(os.path.normpath(clone))
+            if batches is None:                              # no origin/main in this clone: its working tree is the best there is
+                batches, hist = load(os.path.join(clone, 'diag'), days), None
+                source = os.path.join(os.path.basename(os.path.normpath(clone)), 'diag') + ' (working tree: this clone has no origin/main)'
+        else:
+            source = 'no private clone found'
+    dedupe(batches)
     r = analyse(batches)
     if short:
         line = brief(r, batches)
@@ -217,16 +303,41 @@ def main(argv):
             print(line)
         return 0
     if not batches:
-        print('No live-diagnostics files in %s for the last %d days (switch off, no token yet, or the private repo is not cloned: git clone --depth 1 https://github.com/tjshea90/kestrel-private ../kestrel-private).' % (os.path.normpath(base), days))
+        print('No live-diagnostics files (%s, last %d days). Switch off, no token yet, or no private clone: add_repo Kestrel-Private, or read the files with the GitHub tools '
+              '(get_file_contents tjshea90/Kestrel-Private, path diag, ref main). %s' % (source, days, note))
         return 0
-    print('LIVE DIAGNOSTICS DIGEST: %d file(s), %d device(s), %d events, %d dropped on the tablet; app versions %s; newest %s' % (
-        len(batches), len(r['installs']), r['events'], r['dropped'], dict(r['versions']), max(b.get('at', '') for b in batches)))
+    print('LIVE DIAGNOSTICS DIGEST (%s): %d file(s), %d device(s), %d events, %d dropped on the tablet; app versions %s; newest %s' % (
+        source, len(batches), len(r['installs']), r['events'], r['dropped'], dict(r['versions']), max(b.get('at', '') for b in batches)))
+    if note:
+        print('  ' + note.strip())
+    resent = sum(b.get('_resent', 0) for b in batches)
+    if resent:
+        print('  %d line(s) that an older app version sent twice were counted once.' % resent)
+    print('\n== FILES (oldest first; each upload is its own file, never replaced) ==')
+    for b in batches:
+        print('  %-28s v%s %-18s %4d events, dropped %s%s' % (b['_file'], b.get('v', '?'), b.get('app', '?'), len(b.get('events', [])), b.get('dropped', 0), ('  [%d re-sent lines removed]' % b['_resent']) if b.get('_resent') else ''))
+    problems = file_checks(batches)
+    if hist is not None:
+        bad = hist['bad']
+        verdict = 'OK: every file was added once and never changed or deleted' if not bad and not problems else 'PROBLEM'
+        print('\n== INTEGRITY (git history of origin/main, folder diag/): %s ==\n  %d commit(s) touched diag/: %d file(s) added, %d changed or renamed, %d deleted%s' % (
+            verdict, hist['commits'], hist['A'], len([x for x in bad if x[0] != 'D']), len([x for x in bad if x[0] == 'D']),
+            '  (this clone is shallow: only the newest commits are visible; the GitHub tools list_commits path=diag shows all)' if hist['shallow'] else ''))
+        for x in bad[:10]:
+            print('  CHANGED: ' + x)
+    elif verify:
+        print('\n== INTEGRITY: cannot be proven here (no git history: --dir or no origin/main). Use list_commits path=diag on tjshea90/Kestrel-Private. ==')
+    for x in problems:
+        print('  FILE PROBLEM: ' + x)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
     if not r['advice']:
         print('  (none: the advisor found nothing, or the files are version 1)')
     show('Crashes, freezes, kills (fix first)', r['crash'])
+    ends = run_endings(batches)
+    if ends:
+        print('\n== How earlier runs ended (newest file, last 7 days) ==\n  ' + '; '.join('%d %s' % (v, k) for k, v in ends.most_common()))
     sh = sorted(((sum(v) / len(v), max(v), len(v), k) for k, v in r['slowhost'].items()), reverse=True)
     print('\n== Slow page loads by site (avg s, worst s, loads) ==')
     for avg, worst, n, k in sh[:8]:
@@ -238,6 +349,12 @@ def main(argv):
         rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]
         for k, t in rows:
             print('  %4d %3d %5.1f %5.1f  %s' % (t['loads'], t['failed'], (t['medsum'] / t['n'] / 1000.0) if t['n'] else 0, t['worst'] / 1000.0, k))
+    pr = [x for x in perf_rows(batches) if any(x[k] for k in ('paint', 'avail', 'cpu', 'jank'))]
+    if pr:
+        print('\n== TUNING NUMBERS per file (cold start ms: paint / runtime / activity; memory available MB; app heap MB; CPU %% of one core avg/peak; slow-frame count; Back presses/kept; video) ==')
+        for x in pr:
+            print('  %-26s %-8s up %5ss  cold %s/%s/%s  avail %s  heap %s  cpu %s  jank %s  back %s  video %s' % (
+                x['file'][:26], x['app'], x['up'] or '-', x['paint'] or '-', x['runtime'] or '-', x['activity'] or '-', x['avail'] or '-', x['heap'] or '-', x['cpu'] or '-', x['jank'] or '-', x['back'] or '-', x['video'] or '-'))
     if r['kinds']:
         print('\n== Event kinds over all files (count) ==\n  ' + ', '.join('%s %d' % kv for kv in r['kinds'].most_common(14)))
     if r['device']:
