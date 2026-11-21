@@ -18,8 +18,8 @@ object FilePickRules {
     )
 
     /**
-     * The kinds of file to show in the system picker for a page's `accept` list (MIME types, wildcards such as `image/*`, extensions such as `.pdf`), or null = show every file.
-     * The old rule kept only the entries that contain a slash: an input that accepts `.pdf,.docx` was given an empty list (fine), but one that accepts `image/*,.pdf,.docx` was given ONLY pictures, so the
+     * The kinds of file to show in the system picker for a page's `accept` list (MIME types, a kind wildcard such as image-slash-star, extensions such as `.pdf`), or null = show every file.
+     * The old rule kept only the entries that contain a slash: an input that accepts `.pdf,.docx` was given an empty list (fine), but one that accepts the pictures wildcard plus `.pdf` and `.docx` was given ONLY pictures, so the
      * picker hid the documents the page asked for. Now every entry must be understood; one that is not (an unknown extension, a word) means no restriction rather than a wrong one. A page does not
      * depend on the filter (it checks what it was given), so showing too many files is harmless and hiding the right one is not.
      */
