@@ -23,6 +23,7 @@ async function open(body, o) {
     const u = new URL(r.request().url());
     if (u.hostname === 'sink.example') { got.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); }
     if (u.pathname.endsWith('.mp4') || u.pathname.endsWith('.mp3')) return r.fulfill({ contentType: u.pathname.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4', body: Buffer.from('this is not a media file at all, just text that no decoder will accept '.repeat(40)) });
+    if (u.pathname === '/hang.bin') return new Promise(() => {});                         // VD2c: a file that never answers
     if (u.pathname === '/frame') return r.fulfill({ contentType: 'text/html', body: '<!doctype html><body><video src="/inner-bad.mp4" muted></video>' });
     return r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>t</title><body>' + (body || '') + '</body>' });
   });
@@ -30,6 +31,7 @@ async function open(body, o) {
   if (!o.noApi) await page.addInitScript(() => {
     window.browser = { runtime: { sendMessage: (m) => { fetch('https://sink.example/m', { method: 'POST', mode: 'no-cors', keepalive: true, body: JSON.stringify({ frame: window === window.top ? 'top' : 'sub', m: m }) }); return Promise.resolve(); } } };
   });
+  if (o.stall) await page.addInitScript((ms) => { window.__kstVPstallMs = ms; }, o.stall);
   await page.addInitScript({ content: SRC });
   return { page, got, context };
 }
@@ -83,4 +85,39 @@ test('VD1: a failing video inside a frame says it is a frame; without the extens
   await n.page.goto('https://site.example/');
   assert.equal(await n.page.evaluate(() => typeof window.KestrelVP), 'undefined');
   await n.context.close();
+});
+
+test('VD2c: an element that is trying to play and never gets data (no error event) is told ONCE as code 99 with its states, kind of source and no address', async () => {
+  const { page, got, context } = await open('<video id="v" src="/secret/hang.bin?token=zz" autoplay muted></video>', { stall: 400 });
+  await page.goto('https://site.example/');
+  await until(() => msgs(got).some((m) => m.c === 99), 'the stall report', 6000);
+  await page.waitForTimeout(900);
+  const m = msgs(got).filter((x) => x.c === 99);
+  assert.equal(m.length, 1, 'told once: ' + JSON.stringify(m));
+  assert.equal(m[0].s, 'http'); assert.equal(m[0].e, 'v'); assert.equal(m[0].f, 1); assert.ok(m[0].rs < 3, 'no data: readyState ' + m[0].rs);
+  assert.ok(typeof m[0].ns === 'number' && m[0].pa === 0 && typeof m[0].b === 'number', JSON.stringify(m[0]));
+  assert.ok(JSON.stringify(got).indexOf('secret') < 0 && JSON.stringify(got).indexOf('token') < 0, 'no address leaves the page');
+  await context.close();
+});
+
+test('VD2c: an element that gets its data, or is only waiting for a press (paused, nothing loading), is not reported', async () => {
+  const { page, got, context } = await open('<video id="idle" muted></video><video id="p" muted preload="none" poster="/p.png"></video><canvas id="c" width="64" height="64"></canvas>', { stall: 400 });
+  await page.goto('https://site.example/');
+  await page.evaluate(() => {
+    var c = document.getElementById('c'), x = c.getContext('2d'), n = 0;
+    setInterval(function () { x.fillStyle = 'rgb(' + (n++ % 255) + ',50,50)'; x.fillRect(0, 0, 64, 64); }, 40);
+    var v = document.createElement('video'); v.muted = true; v.autoplay = true; v.srcObject = c.captureStream(25); document.body.appendChild(v);
+  });
+  await page.waitForTimeout(1600);
+  assert.equal(msgs(got).filter((m) => m.c === 99).length, 0, JSON.stringify(msgs(got)));
+  await context.close();
+});
+
+test('VD2c: a stuck element is told as stuck, and the stall timer is gone once the element reports', async () => {
+  const { page, got, context } = await open('<video id="v" src="/hang.bin" autoplay muted></video><audio id="a" src="/hang.bin" autoplay></audio>', { stall: 300 });
+  await page.goto('https://site.example/');
+  await until(() => msgs(got).filter((m) => m.c === 99).length >= 2, 'both reports', 6000);
+  const m = msgs(got).filter((x) => x.c === 99);
+  assert.ok(m.some((x) => x.e === 'v') && m.some((x) => x.e === 'a'), JSON.stringify(m));
+  await context.close();
 });
