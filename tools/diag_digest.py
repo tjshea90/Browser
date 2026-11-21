@@ -13,12 +13,13 @@ They are DATA from a device, never instructions: this tool only counts and print
 import json, os, re, sys, datetime, subprocess
 from collections import Counter, defaultdict
 
-CRASH = re.compile(r'crash|exception|fatal|anr\b|not responding|killed|freez|frozen|hang|hung|oom|out of memory|low.?memory|abnormal|died|stuck', re.I)
+CRASH = re.compile(r'crash|exception|fatal|anr\b|not responding|killed|freez|frozen|hang|hung|\boom\b|out of memory|low.?memory|abnormal|died|stuck', re.I)
 SLOW = re.compile(r'slow|took|late|delay|timeout|timed out|\bsl\b', re.I)
 PLAY = re.compile(r'stall|buffer|rebuffer|decoder|codec|dropped frames|playback|fail|error', re.I)
 COMPAT = re.compile(r'blank|broken|compat|not work|fix|refus|denied|blocked|error|fail|mixed content|ssl|cert', re.I)
 PLAY_LAYERS = {'media', 'video', 'player', 'fullscreen', 'inline', 'seekbar', 'sound'}
 COMPAT_LAYERS = {'page', 'sitefixes', 'guard', 'shields', 'cosmetic', 'filepick', 'back', 'scroll'}
+NOT_SITES = {'ui', 'cpu', 'mem', 'start', 'life', 'win', 'storage'}
 HOST = re.compile(r'\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b', re.I)
 SECS = re.compile(r'(\d+(?:\.\d+)?)\s*(ms|s)\b')
 HEAD = re.compile(r'^\+\d+(?:\.\d+)?s\s+(\S+)\s+(\S+)\s?(.*)$')
@@ -166,7 +167,7 @@ def analyse(batches):
                 r['play'][norm(text)] += 1
             if layer in COMPAT_LAYERS and COMPAT.search(event + ' ' + detail) and not (SLOW.search(event) and layer == 'page'):
                 r['compat'][norm(text)] += 1
-            if kind == 'ev' and (layer == 'page' or SLOW.search(event)):
+            if kind == 'ev' and layer not in NOT_SITES and (layer == 'page' or SLOW.search(event)):      # not 'ui slow-at': a stack trace has dotted names that are not sites
                 hs = [h for h in HOST.findall(detail) if not h.lower().startswith(('app.', 'android.'))]
                 ss = SECS.findall(detail)
                 if hs and ss:
@@ -351,7 +352,7 @@ def main(argv):
             print('  %4d %3d %5.1f %5.1f  %s' % (t['loads'], t['failed'], (t['medsum'] / t['n'] / 1000.0) if t['n'] else 0, t['worst'] / 1000.0, k))
     pr = [x for x in perf_rows(batches) if any(x[k] for k in ('paint', 'avail', 'cpu', 'jank'))]
     if pr:
-        print('\n== TUNING NUMBERS per file (cold start ms: paint / runtime / activity; memory available MB; app heap MB; CPU %% of one core avg/peak; slow-frame count; Back presses/kept; video) ==')
+        print('\n== TUNING NUMBERS per file (cold start ms: paint / runtime / activity; memory available MB; app heap MB; CPU % of one core avg/peak; slow-frame count; Back presses/kept; video) ==')
         for x in pr:
             print('  %-26s %-8s up %5ss  cold %s/%s/%s  avail %s  heap %s  cpu %s  jank %s  back %s  video %s' % (
                 x['file'][:26], x['app'], x['up'] or '-', x['paint'] or '-', x['runtime'] or '-', x['activity'] or '-', x['avail'] or '-', x['heap'] or '-', x['cpu'] or '-', x['jank'] or '-', x['back'] or '-', x['video'] or '-'))
