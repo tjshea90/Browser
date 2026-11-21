@@ -44,3 +44,13 @@ Reels for a logged-out visitor stop behind a login prompt after a few; mobile we
 - No tablet session of Instagram was seen; cause 1 is read from the code and consistent with the symptom, not observed.
 - A player that gave up waiting for `sourceopen` before the tap may need a reload even after the exception; the per-site switch avoids that by never holding.
 - No change to the format policy or the DRM path without a per-site line that names them.
+
+## VD2: pornhub.com videos spin in the page but play in Kestrel's own player (owner, 2026-11-21)
+Owner, verbatim: "pornhub.com videos don't load in the webpage (loading nonstop), but they load in the external kestrel player".
+What the second half proves: the film's address is found (the video finder saw it), the tablet's hardware decodes it, the hotspot carries it, and the site serves it to a plain request. So the network, the chip and the film are fine; what differs is the PAGE's own player inside the engine. Everything below the gate/format layer in VD1 applies; nothing here was observed on the tablet.
+Ranked for this symptom (a spinner that never ends = a player that waits for something that never arrives):
+1. The press-to-play rule (cause 1 above): a script player that waits for `sourceopen` or a response to its first `play()` stays on its loading symbol when the gate holds the blob source or refuses the play. Test: Shields panel > "Videos may start by themselves" for the site, reload.
+2. A request the player needs is blocked by Shields (an ad / tracker call that the player waits for before it starts, or a CDN host on a list). Test: Shields off for the site (the per-site switch), reload; the `page timing` lines say `shields=up|down`.
+3. The format policy (cause 3): if the player asks `isTypeSupported` WITH a frame rate or AV1 and gets "no" for every rung it stays empty. alpha87's `video codec-no <host>` line says it.
+4. The site's own age check (the player loads after a click-through that needs storage or a cookie Kestrel's protections block), or its player frame being an embed (EX-10 waits for a tap there).
+What alpha87 records for the site after one load of a pornhub page: `video gate <host> ...` (what the rule held), `video codec-no <host> ...` (what the format policy refused), `video error <host> code=.. src=..` (the element's own failure), `page timing` (shields up / down); `tools/diag_digest.py` prints them as "VIDEO PROBLEMS by site" with the cause each points to. Private tabs record nothing (PV1).
