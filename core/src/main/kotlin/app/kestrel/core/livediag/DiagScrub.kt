@@ -25,7 +25,7 @@ object DiagScrub {
     private val TOKENS = Regex("""\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{12,}|AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*)""")
     private val PEM = Regex("""-----BEGIN [A-Z ]+-----""")
     private val OPAQUE = Regex("""(?<![A-Za-z0-9])[A-Za-z0-9+/_=-]{40,}(?![A-Za-z0-9])""")
-    private val HOSTISH = Regex("""(?<![A-Za-z0-9@./:-])((?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24})(?![A-Za-z0-9-])""")
+    private val HOSTISH = Regex("""(?<![A-Za-z0-9@./:-])((?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24})(?![A-Za-z0-9-])(/[^\s,;)\]}"'<>]*)?""")
     private val CODE_PREFIX = Regex("""^(?:app|android|androidx|java|javax|kotlin|kotlinx|dalvik|libcore|sun|org\.mozilla|org\.json|com\.android|com\.google\.android|mozilla|gecko)\.""", RegexOption.IGNORE_CASE)
 
     /** The host of an http(s) / ws(s) link without user name, port, path, query or fragment, lower case; null when it has none. */
@@ -79,7 +79,7 @@ object DiagScrub {
         s = HOSTISH.replace(s) { m ->
             val h = m.groupValues[1]
             if (CODE_PREFIX.containsMatchIn(h) || h.all { it.isDigit() || it == '.' }) m.value
-            else if (SensitiveSites.isSensitive(h.lowercase())) SENSITIVE else m.value
+            else if (SensitiveSites.isSensitive(h.lowercase())) SENSITIVE else h      // a bare "host/some/path" (no https:// in front, as some app lines write it) keeps the host only
         }
         s = OPAQUE.replace(s, "<secret>")
         if (s.length > MAX_LINE) s = s.take(MAX_LINE) + "..."
