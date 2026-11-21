@@ -28,6 +28,14 @@ object LastRun {
     private const val MAX_EVENTS = 40
     private const val LAZY_MS = 1500L
     private const val TICK_MS = 15_000L
+    /** DG1 (owner Diagnostics 2026-11-19: two runs ended 4-9 s after the first start following an install, and "ran about 0 min" could not say more): the first minute of a run is sampled every 2 s, so the note says how many seconds it lived. */
+    private const val FAST_TICK_MS = 2_000L
+    private const val FAST_WINDOW_MS = 60_000L
+    /** DG1: a package update ends the running process some seconds before the new build's install time is stamped; this many ms either side still counts as "the update ended it". */
+    private const val UPDATE_BEFORE_MS = 120_000L
+    private const val UPDATE_AFTER_MS = 5_000L
+    /** DG1: a run that began within this long after its build was installed is "the first start after an install". */
+    private const val FIRST_RUN_MS = 10 * 60_000L
     private const val MAX_CHARS = 12_000
 
     private val lock = Any()
@@ -42,6 +50,11 @@ object LastRun {
     private var memPrev = ""
     private var pid = 0
     private var build = ""
+    /** DG1: when this build was installed (PackageInfo.lastUpdateTime); written into the note so the NEXT start can tell an update from a crash and a first start from a later one. */
+    private var installAt = 0L
+    /** Test hooks: pretend to be another build / another install time (Robolectric has one fixed package). */
+    @Volatile internal var buildOverride: String? = null
+    @Volatile internal var installAtOverride: Long? = null
     private var startedAt = 0L
     private var state = "starting"
     private var stateAt = 0L
@@ -57,7 +70,7 @@ object LastRun {
         "page" -> event == "loaded" || event == "error"
         "gecko" -> event == "onKill" || event == "onCrash" || event.startsWith("recover-")
         "ui" -> event == "STALL" || event.trim() == "at"                       // CR1f: the screen thread is blocked, and the stack it is blocked in (written by the watchdog thread, not by the blocked one)
-        "start" -> event == "paint" || event == "runtime"                      // how far the start got
+        "start" -> event == "paint" || event == "runtime" || event == "oat" || event == "art"   // how far the start got, and (DG1) whether Android had compiled the app yet in a run that died early
         "tabs" -> event == "early-cover"
         "engine" -> event == "warm-start" || event == "runtime-ready"
         else -> false
@@ -93,17 +106,22 @@ object LastRun {
         val d = app.filesDir
         synchronized(lock) {
             dir = d; appCtx = app; pid = android.os.Process.myPid(); startedAt = now; state = "starting"; stateAt = now; events.clear(); flushQueued = false
+            var inst = 0L
             build = try {
                 @Suppress("DEPRECATION") val pi = app.packageManager.getPackageInfo(app.packageName, 0)
+                inst = pi.lastUpdateTime
                 @Suppress("DEPRECATION") "${pi.versionName} (code ${pi.versionCode})"
             } catch (e: Exception) { "?" }
+            buildOverride?.let { build = it }
+            installAt = installAtOverride ?: inst
         }
         Io.exec {
             try {
                 val old = File(d, FILE)
                 if (old.isFile) {
                     val bootAt = now - SystemClock.elapsedRealtime()
-                    val text = old.readText().take(MAX_CHARS) + "\nnextStart=$now\nbootAt=$bootAt\ncrashAt=${CrashNote.noteTime(app)}\nengineAt=${CrashNote.newestEngineReportAt(app)}\n"
+                    val (myBuild, myInstall) = synchronized(lock) { build to installAt }
+                    val text = old.readText().take(MAX_CHARS) + "\nnextStart=$now\nnextBuild=$myBuild\nnextInstallAt=$myInstall\nbootAt=$bootAt\ncrashAt=${CrashNote.noteTime(app)}\nengineAt=${CrashNote.newestEngineReportAt(app)}\n"
                     val abnormal = read(text).abnormal
                     synchronized(lock) { previous = text; previousAbnormal = abnormal }
                     if (abnormal) keep(d, text)
@@ -128,7 +146,7 @@ object LastRun {
      * UI watchdog thread (never the main thread) about every 250 ms while the app is in front; writes the note at most every [TICK_MS].
      */
     fun tick(now: Long = System.currentTimeMillis()) {
-        synchronized(lock) { if (dir == null || state != "fg" || now - lastFlushAt < TICK_MS) return; lastFlushAt = now }
+        synchronized(lock) { if (dir == null || state != "fg" || now - lastFlushAt < (if (now - startedAt in 0 until FAST_WINDOW_MS) FAST_TICK_MS else TICK_MS)) return; lastFlushAt = now }
         Io.exec { flush(now) }
     }
 
@@ -177,7 +195,7 @@ object LastRun {
             if (snap != memLine) { memPrev = memLine; memLine = snap }
             val sb = StringBuilder(2048)
             sb.append(HEADER).append('\n').append("pid=").append(pid).append('\n').append("build=").append(build).append('\n')
-                .append("started=").append(startedAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
+                .append("started=").append(startedAt).append('\n').append("installAt=").append(installAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
             sb.append("availMb=").append(avail).append('\n')
             if (memPrev.isNotEmpty()) sb.append("mem0=").append(memPrev).append('\n')
             if (memLine.isNotEmpty()) sb.append("mem=").append(memLine).append('\n')
@@ -205,33 +223,45 @@ object LastRun {
         val avail = kvLong(text, "availMb")
         val mem = kv(text, "mem"); val mem0 = kv(text, "mem0")
         val last = maxOf(saved, stateAt)
-        val ranMin = if (last > started && started > 0) (last - started) / 60_000 else 0
+        val ranMs = if (last > started && started > 0) last - started else 0L
+        val ranText = if (ranMs < 120_000) "${ranMs / 1000} s" else "${ranMs / 60_000} min"       // DG1: seconds while the run was young, so "0 min" never hides a 4 s life
+        val myBuild = kv(text, "build"); val nextBuild = kv(text, "nextBuild")
+        val installAt = kvLong(text, "installAt"); val nextInstall = kvLong(text, "nextInstallAt")
+        val sinceInstall = if (installAt > 0 && started >= installAt) started - installAt else -1L
+        val firstRun = sinceInstall in 0..FIRST_RUN_MS
+        val upTo = if (next > 0) next else Long.MAX_VALUE
+        val crashed = crashAt in started..upTo && crashAt > 0
+        val engine = engineAt in started..upTo && engineAt > 0
+        val stalled = text.lineSequence().any { it.startsWith("ev=") && it.contains(" ui STALL ") }
+        // DG1: an update replaces the app and ends the running process; the new build's install time lands just after the old run's last note
+        val updated = st == "fg" && nextBuild != null && myBuild != null && nextBuild != myBuild && nextInstall > 0 && (nextInstall - last) in -UPDATE_AFTER_MS..UPDATE_BEFORE_MS && !crashed && !engine && !stalled
         val out = ArrayList<String>()
-        val abnormal = st == "fg"
-        val head = when (st) {
-            "exit" -> "Last run ended on purpose (the app was closed with nothing left to do)."
-            "bg" -> "Last run was in the background when it ended (Android takes back background apps when it needs the memory: an ordinary end, not a crash)."
-            "starting" -> "Last run never reached the screen (a background job such as the daily check, or it ended while starting)."
+        val abnormal = st == "fg" && !updated
+        val head = when {
+            updated -> "Last run was ended by an UPDATE (a newer build was installed over it while it was on screen: a normal part of updating, not a crash)."
+            st == "exit" -> "Last run ended on purpose (the app was closed with nothing left to do)."
+            st == "bg" -> "Last run was in the background when it ended (Android takes back background apps when it needs the memory: an ordinary end, not a crash)."
+            st == "starting" -> "Last run never reached the screen (a background job such as the daily check, or it ended while starting)."
             else -> "Last run ended WHILE ON SCREEN: that is not an ordinary close."
         }
         out.add(head)
-        out.add("  build ${kv(text, "build") ?: "?"}, started ${stamp(started)}, last note ${stamp(last)} (ran about $ranMin min), memory free at the last note: ${if (avail >= 0) "$avail MB" else "?"}")
+        out.add("  build ${myBuild ?: "?"}, started ${stamp(started)}, last note ${stamp(last)} (ran about $ranText), memory free at the last note: ${if (avail >= 0) "$avail MB" else "?"}")
+        if (firstRun) out.add("  This run was the FIRST START after its build was installed (it started ${sinceInstall / 1000} s after the install at ${stamp(installAt)}).")
         if (mem != null) out.add("  memory at the last note: $mem")
         if (mem0 != null && mem0 != mem) out.add("  memory at the note before: $mem0")
         if (abnormal) {
             val sumMb = Regex("sum=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: -1L
             val lowMem = (avail in 0..300) || (Regex("avail=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: Long.MAX_VALUE) in 0..300
-            val crashed = crashAt in started..(if (next > 0) next else Long.MAX_VALUE) && crashAt > 0
-            val engine = engineAt in started..(if (next > 0) next else Long.MAX_VALUE) && engineAt > 0
             val rebooted = bootAt > 0 && saved > 0 && bootAt > saved + 5_000   // a tablet that restarted came back at least some seconds after the last note
-            val stalled = text.lineSequence().any { it.startsWith("ev=") && it.contains(" ui STALL ") }
+            val held = if (sumMb >= 0) " The app held about $sumMb MB at the last note." else ""
             out.add("  " + when {
                 stalled -> "Cause: the app's SCREEN THREAD WAS FROZEN (a STALL line below names where it was stuck): a freeze, not a crash; the app was probably closed by hand or by Android afterwards."
                 crashed -> "Cause: an uncaught Java exception (the crash note is shown below as EARLIER CRASH)."
                 rebooted -> "Cause: the whole tablet restarted after the last note (empty battery or a restart), not the app."
                 engine -> "Cause: probably the engine: it wrote crash report(s) during this run (see Engine crash reports below; a page process crash alone does not close the app, a main process one does)."
+                firstRun && ranMs < 120_000 -> "Cause: NO crash note and NO engine crash report, and this was the FIRST START after an install, ended after only about $ranText: look at the install itself (the system compiling the app, the installer, the engine's first start on an app that is not compiled yet) before blaming a page or the memory.$held"
                 lowMem -> "Cause: NO crash note and NO engine crash report, and the memory was LOW at the last note: Android's memory killer ended the app (the memory line above shows who held it)."
-                else -> "Cause: NO crash note and NO engine crash report, so the process was ended from outside (a native crash that left no report, Android's memory killer, or Force stop)." + (if (sumMb >= 0) " The app held about $sumMb MB at the last note." else "")
+                else -> "Cause: NO crash note and NO engine crash report, so the process was ended from outside (a native crash that left no report, Android's memory killer, or Force stop).$held"
             })
         }
         val ev = text.lineSequence().filter { it.startsWith("ev=") }.map { it.substring(3) }.toList()

@@ -377,7 +377,7 @@ class ShieldsBridge(
         companion object {
             fun from(m: JSONObject) = EngineStats(
                 m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
-                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240), m.optString("hx").take(300), m.optString("vg").take(300),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240), m.optString("hx").take(300), m.optString("vg").take(600),
             )
         }
     }
