@@ -22,6 +22,7 @@ var cfgAt = new Map();     // page host -> when the answer arrived
 var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies, 2 = embeds wait for a tap, 4 = stand-ins for blocked files and scriptlets are allowed)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
 var hlsCap = 0;            // ANS52h: pixels of the LONGER side above which a rung of an HLS master playlist is taken out (0 = off); the app's 6th field of every page answer
+var bkMode = 0;           // BK10 (owner 2026-11-21, RX3-BK5): 1 = pages that forbid caching may be made cacheable so Back is instant (the app's 7th field of every page answer; Settings > Instant Back)
 var codecCfg = '';         // ANS52g: the video format policy the app last sent with a page answer (5th field; "" = none), handed to the pages as `cx` (codec-main.js)
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
@@ -39,6 +40,7 @@ function askCfg(host) {
     cfgFlags.set(host, parseInt(parts[3], 10) || 0);
     if (parts.length > 4) codecCfg = String(parts[4]).slice(0, 160); // an answer of an older app (or for no host) has no 5th field: the last policy stays
     if (parts.length > 5) { var hc = parseInt(parts[5], 10); hlsCap = (hc >= 320 && hc <= 20000) ? hc : 0; } // ANS52h: the 6th is the picture size cap in pixels (nothing sensible = off)
+    if (parts.length > 6) bkMode = parts[6] === '1' ? 1 : 0; // BK10: 7th = instant Back for no-store pages (an older app sends none: off)
     noteGeneration(parseInt(parts[1], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
@@ -909,7 +911,7 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
     else if (n === 'cache-control' && d.type === 'main_frame' && /no-store/i.test(h[i].value || '')) nostore = true; // 13 letters like content-range: it passes the length filter above
   }
-  if (nostore) send({ k: 'ns', p: url.slice(0, 600) }).catch(function () {}); // RX3-BK1: this page forbids every cache, so Back has to load it again (the Back lab and the early picture use it)
+  if (nostore && !bkRelaxed.has(d.requestId)) send({ k: 'ns', p: url.slice(0, 600) }).catch(function () {}); // RX3-BK1 (BK10: not for a page that was just made cacheable, its own message says so): this page forbids every cache, so Back has to load it again (the Back lab and the early picture use it)
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) { maybeMedia(d, url, ct, size, ref, org); return; }
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
@@ -974,6 +976,57 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   } catch (e) { hls.err++; }
   return {};
 }, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
+
+// BK10 (owner 2026-11-21: "The back button needs to be improved. Sometimes when i press back ... it takes a long time to load while it is stuck on a picture of the page ... Caching sites for instant reloading may be
+// the answer"; RX3-BK5 of research/REVIEW-EXTERNAL-3.md, which waited for this answer): a page whose own response says `Cache-Control: no-store` is kept by NO cache, so Back loads it again over the hotspot while a picture
+// covers the page. For such a main page the word `no-store` is replaced by `no-cache` (the browser still asks the server again for every NORMAL visit, so nothing is ever shown stale by a normal visit; only Back /
+// Forward may use the copy, and the engine's back/forward cache may keep the live page). Never for: a private tab, anything but a plain GET answered 200 as a web page, an address with a name or password in it,
+// and the places where `no-store` is a safety rule (mail, banking, payment, sign-in, account and health addresses: bkSensitive). The app switches the whole thing off in Settings (bkMode).
+var bkRelaxed = new Map();   // requestId of main pages made cacheable here (so the sniffer does not report them as uncacheable too)
+var BK_LABELS = /^(?:mail|webmail|email|bank|banking|login|signin|sign-in|signon|accounts?|myaccount|auth|sso|secure|pay|payments?|checkout|wallet|billing|id|identity|passwords?|vault|admin|portal|health|patient|medical|tax|payroll)$/;
+var BK_HOST = /(?:bank|banc|credit|loan|mortgage|insur|medic|clinic|paypal|venmo|crypto|coinbase|binance|proton|tutanota|outlook|hotmail|icloud|cashapp|payroll)/;
+var BK_PATH = /(?:^|\/)(?:log-?in|log-?out|log-?on|sign-?in|sign-?out|sign-?up|register|account|accounts|myaccount|checkout|cart|payment|payments|billing|password|passwd|oauth2?|authorize|auth|sso|verify|2fa|otp|callback|settings|profile|admin|wp-admin|inbox|mail|banking|wallet|transfer|security)(?:\/|$|\.|\?)/i;
+var BK_QUERY = /[?&](?:password|passwd|token|code|otp|access_token|id_token|session|sid|auth)=/i;
+function bkSensitive(u) {
+  var host = String(u.hostname || '').toLowerCase(), labels = host.split('.'), i;
+  for (i = 0; i < labels.length; i++) if (BK_LABELS.test(labels[i])) return true;
+  var last = labels[labels.length - 1], second = labels.length > 1 ? labels[labels.length - 2] : '';
+  if (last === 'gov' || last === 'mil' || last === 'edu' || second === 'gov' || second === 'edu') return true;
+  if (BK_HOST.test(host)) return true;
+  return BK_PATH.test(String(u.pathname || '')) || BK_QUERY.test(String(u.search || ''));
+}
+/** `private, No-Store, max-age=0` -> `private, max-age=0, no-cache`: the word no-store goes, no-cache stays or is added (every normal visit still asks the server). */
+function bkRewrite(v) {
+  var t = String(v).split(','), out = [], hasNoCache = false, i;
+  for (i = 0; i < t.length; i++) {
+    var x = t[i].trim();
+    if (!x || /^no-store$/i.test(x)) continue;
+    if (/^no-cache\b/i.test(x)) hasNoCache = true;
+    out.push(x);
+  }
+  if (!hasNoCache) out.push('no-cache');
+  return out.join(', ');
+}
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  try {
+    if (!bkMode || d.method !== 'GET' || d.statusCode !== 200 || d.type !== 'main_frame') return {};
+    var h = d.responseHeaders, i, at = [], html = false;
+    if (!h) return {};
+    for (i = 0; i < h.length; i++) {
+      var nm = h[i].name.length, lc = nm === 13 || nm === 12 ? h[i].name.toLowerCase() : '';
+      if (lc === 'cache-control' && /no-store/i.test(h[i].value || '')) at.push(i);
+      else if (lc === 'content-type' && /^\s*(?:text\/html|application\/xhtml)/i.test(h[i].value || '')) html = true;
+    }
+    if (!at.length || !html) return {};                                                          // nothing to relax, or not a web page (a download, a picture, JSON)
+    if (d.incognito) return {};                                                                  // a private tab keeps nothing
+    var u; try { u = new URL(d.url); } catch (e) { return {}; }
+    if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password || bkSensitive(u)) return {};
+    for (i = 0; i < at.length; i++) h[at[i]].value = bkRewrite(h[at[i]].value);
+    bkRelaxed.set(d.requestId, 1); trimMap(bkRelaxed, 40);
+    send({ k: 'ns', p: d.url.slice(0, 600), rx: 1 }).catch(function () {});                    // the app: this page CAN be kept now (and counts how many were made cacheable)
+    return { responseHeaders: h };
+  } catch (e) { return {}; }
+}, { urls: ['http://*/*', 'https://*/*'], types: ['main_frame'] }, ['blocking', 'responseHeaders']);
 
 // RVW1 F8: JSON answers that NAME media. Vimeo's player configuration (`progressive` MP4 files and `hls` playlists), JW Player's `v2/media/ID`, Wistia's `ID.json`, Dailymotion's metadata, Brightcove's playback API and
 // the like never show a media address on the wire: the player reads them from a JSON answer and then fetches the pieces through MSE, so the finder saw nothing. The answers of video-looking endpoints are READ here
