@@ -87,9 +87,9 @@ def git(clone, args, timeout=60):
         return 1, ''
 
 
-def fetch_main(clone):
+def fetch_main(clone, timeout=90):
     """Refresh origin/main (the branch the tablet writes to). True when it worked; failure is not fatal: the clone's last copy is used."""
-    rc, _ = git(clone, ['fetch', '-q', 'origin', '+refs/heads/main:' + REF], 90)
+    rc, _ = git(clone, ['fetch', '-q', 'origin', '+refs/heads/main:' + REF], timeout)
     return rc == 0
 
 
@@ -286,8 +286,8 @@ def main(argv):
     else:
         clone = repo or find_clone()
         if clone:
-            if fetch and not short:
-                if not fetch_main(clone):
+            if fetch:
+                if not fetch_main(clone, 25 if short else 90) and not short:
                     note = 'could not fetch origin/main (offline?): showing what this clone already has. '
             batches, hist = load_git(clone, days)
             source = 'origin/main of ' + os.path.basename(os.path.normpath(clone))
