@@ -8,7 +8,17 @@
 # from git (nothing leaks into the public repo, but nothing is saved either until the clone exists):
 #   mcp__claude-code-remote__add_repo tjshea90/Kestrel-Private (access push), then git clone --depth 1 https://github.com/tjshea90/kestrel-private ../kestrel-private
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 1
-P="${KESTREL_PRIVATE:-$(dirname "$D")/kestrel-private}"
+# LD3d: find the clone whatever its letter case. The cloud harness clones the repo as ../Kestrel-Private (capital K and P) and Linux is case sensitive, so a fixed
+# "../kestrel-private" was never found there: INBOX/OUTBOX were not saved and diag_digest.py saw no diagnostics. Order: $KESTREL_PRIVATE, kestrel-private, Kestrel-Private, any case.
+find_clone() {
+  local parent n d b; parent="$(dirname "$D")"
+  [ -n "$KESTREL_PRIVATE" ] && { echo "$KESTREL_PRIVATE"; return; }
+  for n in kestrel-private Kestrel-Private; do [ -d "$parent/$n/.git" ] && { echo "$parent/$n"; return; }; done
+  for d in "$parent"/*; do b="$(basename "$d")"; [ "${b,,}" = "kestrel-private" ] && [ -d "$d/.git" ] && { echo "$d"; return; }; done
+  echo "$parent/kestrel-private"
+}
+P="$(find_clone)"
+[ "${1:-}" = "path" ] && { echo "$P"; exit 0; }       # bash tools/private.sh path -> where the clone is (used by resume.sh and other tools)
 PATHS="INBOX.md OUTBOX.md .handoff"
 [ -f tools/PRIVATE_ON ] || exit 0          # the switch: the file is committed once the owner's private repo is in use
 
