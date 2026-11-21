@@ -17,14 +17,14 @@ after(async () => { await browser.close(); });
 
 const FAST = { tick: 40, grace: 250, cap: 6000 };
 
-/** A page at https://site.example/ whose subresources the test answers; every message of the fake extension API goes to [got]. */
+/** A page at https://site.example/ whose subresources the test answers; every message of the fake extension API goes to [got] (as a keepalive POST to sink.example, which the test route collects). */
 async function open(route, cfg, o) {
   o = o || {};
   const got = [];
   const context = await browser.newContext({ viewport: { width: 500, height: 800 } });
-  await context.exposeBinding('__ptSink', (src, s) => { got.push({ frame: src.frame === src.page.mainFrame() ? 'top' : 'sub', m: JSON.parse(s) }); });
   await context.route('https://**/*', async (r) => {
     const u = new URL(r.request().url());
+    if (u.hostname === 'sink.example') { got.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); }     // a keepalive fetch survives the page being left (a binding call does not)
     const a = await route(u, r);
     if (a) return;
     return r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>t</title><body><h1>Hello</h1>' + (o.body || '') + '</body>' });
@@ -32,7 +32,7 @@ async function open(route, cfg, o) {
   const page = await context.newPage();
   await page.addInitScript((c) => {
     window.__kstPTcfg = c;
-    window.browser = { runtime: { sendMessage: (m) => { window.__ptSink(JSON.stringify(m)); return Promise.resolve(); } } };
+    window.browser = { runtime: { sendMessage: (m) => { fetch('https://sink.example/pt', { method: 'POST', mode: 'no-cors', keepalive: true, body: JSON.stringify({ frame: window === window.top ? 'top' : 'sub', m: m }) }); return Promise.resolve(); } } };
   }, Object.assign({}, FAST, cfg || {}));
   await page.addInitScript({ content: SRC });
   return { page, got, context };

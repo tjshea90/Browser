@@ -12,6 +12,7 @@
 (function () {
   try {
     if (window !== window.top || window.__kstPT) return;
+    if (!/^https?:$/.test(String(location.protocol))) return;                       // (the manifest only matches http and https; this keeps a stray about:blank out)
     if (typeof browser === 'undefined' || !browser || !browser.runtime) return;
     var perf = window.performance;
     if (!perf || typeof perf.now !== 'function') return;
