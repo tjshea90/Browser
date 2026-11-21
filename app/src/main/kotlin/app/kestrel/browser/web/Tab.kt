@@ -24,7 +24,12 @@ sealed class ErrorScreen {
  */
 class Tab(@JvmField val id: Long) {
     // ---- UI-thread state
-    var url: String = "" // "" = new-tab page
+    /** "" = new-tab page. TP1: a new PAGE (not just a #fragment) takes the preview of the old one away at once: the grid shows the site's card until a picture of THIS page exists. */
+    var url: String = ""
+        set(v) {
+            field = v
+            if ((thumb != null || thumbPage.isNotEmpty()) && thumbPage != app.kestrel.core.ui.ThumbRule.pageOf(v)) { thumb = null; thumbAt = 0L; thumbPage = "" }
+        }
     var title: String = ""
     var webView: WebView? = null // WebView build only
     var engineData: Any? = null // Gecko build only: its per-tab session state (this shared class must not name Gecko types)
@@ -60,6 +65,8 @@ class Tab(@JvmField val id: Long) {
     var showHome = false // the Home screen is laid over this tab's page (the Home button); the page's session stays alive underneath
     var thumb: Bitmap? = null // small snapshot of the page for the tab grid (RGB_565, about 240 px wide); never written to disk for a private tab
     var thumbAt = 0L // uptime millis of that snapshot
+    /** TP1: the page ([app.kestrel.core.ui.ThumbRule.pageOf]) the preview in [thumb] was taken for; "" = no preview. */
+    var thumbPage = ""
     var scrollY = 0 // where the page is scrolled, as the engine last said (Gecko build; the last look keeps it with the picture); UI thread
     /** RX3-BK2: where each page of this tab was when the owner left it (CSS px as the page reports them; RAM only, dies with the tab, never written to disk); thread-safe (the bridge's worker thread reads it too). */
     val scrollByUrl = app.kestrel.core.session.ScrollMemory()
@@ -69,6 +76,8 @@ class Tab(@JvmField val id: Long) {
     var dialogsSuppressed = false
     /** Videos, audio files and stream playlists this page has loaded (Gecko build: filled by the Shields extension's sniffer); cleared when a new page starts. UI thread only. */
     val media = MediaList()
+    /** NM1: what this page says about WHICH video is on (the episode its list marks, the show's name): names.js tells it, a new page forgets it. UI thread only. */
+    var nameClues: app.kestrel.core.media.NameClues? = null
 
     val isNewTab: Boolean get() = url.isEmpty() && pendingLoad == null
     val displayTitle: String get() = if (title.isNotBlank()) title else if (url.isEmpty()) "New tab" else url

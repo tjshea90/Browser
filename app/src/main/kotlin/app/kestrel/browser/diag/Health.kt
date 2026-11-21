@@ -66,6 +66,7 @@ object Health {
         if (detail.isNotEmpty()) sb.append(' ').append(detail)
         val line = sb.toString()
         ring.add(line)
+        if (LastRun.wants(layer, event)) LastRun.note(layer, event, line)   // CR1: the few lines that tell how the last run ended are kept on disk
         if (mirror) android.util.Log.d("KestrelHealth", line)   // DEBUG builds only (the emulator test rig reads `adb logcat -s KestrelHealth`: no menu taps on a slow screen)
     }
 
@@ -92,6 +93,7 @@ object Health {
             var postedAt = 0L; var warned = false; var stacked = false; var blockSamples = 0; var lastSampleAt = 0L
             while (watching) {
                 val now = SystemClock.uptimeMillis()
+                try { LastRun.tick() } catch (e: Exception) { /* a help, never a risk */ }                  // CR1g: the memory sample every 15 s, from THIS thread
                 if (postedAt == 0L) { postedAt = now; ackAt = 0L; main.post { ackAt = SystemClock.uptimeMillis() } }
                 try { Thread.sleep(250) } catch (e: InterruptedException) { break }
                 val n = SystemClock.uptimeMillis()
@@ -187,6 +189,7 @@ object Health {
             sb.append("Processes: ").append(procs ?: "?").append('\n')
         } catch (e: Exception) { /* ignore */ }
         try { CrashNote.reportLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ } // AX2: what the LAST run left behind if it crashed
+        try { LastRun.reportLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ } // CR1: how the last run ended (on screen / background / on purpose) and why
         engineFacts.forEach { sb.append(it).append('\n') }
         PageTimes.lines().forEach { sb.append(it).append('\n') }
         try { app.kestrel.browser.download.PhoneBridge.diagLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ }

@@ -97,3 +97,10 @@ The repo is the ONLY memory: what a session pushed is safe; what it knew only in
 
 ## 7. What waits on the owner
 See the `OWNER` lines in TASKS.md: tablet feedback on Kestrel G, the Cromite comparison, the optional main-branch and private-key decisions.
+
+### Lessons from alpha69 (2026-11-18), for the next session
+- A new field on a message that crosses `kestrel-shields/background.js` (which rebuilds `vst`, `vh`, `nm` ... from a fixed list) needs a web test THROUGH background.js (`h.message` / `h.of('vst')`); the QL1 list was dropped there and only the real-engine lab run found it.
+- Check the lab report's Diagnostics line "Videos start only when pressed (ON/OFF)" before trusting any gate result: the lab runs with the rule OFF unless a scene sets `debug vpress 1` (soak.py vs_scene now does for the embed variants).
+- Never run two gradle commands at once (the second run loses the first's XML results: "Could not write XML test results").
+- The ffmpeg install step of the lab can take 12 minutes on a slow runner; a lab run is 15-25 minutes wall clock. Dispatch ONE at a time per branch (a second one cancels the first).
+- Open for the owner's tablet test of alpha69: the Last run line after any crash, the Quality list on real YouTube, doraby servers (vidsrc, vidfast), episode names on the real doraby markup, moving / resizing the download window by finger.
