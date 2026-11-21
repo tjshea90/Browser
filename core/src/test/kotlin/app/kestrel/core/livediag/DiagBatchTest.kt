@@ -17,6 +17,17 @@ class DiagBatchTest {
         assertTrue(DiagBatch("i", "v", 1, 29, "m", "t", emptyList(), emptyList(), 0).toJson().contains("\"snapshot\": []"))
     }
 
+    @Test fun version2CarriesSettingsDeviceKindsSitesAndAdvice() {
+        val x = DiagBatch("i", "v", 1, 29, "m", "t", emptyList(), emptyList(), 0, mapOf("tabs_kept" to "1"), mapOf("ramAvailMb" to 410L), mapOf("gecko onKill" to 2L),
+            listOf(SiteStat("a.example.org", 5, 1, 4000, 9000, 700)), listOf("Settings > Appearance > Tabs kept ready: change Automatic to Few (2). Why: x"))
+        val j = x.toJson()
+        assertTrue(j, j.contains("\"settings\": {\n  \"tabs_kept\": \"1\"\n }"))
+        assertTrue(j, j.contains("\"ramAvailMb\": 410")); assertTrue(j, j.contains("\"gecko onKill\": 2"))
+        assertTrue(j, j.contains("{\"site\": \"a.example.org\", \"loads\": 5, \"failed\": 1, \"medianMs\": 4000, \"worstMs\": 9000, \"paintMs\": 700}"))
+        assertTrue(j, j.contains("\"advice\": [\n  \"Settings > Appearance"))
+        assertTrue("empty sections are valid JSON", DiagBatch("i", "v", 1, 29, "m", "t", emptyList(), emptyList(), 0).toJson().contains("\"settings\": {},"))
+    }
+
     @Test fun theFileGoesInADatedFolderWithTheInstallIdAndNeverOverwritesAnother() {
         assertEquals("diag/2026-11-21/064012-ab12cd34.json", DiagBatch.path("2026-11-21T06:40:12Z", "ab12cd34"))
         assertEquals("diag/undated/000000-x.json", DiagBatch.path("", "x"))
