@@ -60,7 +60,7 @@ function harness(app, opts) {
   opts = opts || {};
   const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 }, filters = [];
   const ctx = {
-    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder,
+    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder, URL,   // (URL: BK10 reads the address of a main page)
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
