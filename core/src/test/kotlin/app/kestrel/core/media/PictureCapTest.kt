@@ -48,4 +48,17 @@ class PictureCapTest {
             assertTrue("mode $mode screen $screen gave $px", px == 0 || px in 320..20000)
         }
     }
+
+    @Test fun theLongSideOfA16By9PictureIsRoundedUpSoTheUsual854By480RungFitsThe480Cap() {
+        // RVW3 PB5: capH * 16 / 9 gave 853 for 480 and left the 854 x 480 rung out
+        assertEquals(854, PictureCap.longSide(480))
+        assertEquals(PictureCap.pixels(PictureCap.P480, 0), PictureCap.longSide(480))
+        assertEquals(1280, PictureCap.pixels(PictureCap.P720, 0)); assertEquals(1280, PictureCap.longSide(720))
+        assertEquals(1920, PictureCap.longSide(1080)); assertEquals(640, PictureCap.longSide(360)); assertEquals(960, PictureCap.longSide(540))
+        assertEquals(256, PictureCap.longSide(144)); assertEquals(427, PictureCap.longSide(240)); assertEquals(2560, PictureCap.longSide(1440)); assertEquals(3840, PictureCap.longSide(2160))
+        // the rungs real ladders use at 480 lines, and the ones at 360 that must NOT slip under a 360 cap
+        for (w in listOf(842, 848, 852, 853, 854)) org.junit.Assert.assertTrue("a ${w}x480 rung fits the 480 cap", w <= PictureCap.longSide(480))
+        org.junit.Assert.assertTrue("a 855 wide rung does not", 855 > PictureCap.longSide(480))
+        for (h in 144..2160 step 12) org.junit.Assert.assertTrue("never below the exact 16:9 width at $h", PictureCap.longSide(h) * 9 >= h * 16 && (PictureCap.longSide(h) - 1) * 9 < h * 16)
+    }
 }

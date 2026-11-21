@@ -112,3 +112,25 @@ test('speed (informational): average microseconds per check over the corpus', ()
   console.log(`# engine.js: ${us.toFixed(2)} us per check on this machine (x86 V8; the tablet will be several times slower)`);
   assert.ok(us < 200);
 });
+
+// ---------------------------------------------------------------- RVW3 SP1: token-less rules are tried only on the pages their $domain= list can reach
+test('SP1: an options-only rule with an include list is tried only on a page it can reach; rules with no include list on every page; the verdicts are Kotlin\'s (corpus above)', () => {
+  const eng = E.create(imageBytes());
+  const URL1 = 'https://zz.example/q', SCRIPT = E.T.SCRIPT;
+  const tried = (page) => { eng.check(URL1, page, SCRIPT); return eng.lastEvals(); };
+  const base = tried('unrelated.example');
+  assert.equal(tried(null), base, 'no page host: the same candidates as a page nothing names');
+  assert.equal(tried(''), base);
+  // fixture rules (ExtImageTest.curated, RVW3 SP1): `$script,domain=a.com|b.com` and `@@$script,domain=a.com` reach a.com; `$xhr,domain=example.com` and `$stylesheet,domain=example.com|other.co.uk` reach example.com;
+  // `$media,domain=site.*` (an entity), `$image,domain=news.site.co.uk|~img.site.co.uk` and `$subdocument,domain=co.uk` (a suffix of the host) reach news.site.co.uk
+  assert.equal(tried('a.com') - base, 2, 'a.com');
+  assert.equal(tried('example.com') - base, 2, 'example.com');
+  assert.equal(tried('news.site.co.uk') - base, 3, 'news.site.co.uk: an entity, a full host and a suffix');
+  assert.equal(tried('img.site.co.uk') - base, 2, 'img.site.co.uk: the entity and the suffix, not the full-host rule');
+  assert.equal(tried('www.example.com') - base, 3, 'www.example.com: example.com by suffix plus the font rule that names www.example.com');
+  // every page costs fewer rules than "all token-less rules", which is what every request paid before
+  const withAll = base + (eng.tokenlessRules - 1);
+  assert.ok(tried('news.site.co.uk') < withAll, 'fewer than all of them');
+  // the second look at the same page is the memo and gives the same answer
+  assert.equal(tried('a.com'), base + 2);
+});
