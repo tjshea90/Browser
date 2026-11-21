@@ -10,7 +10,7 @@ Evidence = the 4 real uploads in tjshea90/Kestrel-Private diag/2026-11-21 (alpha
 | claude.ai other loads | 31 s average, 35 s worst over 3 loads | digest "Slow page loads" |
 | m.youtube.com | first paint 4.9 to 6.2 s, done 11 s (first start after an install) up to 28 s | files 081049, 085654 |
 | gemini.google.com | paint 1.3 s, done 12.3 s | file 151240 |
-| requests of one claude.ai load | 1,044 (alpha81 snapshot, 4 min); 91 % came from cache (1,115 of 1,228 requests) | file 072850 Blocker line |
+| requests during one claude.ai VISIT (about 4 minutes, not necessarily one load) | 1,044 in the page report; the Blocker line counted 1,228 requests, 91 % from cache (1,115) | file 072850 |
 | Shields judging, 46 min of claude.ai + YouTube | 2,423 requests judged, average 1.24 ms, slowest 53 ms, 279 over 2 ms | file 085654 Blocker line |
 | Extension listeners (parent process main thread), same 46 min | req 2,425 calls = 3.95 s held (1.63 ms per call); rcv 0.30 s; snd 0.10 s; done 0.20 s; err 0.06 s | same line |
 | CPU samples during loads (parent process, % of one core) | gemini load: `Cache2 I/O 31, Gecko 28, Socket Thread 27` (71 % total); claude.ai load: `Gecko 89, RenderThread 44, HeapTaskDaemon 12` (136 %); +125 s and +1930 s: `Classifier Upda 95` / `90` | `cpu busy` events |
