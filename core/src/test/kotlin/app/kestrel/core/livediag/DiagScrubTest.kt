@@ -29,6 +29,13 @@ class DiagScrubTest {
         assertEquals("<sensitive-site> end", s("secure.example.org/account/42 end"))
     }
 
+    @Test fun networkAddressesAreRemovedButVersionNumbersAreNot() {
+        assertEquals("Phone link: address=<ip> paired=true", s("Phone link: address=192.168.43.1:8765 paired=true"))
+        assertEquals("from <ip> to <ip>", s("from 10.0.0.7 to 203.0.113.9"))
+        assertEquals("Gecko 160.4.0 on app 0.3.0-alpha81 code 182", s("Gecko 160.4.0 on app 0.3.0-alpha81 code 182"))
+        assertEquals("extension 1.0.182 ok", s("extension 1.0.182 ok"))
+    }
+
     @Test fun aSensitiveSiteIsNeverNamedNotEvenAsABareHost() {
         assertEquals("page loaded <sensitive-site> in 900 ms", s("page loaded https://mail.google.com/mail/u/0/#inbox in 900 ms"))
         assertEquals("to=<sensitive-site> reload", s("to=www.chase.com reload"))

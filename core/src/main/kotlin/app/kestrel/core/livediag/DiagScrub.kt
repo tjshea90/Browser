@@ -17,6 +17,8 @@ object DiagScrub {
 
     private val URL = Regex("""(?i)\b(?:https?|wss?|ftp)://[^\s"'<>)\]},;|]+""")
     private val LOCAL = Regex("""(?i)\b(?:file|content|blob|data|javascript|intent|view-source|moz-extension|resource):[^\s"'<>)\]},;|]*""")
+    /** A dotted-quad address (the phone's address on the hotspot, the tablet's own): it names a person's network, so it is never kept. Version numbers have three parts and are not touched. */
+    private val IPV4 = Regex("""(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?::\d{1,5})?(?![\d.]*\d)""")
     private val EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
     private val PHONE = Regex("""(?<![\d.])(?:\+\d{1,3}[ .-]?)?\(?\d{2,4}\)?[ .-]\d{3,4}[ .-]\d{3,4}(?!\d)""")
     private val CARDISH = Regex("""(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)""")
@@ -70,6 +72,7 @@ object DiagScrub {
         s = URL.replace(s) { m -> site(m.value) }                                   // first: a link is judged whole (a token in its query makes the site sensitive) before anything is cut out of it
         s = LOCAL.replace(s, LOCAL_TAG)
         s = EMAIL.replace(s, "<email>")
+        s = IPV4.replace(s, "<ip>")
         s = PEM.replace(s, "<secret>")
         s = TOKENS.replace(s, "<secret>")
         s = BEARER.replace(s, "Bearer <secret>")
