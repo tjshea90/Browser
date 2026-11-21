@@ -138,6 +138,16 @@ object CpuMeter {
         return out
     }
 
+    /** LD4: the mean CPU (percent of ONE core) of the process called [name] ("parent", "tab") over the last [windowMs] (readings come every 5 s, so a short window holds only a few); -1 when it has no reading. */
+    fun recentMean(name: String, windowMs: Long): Long {
+        val now = SystemClock.elapsedRealtime()
+        synchronized(lock) {
+            val p = procs.values.firstOrNull { short(it.name) == name && it.series.size > 0 } ?: return -1L
+            val w = windowMs.coerceIn(5_000L, WINDOW_MS)
+            return p.series.mean(now, w).toLong()
+        }
+    }
+
     /** LD4: the numbers of the Diagnostics CPU line for the live diagnostics: per process (parent, tab, gpu ...) `cpu<Name>Avg` and `cpu<Name>Peak` over the last 5 minutes and `cpu<Name>Now` (the newest reading), in percent of ONE core. */
     fun numbers(): Map<String, Long> {
         val now = SystemClock.elapsedRealtime()

@@ -2585,9 +2585,10 @@ open class BrowserActivity : Activity(), DockListener {
             m.optJSONArray("sl")?.let { a -> for (i in 0 until minOf(a.length(), 3)) a.optJSONArray(i)?.let { e -> sl.add(app.kestrel.core.livediag.PageTimingLine.Slow(e.optString(0), e.optString(1), e.optLong(2, 0L))) } }
             val eff = app.kestrel.browser.shield.Shields.effective(prefs, host)
             val avail = try { val mi = android.app.ActivityManager.MemoryInfo(); getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(mi); mi.availMem shr 20 } catch (e: Exception) { -1L }
-            val cpu = app.kestrel.browser.diag.CpuMeter.numbers()
+            val span = maxOf(m.optLong("at", 0L), 5_000L) + 2_000L                 // the CPU over the load itself (readings come every 5 s), not the newest single reading
+            val cpuP = app.kestrel.browser.diag.CpuMeter.recentMean("parent", span); val cpuT = app.kestrel.browser.diag.CpuMeter.recentMean("tab", span)
             val ctx = "shields=" + (if (eff.shieldsUp) "up" else "down") + " ads=" + (if (eff.shieldsUp && eff.blockAds) 1 else 0) + " net=" + GeckoEngine.networkProfileCode + " avail=" + avail +
-                " cpuP=" + (cpu["cpuParentNow"] ?: -1L) + " cpuT=" + (cpu["cpuTabNow"] ?: -1L) + " tabs=" + tabs.size + " live=" + tabs.count { it.session != null }
+                " cpuP=" + cpuP + " cpuT=" + cpuT + " tabs=" + tabs.size + " live=" + tabs.count { it.session != null }
             Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx))
         }
     }
