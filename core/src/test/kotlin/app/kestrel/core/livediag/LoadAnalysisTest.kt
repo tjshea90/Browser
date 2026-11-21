@@ -115,4 +115,25 @@ class LoadAnalysisTest {
         val a = Advisor.advise(emptyMap(), emptyMap(), listOf(SiteStat("claude.ai", 4, 0, 28000, 35000, 14000)), ext)
         assertTrue(a.none { it.id.startsWith("busy-") || it.id.startsWith("shields-heavy-") })
     }
+
+    // ---- the numbers the app adds
+
+    @Test fun theExtensionsListenerTextBecomesNumbersAndTheJudgesAverage() {
+        val n = ExtCost.numbers("req 2425 (3948000 us), rcv 711 (303000 us), snd 710 (102000 us), done 1637 (197000 us), err 341 (62000 us)", 2423L, 3_011_000L, 53_000L, 279L)
+        assertEquals(2425L, n["extReqCalls"]); assertEquals(3_948_000L, n["extReqUs"]); assertEquals(303_000L, n["extRcvUs"]); assertEquals(197_000L, n["extDoneUs"]); assertEquals(62_000L, n["extErrUs"])
+        assertEquals(1242L, n["judgeAvgUs"]); assertEquals(53_000L, n["judgeMaxUs"]); assertEquals(279L, n["judgeOver2ms"]); assertEquals(2423L, n["judged"])
+        assertTrue("nothing at all before the extension reports", ExtCost.numbers("", 0, 0, 0, 0).isEmpty())
+        assertEquals(2, ExtCost.numbers("req 10 (500 us), junk, rcv x (y us)", 0, 0, 0, 0).size)
+    }
+
+    @Test fun thePageTimingLineHasEveryKeyInOrderAndTheThreeSlowestRequests() {
+        val v = mapOf("nt" to 0L, "ttfb" to 700L, "fcp" to 14000L, "load" to 28000L, "rn" to 1044L, "hid" to 0L, "pt" to 0L, "at" to 31000L, "nodes" to 3400L)
+        val line = PageTimingLine.build("claude.ai", v, listOf(2400L, 11000L, 60L), listOf(PageTimingLine.Slow("a.example.com", "js", 9800), PageTimingLine.Slow("b.example.com", "xhr", 5200)), "shields=up net=fast-wifi avail=420 cpu=88 tabs=1")
+        assertTrue(line, line.startsWith("host=claude.ai nt=0 dns=-1 con=-1 tls=-1 fb=-1 ttfb=700 fcp=14000 lcp=-1 dcl=-1 load=28000 rn=1044 rc=-1"))
+        assertTrue(line, line.contains(" lag=2400/11000/60 nodes=3400 scr=-1 fr=-1 rd=-1 hid=0 pt=0 at=31000 slow=a.example.com:js:9800,b.example.com:xhr:5200 | shields=up net=fast-wifi avail=420 cpu=88 tabs=1"))
+        assertTrue("short enough for one journal line", line.length <= DiagScrub.MAX_LINE)
+        val d = DiagStats(); d.observe("page", "timing", "+9.0s page timing $line")
+        val s = d.sites().single()
+        assertEquals("claude.ai", s.site); assertEquals(1, s.timed); assertEquals(14000L, s.avgFcpMs); assertEquals(1044, s.avgReqs); assertEquals(8, s.lagPct)
+    }
 }
