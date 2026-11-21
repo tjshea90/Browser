@@ -1,21 +1,24 @@
-# CHECKPOINT 2811 — read me first, then TASKS.md
+# CHECKPOINT 2812 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T16:13:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `fb20d562` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T16:15:21Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `8d9aff18` (this checkpoint is the commit after it)
 
 ## Just done
-LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned counts, noisy kinds thinned, trouble never) + DiagStats.mergeFrom + DiagSchedule.waitMs + DiagBatch v3 (thinned, collision-safe path suffix); LiveDiag.kt uses them: one upload at a time, create-only PUT (no sha, no delete) retries a taken name with -2/-3, 409 once, check re-armed while in front (BrowserActivity.onPause -> LiveDiag.onBack), Send now not counted in the automatic 4/day, dated run marker line + uptimeS + manualSend flag in device, rolling 7-day week feeds the advisor. core livediag 49 tests green, app diag 72 green (LiveDiagTest 28, 8 new)
+LD3 docs + TASKS ticks (a-d) written; digest prints sends automatic/manual + runs + thinned; CLAUDE.md says how to read the diagnostics and where the clone is
 
 ## Do this next
-(1) digest: print thinned, runs (from 'run start' markers), auto vs manual sends (device.manualSend); (2) update research/LIVE_DIAG.md LD3 + CLAUDE.md private clone note + TASKS LD3 ticks; (3) full gate: ./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :geckoapp:compileDebugKotlin then :app:lintDebug; (4) bump geckoapp versionCode 185 / 0.3.0-alpha84, bash tools/sync-ext-version.sh, ship.sh gecko with note file, ONE dispatch, record-release
+Full gate then release: ./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :geckoapp:compileDebugKotlin (background, poll log for GRADLE_EXIT, check XML not the tail), :app:lintDebug; then bump geckoapp/build.gradle.kts to versionCode 185 / 0.3.0-alpha84, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA84_RELEASE_NOTE.txt, bash ship.sh gecko "note", ONE dispatch (app=gecko full_build=true), wait, record-release with the identical note; then LD3e answer to the owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M CLAUDE.md
+     M TASKS.md
+     M research/LIVE_DIAG.md
 
 ## Last ten checkpoints
 ```
+  7369e028 ckpt 2811: LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned
   bb443992 ckpt 2810: LD3d tools done: private.sh + diag_digest.py find the clone in any letter ca
   2015daad ckpt 2809: LD3 audit written into research/LIVE_DIAG.md from the 4 real uploads: manual
   51209a26 ckpt 2808: LD3 written into TASKS.md in the owner's words (4 checks of the live diagnos
@@ -25,8 +28,7 @@ LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned cou
   6eac0f1a ckpt 2804: LD2e: full gate green (:core:test :app:testDebugUnitTest :geckoapp:compileDe
   d2831830 ckpt 2803: LD2a-d built and tested: app LiveDiag (tables fed after switch+whitelist, fa
   9ebf9afd ckpt 2802: LD2 core written + tested (33 tests in core livediag): DiagStats (event hist
-  6719ce3e ckpt 2801: gated kestrel-g-v0.3.0-alpha82 (gecko code 183) and pushed it: handoff self-
 ```
 
-(10 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
