@@ -153,7 +153,7 @@ object CrashNote {
             for (l in text.lines()) { val i = l.indexOf('='); if (i > 0 && l.substring(0, i) in KEEP_KEYS) keep.add(l) else if (l.isNotBlank()) removed = true }
             out = keep.joinToString("\n")
         }
-        if (removed) f.writeText(out)
+        if (removed) { val t = f.lastModified(); f.writeText(out); f.setLastModified(t) }   // the time stays: LastRun judges which run a report belongs to by it
         return removed
     }
 
