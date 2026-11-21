@@ -220,4 +220,77 @@ class LiveDiagTest {
         val others = File("src/main/kotlin").walkTopDown().filter { it.isFile && it.name.endsWith(".kt") && it.name != "LiveDiag.kt" }.filter { it.readText().contains("LiveDiag.journal") }
         assertEquals(emptyList<File>(), others.toList())
     }
+
+    // ---- LD3 (owner 2026-11-21): "make sure each diagnostic upload is not deleting or overwriting the last upload", and what the first real uploads showed
+
+    private fun kept() = LiveDiag.journalForTest().filterNot { it.contains("s run ") }
+
+    @Test fun everyRunStartsWithADatedMarkerSoClaudeCanTellRunsApartAndNeverThinsItAway() {
+        val m = LiveDiag.journalForTest().filter { it.contains("s run start utc=") }
+        assertEquals(1, m.size)
+        assertTrue(m[0], Regex("""^\+\d+\.\d{3}s run start utc=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ build=\S+ code=\d+$""").matches(m[0]))
+        repeat(200) { LiveDiag.observe("video", "quality", "video quality m.example.com frames=$it dropped=0") }
+        assertTrue("the marker is still there after a flood", LiveDiag.journalForTest().any { it.contains("s run start utc=") })
+    }
+
+    @Test fun aNoisyKindIsThinnedInTheJournalYetEveryOneIsCountedInTheTable() {
+        repeat(200) { LiveDiag.observe("video", "quality", "video quality m.example.com frames=$it dropped=0") }
+        repeat(5) { LiveDiag.observe("gecko", "onKill", "gecko onKill the page engine was killed $it") }
+        assertEquals(40, kept().count { it.contains("video quality") })
+        assertEquals("trouble is never thinned", 5, kept().count { it.contains("onKill") })
+        assertEquals(200L, LiveDiag.statsForTest().count("video quality"))
+    }
+
+    @Test fun theAdvisorReadsAWeekNotOneUpload() {
+        fun load(site: String, ms: Int) = LiveDiag.observe("page", "loaded", "page loaded host=$site paint=900ms done=${ms}ms blocked=1 visit=1 ok=true")
+        appPrefs().edit().putString("phone_code", "ABCD-EFGH-JKLM-NPQR").commit()
+        repeat(2) { load("slow-one.example.com", 20000); load("slow-two.example.com", 25000) }
+        assertTrue("two loads per site are too few for a verdict", LiveDiag.advice().none { it.id == "slow-phone" })
+        LiveDiag.foldForTest()                                         // what a successful send does: this upload's table joins the week
+        assertTrue("the table of the next upload starts empty", LiveDiag.statsForTest().isEmpty())
+        repeat(2) { load("slow-one.example.com", 22000); load("slow-two.example.com", 24000) }
+        assertTrue("four loads per site over two uploads are enough", LiveDiag.advice().any { it.id == "slow-phone" })
+    }
+
+    @Test fun turningItOffErasesTheWeekToo() {
+        LiveDiag.observe("page", "loaded", "page loaded host=a.example.com paint=1ms done=2ms blocked=0 visit=1 ok=true")
+        LiveDiag.foldForTest()
+        LiveDiag.observe("gecko", "onKill", "gecko onKill x")
+        ioDone()
+        LiveDiag.setEnabled(false)
+        assertTrue(LiveDiag.weekForTest().isEmpty())
+        assertFalse(File(ctx.filesDir, "livediag.week").exists())
+        assertEquals(emptyList<String>(), LiveDiag.journalForTest())
+    }
+
+    @Test fun anUploadIsAlwaysANewFileNeverAReplacementOrADelete() {
+        val s = src("diag/LiveDiag.kt")
+        val put = s.substringAfter("private fun put(").substringBefore("// ---- what is stored")
+        assertTrue(put.contains("requestMethod = \"PUT\""))
+        assertFalse("no old-file sha is ever sent: with one GitHub would REPLACE the file", put.contains("sha"))
+        assertFalse("the only call that can change a file is the PUT", Regex("\"(DELETE|PATCH|POST)\"").containsMatchIn(s))
+        assertTrue("a taken name gets the next free one", s.contains("put(DiagBatch.path(at, installId(p), attempt)") && s.contains("code == 422 && attempt < 2"))
+        assertFalse("nothing in the feature removes a file from the repository", Regex("contents/.*DELETE|deleteFile|\"DELETE\"").containsMatchIn(s))
+    }
+
+    @Test fun oneUploadRunsAtATimeAndTheOwnButtonDoesNotUseUpTheAutomaticDay() {
+        val s = src("diag/LiveDiag.kt")
+        assertTrue(s.contains("uploading.compareAndSet(false, true)"))
+        assertTrue("the guard is let go however the upload ends", s.contains("finally { uploading.set(false) }"))
+        assertTrue(s.contains("if (!manual) e.putString(\"day\", day).putInt(\"today\""))
+    }
+
+    @Test fun aSendRefusedOnlyBecauseOfTimeIsAskedAgainWhileTheAppIsInFrontAndNotWhenItLeft() {
+        val s = src("diag/LiveDiag.kt")
+        assertTrue(s.contains("rearm(DiagSchedule.waitMs(st, now), snapshotOnMain)"))
+        assertTrue("no re-arm unless the app is in front", s.substringAfter("private fun rearm(").substringBefore("}\n").contains("!inFront"))
+        assertTrue("leaving the front is told to LiveDiag", src("../../../../../../../geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("LiveDiag.onBack()"))
+    }
+
+    @Test fun theJournalIsOnlyEverTrimmedThroughTheCoreJournalSoAGapIsAlwaysCounted() {
+        val s = src("diag/LiveDiag.kt")
+        assertFalse(s.contains("removeFirst"))
+        assertTrue(s.contains("journal.cut(DiagSchedule.MAX_EVENTS)") && s.contains("journal.commit(cut)"))
+        assertTrue("the file says how many lines were left out", s.contains("cut.lost") && s.contains("cut.thinned"))
+    }
 }

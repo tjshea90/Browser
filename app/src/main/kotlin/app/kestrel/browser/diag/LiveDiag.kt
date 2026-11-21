@@ -399,6 +399,7 @@ object LiveDiag {
     /** Tests only: what is kept right now, and a clean slate. */
     internal fun journalForTest(): List<String> = journal.toList()
     internal fun weekForTest(): DiagStats = weekView()
+    internal fun foldForTest() = foldIntoWeek()
     internal fun resetForTest() { Io.main.removeCallbacks(sendTask); journal.clear(); synchronized(lock) { sinceFlush = 0 }; stats.reset(); roll.reset(); rollSince = 0L; enabled = true; hasToken = false; sendQueued = false; inFront = false; uploading.set(false); snapshotSupplier = null; extraFacts = null; sp = null; appSp = null; appCtx = null; dir = null }
     internal fun queuedForTest(): Boolean = sendQueued
     internal fun statsForTest(): DiagStats = stats
