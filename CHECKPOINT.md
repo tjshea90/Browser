@@ -1,21 +1,22 @@
-# CHECKPOINT 2810 — read me first, then TASKS.md
+# CHECKPOINT 2811 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T16:05:24Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `b75d850b` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T16:13:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `fb20d562` (this checkpoint is the commit after it)
 
 ## Just done
-LD3d tools done: private.sh + diag_digest.py find the clone in any letter case (cloud harness makes ../Kestrel-Private), digest fetches + reads origin/main from git objects (no working-tree change), prints FILES + INTEGRITY (add-only proof from git history) + TUNING NUMBERS per file (cold start, memory, heap, CPU, jank, back, video) + how earlier runs ended, dedupes lines an older app re-sent, no false crash/site hits; private.sh now links INBOX/OUTBOX in this container (they were NOT being saved before); test_handoff 80/80
+LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned counts, noisy kinds thinned, trouble never) + DiagStats.mergeFrom + DiagSchedule.waitMs + DiagBatch v3 (thinned, collision-safe path suffix); LiveDiag.kt uses them: one upload at a time, create-only PUT (no sha, no delete) retries a taken name with -2/-3, 409 once, check re-armed while in front (BrowserActivity.onPause -> LiveDiag.onBack), Send now not counted in the automatic 4/day, dated run marker line + uptimeS + manualSend flag in device, rolling 7-day week feeds the advisor. core livediag 49 tests green, app diag 72 green (LiveDiagTest 28, 8 new)
 
 ## Do this next
-LD3 code: core DiagJournal (exact commit by sequence number, honest lost count, per-kind cap) + core tests; then LiveDiag.kt uses it (in-flight guard, create-only path retry on 422, re-arm on time-based refusal, manual send not in the auto cap, run marker + uptimeS, rolling 7-day DiagStats for the advisor); source-reading test (no sha, no DELETE); gate; alpha84
+(1) digest: print thinned, runs (from 'run start' markers), auto vs manual sends (device.manualSend); (2) update research/LIVE_DIAG.md LD3 + CLAUDE.md private clone note + TASKS LD3 ticks; (3) full gate: ./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :geckoapp:compileDebugKotlin then :app:lintDebug; (4) bump geckoapp versionCode 185 / 0.3.0-alpha84, bash tools/sync-ext-version.sh, ship.sh gecko with note file, ONE dispatch, record-release
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M tools/diag_digest.py
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  bb443992 ckpt 2810: LD3d tools done: private.sh + diag_digest.py find the clone in any letter ca
   2015daad ckpt 2809: LD3 audit written into research/LIVE_DIAG.md from the 4 real uploads: manual
   51209a26 ckpt 2808: LD3 written into TASKS.md in the owner's words (4 checks of the live diagnos
   91a90882 ckpt 2807: alpha83 SHIPPED and RECORDED: run 44882471063 (run_number 264, head 805cabb9
@@ -25,8 +26,7 @@ LD3 code: core DiagJournal (exact commit by sequence number, honest lost count, 
   d2831830 ckpt 2803: LD2a-d built and tested: app LiveDiag (tables fed after switch+whitelist, fa
   9ebf9afd ckpt 2802: LD2 core written + tested (33 tests in core livediag): DiagStats (event hist
   6719ce3e ckpt 2801: gated kestrel-g-v0.3.0-alpha82 (gecko code 183) and pushed it: handoff self-
-  f95e13ba ckpt 2800: LD2 written into TASKS.md in the owner's words (LD2a-e): smarter + more comp
 ```
 
-(7 automatic checkpoint(s) since the last deliberate one — the
+(10 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
