@@ -53,4 +53,13 @@ class PageReportsTest {
         val errorsLine = t.lines().first { it.trim().startsWith("script errors:") }
         assertTrue(errorsLine.contains("t8.example")); assertFalse(errorsLine.contains("t9.example"))
     }
+
+    @Test fun theElementHidingRulesThatMatchedAreNamedSoABlankAreaHasACulprit() {
+        val r = PageReports()
+        r.add(PageReport("https://www.player.example/", 20, 0, emptyList(), emptyList(), emptyList(), 1000, listOf(".overlay x1", "div.container x3 (style)")))
+        val t = r.text(2000)
+        assertTrue(t, t.contains("hidden by Shields' element-hiding rules on this page: .overlay x1; div.container x3 (style)"))
+        val none = PageReports(); none.add(rep("https://www.quiet.example/"))
+        assertFalse(none.text(2000).contains("element-hiding rules"))
+    }
 }

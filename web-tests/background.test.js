@@ -2028,3 +2028,22 @@ test('VD1: what the gate held, what the format policy refused and what failed ar
   await tick(10);
   assert.ok(h.of('verr').length <= 8, 'no tab: nothing');
 });
+
+test('GL1: the element-hiding rules that matched are kept as short words, checked, capped and sent with the page report; a bad message is ignored', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  h.message({ k: 'jhid', n: 40, m: [['.mgp_overlayContainer', 1, 1], ['div.container', 3, 0], ['x'.repeat(200) + '\u0001bad', 2, 1], [5, 1, 1], ['.zero', 0, 1], ['.huge', 100000, 1], ['.ok', 7, 1]] }, 1);
+  h.message({ k: 'jhid', n: 1, m: 'not a list' }, 1);
+  h.message({ k: 'jhid', n: 1, m: [['.x', 1, 1]] }, -1);
+  h.message({ k: 'jhid', n: 1, m: [['.x', 1, 1]] }, 99);
+  await h.flushTimers();
+  const r = h.of('rep');
+  assert.equal(r.length, 1);
+  assert.ok(Array.isArray(r[0].h), 'the report carries h');
+  assert.deepEqual(r[0].h.filter((x) => x.indexOf('.mgp_overlayContainer') === 0 || x.indexOf('div.container') === 0 || x.indexOf('.ok') === 0), ['.mgp_overlayContainer x1', 'div.container x3 (style)', '.ok x7']);
+  assert.ok(r[0].h.every((x) => x.length <= 100 && !/[\u0000-\u001f]/.test(x)), 'short and clean: ' + JSON.stringify(r[0].h));
+  assert.ok(!r[0].h.some((x) => x.indexOf('.zero') >= 0 || x.indexOf('.huge') >= 0), 'a count outside 1..99999 is dropped');
+  h.mainFrame('https://other.example/'); await h.flushTimers();
+  assert.deepEqual(h.of('rep')[h.of('rep').length - 1].h, [], 'a new page starts clean');
+});
