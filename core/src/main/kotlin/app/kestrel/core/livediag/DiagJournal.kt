@@ -68,7 +68,7 @@ class DiagJournal(private val max: Int = 800, private val perKind: Int = 40) {
 
     companion object {
         private const val MAX_KINDS = 300
-        private val IMPORTANT = Regex("crash|kill|fail|error|exception|fatal|anr|stall|oom|dead|died|freez|hang|hung|slow|late|timeout|refus|denied|abnormal|warn|critical|page loaded|trim|decoder|corrupt|lost|dropped")
+        private val IMPORTANT = Regex("crash|kill|fail|error|exception|fatal|anr|stall|oom|dead|died|freez|hang|hung|slow|late|timeout|refus|denied|abnormal|warn|critical|page loaded|trim|decoder|corrupt|lost|dropped|^run ")
         private val HEAD = Regex("""^\+\d+(?:\.\d+)?s (\S+) (\S+)""")
 
         /** Is this kind one whose lines must always be kept? */
