@@ -57,6 +57,30 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
     @Synchronized fun isEmpty(): Boolean = kinds.isEmpty() && sites.isEmpty()
     @Synchronized fun reset() { kinds.clear(); sites.clear(); other = 0L }
 
+    /**
+     * LD3: add another table's numbers to this one (counts add, the worst time is the larger, the recent load times are appended). The tablet keeps a ROLLING WEEK this way: the table of one upload is cleared after
+     * every send (the file carries only what is new), but the advisor needs more than three page loads to say "this site is slow", so it reads the week = the past weeks' total + the current table.
+     */
+    @Synchronized fun mergeFrom(o: DiagStats) {
+        if (o === this) return
+        synchronized(o) {
+            for ((key, v) in o.kinds) {
+                var k = kinds[key]
+                if (k == null && kinds.size < maxKinds) { k = Kind(); kinds[key] = k }
+                if (k == null) other += v.n else { k.n += v.n; if (v.maxMs > k.maxMs) k.maxMs = v.maxMs }
+            }
+            other += o.other
+            for ((key, x) in o.sites) {
+                var s = sites[key]
+                if (s == null) { if (sites.size >= maxSites) continue; s = Site(); sites[key] = s }
+                s.n += x.n; s.failed += x.failed; if (x.worst > s.worst) s.worst = x.worst; s.paintSum += x.paintSum; s.paintN += x.paintN
+                val c = minOf(x.filled, RECENT)
+                val from = if (x.filled > RECENT) x.filled % RECENT else 0           // oldest first
+                for (i in 0 until c) s.add(x.recent[(from + i) % RECENT])
+            }
+        }
+    }
+
     /** Plain lines, tab separated: K kind n maxMs / S site n failed worst paintSum paintN recent,recent / O other. */
     @Synchronized fun save(): String {
         val sb = StringBuilder()
