@@ -2664,7 +2664,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsBarsLine())
         out.add(turnSettler.line())
         out.add("Frames around turns (FrameMetrics, 8 s from each turn): $slowFrames first draws and frames of 100 ms and over; worst frame $worstFrameMs ms (layout+measure $worstLayoutMs ms, draw $worstDrawMs ms, sync $worstSyncMs ms, waited before it $worstDelayMs ms)")
-        out.add("Heat and speed: " + try { val pm = getSystemService(android.os.PowerManager::class.java); "thermal status ${pm.currentThermalStatus} (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode ${if (pm.isSustainedPerformanceModeSupported) "supported" else "not supported"}" } catch (e: Throwable) { "not readable" })
+        out.add("Heat and speed: " + try { val pm = getSystemService(android.os.PowerManager::class.java); "thermal status ${pm.currentThermalStatus} (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode ${if (pm.isSustainedPerformanceModeSupported) "supported" else "not supported"}, Android Battery Saver ${if (pm.isPowerSaveMode) "ON (it slows the processor: turn it off in Android Settings > Battery if the browser feels laggy)" else "off"}" } catch (e: Throwable) { "not readable" })
         out.add(turnPageLine())
         out.add(viewportLine())
         out.add(player.line())
