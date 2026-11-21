@@ -29,7 +29,9 @@ class DiagBatch(
         sb.append(",\n \"settings\": "); map(sb, settings.mapValues { DiagBatch.q(it.value) })
         sb.append(",\n \"device\": "); map(sb, device.mapValues { it.value.toString() })
         sb.append(",\n \"kinds\": "); map(sb, kinds.mapValues { it.value.toString() })
-        sb.append(",\n \"sites\": ["); for ((i, x) in sites.withIndex()) { sb.append(if (i == 0) "\n  " else ",\n  ").append("{\"site\": ").append(q(x.site)).append(", \"loads\": ").append(x.loads).append(", \"failed\": ").append(x.failed).append(", \"medianMs\": ").append(x.medianDoneMs).append(", \"worstMs\": ").append(x.worstDoneMs).append(", \"paintMs\": ").append(x.avgPaintMs).append('}') }
+        sb.append(",\n \"sites\": ["); for ((i, x) in sites.withIndex()) { sb.append(if (i == 0) "\n  " else ",\n  ").append("{\"site\": ").append(q(x.site)).append(", \"loads\": ").append(x.loads).append(", \"failed\": ").append(x.failed).append(", \"medianMs\": ").append(x.medianDoneMs).append(", \"worstMs\": ").append(x.worstDoneMs).append(", \"paintMs\": ").append(x.avgPaintMs)
+            if (x.timed > 0) sb.append(", \"timed\": ").append(x.timed).append(", \"ttfbMs\": ").append(x.avgTtfbMs).append(", \"fcpMs\": ").append(x.avgFcpMs).append(", \"lagPct\": ").append(x.lagPct).append(", \"reqs\": ").append(x.avgReqs)
+            sb.append('}') }
         if (sites.isNotEmpty()) sb.append("\n ")
         sb.append("],\n \"advice\": ["); list(sb, advice)
         sb.append("],\n \"snapshot\": ["); list(sb, snapshot); sb.append("],\n \"events\": ["); list(sb, events); sb.append("]\n}\n")
