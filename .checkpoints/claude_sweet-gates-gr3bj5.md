@@ -1,15 +1,13 @@
-# CHECKPOINT 2801 — read me first, then TASKS.md
+# CHECKPOINT 2802 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T07:35:49Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `f95e13ba` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T07:39:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `ad18ca1a` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha82 (gecko code 183) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+LD2 core written + tested (33 tests in core livediag): DiagStats (event histogram + per-site load table, bounded, save/load), Advisor (11 rules over settings + stats + device/playback numbers -> 'Settings > <section> > <row>: change X to Y. Why: numbers'; tap-apply only for 8 whitelisted keys), DiagBatch v2 (settings, device, kinds, sites, advice). alpha82 gates passed (ship.sh EXIT 0) but alpha82 is NOT dispatched (folded into alpha83).
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/sweet-gates-gr3bj5, inputs {"app":"gecko","full_build":"true","note":"alpha82: two privacy fixes for the live diagnostics that I found by reading what the app writes, before any data was ever sent. (1) A site address written without https in front (the video-frame notes write them that way) used to keep up to 40 characters of the path; now only the site name is kept. (2) Network addresses (for example the phone's address on the hotspot, shown on the Phone link line) are now removed from everything that is kept or sent. Nothing else changed: alpha81 stays as described (Settings, Live diagnostics (for Claude): master off switch, your own token for the PRIVATE repository, at most 4 small files a day). NOT run on the tablet and not run against the real GitHub."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha82), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha82 "alpha82: two privacy fixes for the live diagnostics that I found by reading what the app writes, before any data was ever sent. (1) A site address written without https in front (the video-frame notes write them that way) used to keep up to 40 characters of the path; now only the site name is kept. (2) Network addresses (for example the phone's address on the hotspot, shown on the Phone link line) are now removed from everything that is kept or sent. Nothing else changed: alpha81 stays as described (Settings, Live diagnostics (for Claude): master off switch, your own token for the PRIVATE repository, at most 4 small files a day). NOT run on the tablet and not run against the real GitHub."
-NEVER ship kestrel-g-v0.3.0-alpha82 twice (check BUILDLOG.md and the Releases first).
+LD2 app side: (1) LiveDiag: DiagStats instance fed in observe() after the switch + whitelist, persisted in livediag.stats, cleared on send/off; facts() = device numbers (ActivityManager mem, StatFs free MB, thermal, powerSave, link kbps, phonePaired from prefs phone_code, filterAgeDays from upd_last, liveFailsInRow) + extraFacts supplier from BrowserActivity (slowFrames, worstFrameMs, NativePlayerStats plays/stalls/frames/linkBps); settings snapshot = Boolean/Int keys of SharedPreferences 'kestrel' minus phone_*/upd_*/data_* + string keys search/https/data_saver; advice() ; apply(advice) via Advisor.canApply; (2) OFF = asleep: removeCallbacks of the delayed send, in-flight upload re-checks enabled before PUT, advice/facts/onFront/sendNow do nothing when off; (3) Settings 'Suggested changes' rows with Apply buttons; (4) upload carries settings/device/kinds/sites/advice; (5) tools/diag_digest.py v2; (6) LiveDiagTest additions; gate; versionCode 184 / alpha83 + ALPHA83 note (also covers alpha82's scrub fixes); ship; answer owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha82 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  6719ce3e ckpt 2801: gated kestrel-g-v0.3.0-alpha82 (gecko code 183) and pushed it: handoff self-
   f95e13ba ckpt 2800: LD2 written into TASKS.md in the owner's words (LD2a-e): smarter + more comp
   946369a8 ckpt 2799: alpha82 prepared: versionCode 183 / 0.3.0-alpha82, extension version synced,
   2d4c1e81 ckpt 2798: alpha81 SHIPPED and RECORDED: run 44878029773 green (check, test-js, test-jv
@@ -27,5 +26,7 @@ NEVER ship kestrel-g-v0.3.0-alpha82 twice (check BUILDLOG.md and the Releases fi
   7f084cff ckpt 2794: gated kestrel-g-v0.3.0-alpha81 (gecko code 182) and pushed it: handoff self-
   68f9d24e ckpt 2793: LD1e: full gate green (:core:test, :app:testDebugUnitTest, :geckoapp:compile
   a6c87bc8 ckpt 2792: LD1d done: tools/diag_digest.py (crashes/kills, slow sites by host, playback
-  2a79bf47 ckpt 2791: LD1c tested: LiveDiagTest 13/13 (switch off = nothing kept, switch survives 
 ```
+
+(4 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
