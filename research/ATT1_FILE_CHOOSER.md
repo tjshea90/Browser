@@ -17,3 +17,6 @@ core `prompt/FilePickRules.mimeTypes` (extensions mapped, anything not understoo
 
 ## Not known (the next paste decides)
 Whether the chooser opened, whether the tablet has any app that chooses files (Settings > Back up & restore > Restore uses the same kind of chooser), whether Android ended Kestrel while the chooser was open (2 GB tablet: Diagnostics "Last run"), and Gemini's own menu steps (a menu first, then "Upload files").
+
+## Release note (alpha79 build)
+Run 44849629774 (the ONE dispatch of alpha79): `test-jvm` FAILED once on GitHub with `PhoneBackendTest > aPhoneThatIsKilledInTheMiddleOfAVideoFinishesItAfterTheRestart` (PhoneBackendTest.kt:94 = the test's own `await` helper, "timeout waiting for ..." after 40 s). That test drives a fake phone over real sockets with sleeps; it passed in every local run and in the runs of alpha76, 77 and 78, and nothing of this change touches the phone helper. Treated as a timing flake under runner load: the failed job was re-run in the same run (`rerun_failed_jobs`, not a new dispatch; no tag or Release existed for alpha79 before). If it fails again the test (timeout 40 s -> longer, or the fake chunk delay) needs hardening in its own commit.
