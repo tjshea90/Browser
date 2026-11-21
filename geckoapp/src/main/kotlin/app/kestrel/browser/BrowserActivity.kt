@@ -628,6 +628,7 @@ open class BrowserActivity : Activity(), DockListener {
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
+        app.kestrel.browser.diag.LiveDiag.setExtraFacts { liveDiagExtraFacts() }
         app.kestrel.browser.diag.LiveDiag.onFront { liveDiagSnapshot() }  // LD1: 2 minutes after the app is in front, IF the switch is on, a token is saved and the schedule allows (<= 4 a day)
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
         if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
@@ -2560,6 +2561,17 @@ open class BrowserActivity : Activity(), DockListener {
         val inPrivate = current?.isPrivateTab == true
         val facts = engineFacts().filter { !(inPrivate && (it.startsWith("Firefox's own tracking protection, this page") || it.contains("this page"))) }
         return try { Health.report(this, facts, 0) } catch (e: Throwable) { "" }
+    }
+
+    /** LD2: numbers only this activity and the player know (screen-update counts, the player's counters, tab counts). No text. Read on the UI thread, only while the live-diagnostics switch is on. */
+    private fun liveDiagExtraFacts(): Map<String, Long> {
+        val m = LinkedHashMap<String, Long>()
+        m["slowFrames"] = slowFrames.toLong(); m["worstFrameMs"] = worstFrameMs
+        val n = app.kestrel.browser.web.NativePlayerStats
+        m["plays"] = n.plays.toLong(); m["playErrors"] = n.errors.toLong(); m["framesShown"] = n.framesShown; m["framesDropped"] = n.framesDropped
+        m["playStalls"] = n.stalls.toLong(); m["playStalledMs"] = n.stalledMs; m["linkKbps"] = n.linkBps / 1000L; m["decoderHw"] = when (n.decoderHardware) { true -> 1L; false -> 0L; else -> -1L }
+        m["tabs"] = tabs.size.toLong(); m["liveTabs"] = tabs.count { it.session != null }.toLong()
+        return m
     }
 
     private fun engineFacts(): List<String> {

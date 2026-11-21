@@ -1,11 +1,19 @@
 package app.kestrel.browser.diag
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.PowerManager
+import android.os.StatFs
 import android.util.Base64
 import app.kestrel.browser.Io
+import app.kestrel.core.livediag.Advice
+import app.kestrel.core.livediag.Advisor
 import app.kestrel.core.livediag.DiagBatch
+import app.kestrel.core.livediag.DiagStats
 import app.kestrel.core.livediag.DiagPolicy
 import app.kestrel.core.livediag.DiagSchedule
 import app.kestrel.core.livediag.DiagScrub
@@ -38,7 +46,12 @@ object LiveDiag {
     @Volatile private var enabled = true
     @Volatile private var hasToken = false
     private var sp: SharedPreferences? = null
+    private var appSp: SharedPreferences? = null          // the browser's own settings ("kestrel"): read for the settings snapshot and the advisor, written only by an accepted suggestion
+    private var appCtx: Context? = null
     private var dir: File? = null
+    private val stats = DiagStats()
+    @Volatile private var extraFacts: (() -> Map<String, Long>)? = null
+    @Volatile private var snapshotSupplier: (() -> String)? = null
     private val journal = ArrayDeque<String>()
     private val lock = Any()
     private var dropped = 0
@@ -52,6 +65,8 @@ object LiveDiag {
         val c = ctx.applicationContext
         sp = c.getSharedPreferences("livediag", Context.MODE_PRIVATE)
         dir = c.filesDir
+        appCtx = c
+        appSp = c.getSharedPreferences("kestrel", Context.MODE_PRIVATE)
         enabled = sp!!.getBoolean("on", true)
         hasToken = !sp!!.getString("token", "").isNullOrEmpty()
         try { @Suppress("DEPRECATION") val pi = c.packageManager.getPackageInfo(c.packageName, 0); versionName = pi.versionName ?: "?"; versionCode = pi.versionCode } catch (e: Exception) { /* the batch then says ? */ }
@@ -66,14 +81,26 @@ object LiveDiag {
     fun setEnabled(on: Boolean) {
         enabled = on
         sp?.edit()?.putBoolean("on", on)?.apply()
-        if (!on) erase()
+        if (!on) sleep()
         status = describe()
     }
+
+    /** LD2c: OFF means asleep. The delayed send is cancelled (nothing is left waiting to wake), the suppliers are let go, everything kept is erased. From here every entry point returns at its first line. */
+    private fun sleep() {
+        Io.main.removeCallbacks(sendTask)
+        sendQueued = false
+        snapshotSupplier = null
+        erase()
+    }
+
+    /** BrowserActivity hands over the numbers only it knows (screen-update counts, the player's counters); read on the UI thread, only while the switch is on. */
+    fun setExtraFacts(f: () -> Map<String, Long>) { extraFacts = f }
 
     /** Health.log calls this for every event: the switch and the whitelist are checked before anything is done. */
     fun observe(layer: String, event: String, line: String) {
         if (!enabled) return
         if (!DiagPolicy.allows(layer, event)) return
+        stats.observe(layer, event, line)                // numbers, code-made names and non-sensitive host names only (core DiagStats)
         val t = DiagScrub.line(line)
         var flush = false
         synchronized(lock) {
@@ -105,8 +132,15 @@ object LiveDiag {
     /** The app is in front: if the schedule allows, a send follows 2 minutes later (one pending at a time). */
     fun onFront(snapshotOnMain: () -> String) {
         if (!enabled || !hasToken || sendQueued) return
+        snapshotSupplier = snapshotOnMain
         sendQueued = true
-        Io.main.postDelayed({ sendQueued = false; request(false, snapshotOnMain, null) }, SEND_DELAY_MS)
+        Io.main.postDelayed(sendTask, SEND_DELAY_MS)
+    }
+
+    private val sendTask = Runnable {
+        sendQueued = false
+        val sup = snapshotSupplier
+        if (enabled && sup != null) request(false, sup, null)
     }
 
     /** "Send now": ignores the 6-hour gap, never the switch or the token. [done] gets one plain sentence. */
@@ -125,10 +159,14 @@ object LiveDiag {
             if (why != null) { status = describe(why); return }
         }
         val text = try { snapshotOnMain() } catch (e: Throwable) { "" }       // built on the UI thread by the caller
-        Io.exec { upload(text, now, done) }
+        val extras = Extras(settingsMap(), facts(), stats.kindCounts(), stats.sites())
+        val advice = Advisor.advise(extras.settings, extras.kinds, extras.sites, extras.device).mapNotNull { DiagScrub.line(it.text()) }
+        Io.exec { upload(text, extras, advice, now, done) }
     }
 
-    private fun upload(snapshotText: String, now: Long, done: ((String) -> Unit)?) {
+    private class Extras(val settings: Map<String, String>, val device: Map<String, Long>, val kinds: Map<String, Long>, val sites: List<app.kestrel.core.livediag.SiteStat>)
+
+    private fun upload(snapshotText: String, x: Extras, advice: List<String>, now: Long, done: ((String) -> Unit)?) {
         val p = sp ?: return
         val token = p.getString("token", "") ?: ""
         var msg: String
@@ -144,12 +182,14 @@ object LiveDiag {
             }
             val lines = snapshotText.lineSequence().mapNotNull { DiagScrub.line(it) }.take(DiagSchedule.MAX_SNAPSHOT).toList()
             val (events, drop) = synchronized(lock) { DiagSchedule.newest(journal.toList(), DiagSchedule.MAX_EVENTS) to dropped }
-            if (events.isEmpty() && lines.isEmpty()) { done?.invoke("Nothing to send yet."); return }
+            if (events.isEmpty() && lines.isEmpty() && x.kinds.isEmpty()) { done?.invoke("Nothing to send yet."); return }
             val at = utc(now)
-            val batch = DiagBatch(installId(p), appVersion(), appCode(), Build.VERSION.SDK_INT, Build.MODEL ?: "?", at, lines, events, drop)
+            val batch = DiagBatch(installId(p), appVersion(), appCode(), Build.VERSION.SDK_INT, Build.MODEL ?: "?", at, lines, events, drop, x.settings, x.device, x.kinds, x.sites, advice)
+            if (!enabled) return                                                   // switched off while the repository was being asked: not one byte goes
             val code = put(DiagBatch.path(at, installId(p)), batch.toJson(), token)
             if (code in 200..299) {
                 synchronized(lock) { repeat(events.size) { if (journal.isNotEmpty()) journal.removeFirst() }; dropped = 0 }
+                stats.reset()                                                          // the tables are a delta: what was sent is not counted again
                 save()
                 val day = dayOf(now)
                 p.edit().putLong("lastSentAt", now).putString("day", day).putInt("today", (if (p.getString("day", "") == day) p.getInt("today", 0) else 0) + 1).putInt("fails", 0).putInt("lastLines", lines.size + events.size).apply()
@@ -199,6 +239,7 @@ object LiveDiag {
     // ---- what is stored on the tablet
 
     private fun file(): File? = dir?.let { File(it, "livediag.journal") }
+    private fun statsFile(): File? = dir?.let { File(it, "livediag.stats") }
 
     private fun load() {
         try {
@@ -207,6 +248,7 @@ object LiveDiag {
             val lines = f.readLines(Charsets.UTF_8).takeLast(MAX_JOURNAL)
             synchronized(lock) { journal.clear(); for (l in lines) DiagScrub.line(l)?.let { journal.addLast(it) } }   // a stored line is scrubbed again on the way in
         } catch (e: Exception) { /* a damaged journal is just empty */ }
+        try { statsFile()?.takeIf { it.isFile }?.let { stats.load(it.readText(Charsets.UTF_8)) } } catch (e: Exception) { /* damaged tables are just empty */ }
         status = describe()
     }
 
@@ -216,19 +258,81 @@ object LiveDiag {
             val f = file() ?: return
             val text = synchronized(lock) { journal.joinToString("\n") }
             f.writeText(text, Charsets.UTF_8)
+            statsFile()?.writeText(stats.save(), Charsets.UTF_8)
         } catch (e: Exception) { /* storage full: the next flush tries again */ }
     }
 
     /** Everything this feature keeps on the tablet is removed: the journal in memory and its file. (The token is the person's to forget: [forgetToken].) */
     fun erase() {
         synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }
-        try { file()?.delete() } catch (e: Exception) { /* gone */ }
+        stats.reset()
+        try { file()?.delete(); statsFile()?.delete() } catch (e: Exception) { /* gone */ }
         status = describe()
+    }
+
+    // ---- LD2: what the tablet knows about itself, and what it would change
+
+    /** Plain numbers about the device and the session (no text): memory, storage, heat, the link, and what BrowserActivity adds. Empty while the switch is off. */
+    fun facts(): Map<String, Long> {
+        if (!enabled) return emptyMap()
+        val c = appCtx ?: return emptyMap()
+        val m = LinkedHashMap<String, Long>()
+        try { val am = c.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager; val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+            m["ramTotalMb"] = mi.totalMem shr 20; m["ramAvailMb"] = mi.availMem shr 20; m["lowMemory"] = if (mi.lowMemory) 1L else 0L; m["lowRamDevice"] = if (am.isLowRamDevice) 1L else 0L } catch (e: Exception) { /* a fact is just missing */ }
+        try { m["storageFreeMb"] = StatFs(c.filesDir.path).availableBytes shr 20 } catch (e: Exception) { /* missing */ }
+        try { val pm = c.getSystemService(Context.POWER_SERVICE) as PowerManager; m["powerSave"] = if (pm.isPowerSaveMode) 1L else 0L; m["thermal"] = pm.currentThermalStatus.toLong() } catch (e: Exception) { /* missing */ }
+        try { val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager; val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            if (caps != null) { m["wifi"] = if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) 1L else 0L; m["downKbps"] = caps.linkDownstreamBandwidthKbps.toLong() }
+            m["metered"] = if (cm.isActiveNetworkMetered) 1L else 0L } catch (e: Exception) { /* missing */ }
+        val a = appSp
+        if (a != null) {
+            m["phonePaired"] = if (!a.getString("phone_code", "").isNullOrEmpty()) 1L else 0L
+            val last = a.getLong("upd_last", 0L); if (last > 0L) m["filterAgeDays"] = (System.currentTimeMillis() - last) / 86_400_000L
+        }
+        m["liveFailsInRow"] = (sp?.getInt("fails", 0) ?: 0).toLong()
+        m["prevRunEndedBadly"] = if (LastRun.previousEndedBadly()) 1L else 0L
+        try { extraFacts?.invoke()?.let { m.putAll(it) } } catch (e: Throwable) { /* the activity's numbers are optional */ }
+        return m
+    }
+
+    private val SKIP = listOf("phone", "glide", "mini", "dl_geom", "data_base", "data_acc", "upd_sig", "upd_notice", "upd_note", "upd_last", "blocked")
+    private val KEY = Regex("[a-z0-9_]{1,32}")
+    private val WORD = Regex("[A-Za-z0-9_-]{1,24}")
+
+    /** What the owner chose in Settings: switches and small numbers by name, plus the three named choices (search engine id, HTTPS mode, data saver level). Never an address, a code, a word list or a counter. */
+    fun settingsMap(): Map<String, String> {
+        if (!enabled) return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for ((k, v) in appSp?.all ?: return out) {
+            if (!KEY.matches(k) || SKIP.any { k.startsWith(it) }) continue
+            when (v) { is Boolean -> out[k] = v.toString(); is Int -> out[k] = v.toString(); is String -> if ((k == "search" || k == "https" || k == "data_saver") && WORD.matches(v)) out[k] = v }
+        }
+        return out
+    }
+
+    /** The suggestions the tablet's advisor would make right now (Settings shows them). Nothing at all, and nothing computed, while the switch is off. */
+    fun advice(): List<Advice> {
+        if (!enabled) return emptyList()
+        return Advisor.advise(settingsMap(), stats.kindCounts(), stats.sites(), facts())
+    }
+
+    /** One tap: make the change a suggestion names (only the keys the advisor may change, within their range). True when it was done. */
+    fun applyAdvice(a: Advice): Boolean {
+        if (!enabled) return false
+        val k = a.key ?: return false
+        val v = a.value
+        if (!Advisor.canApply(k, v)) return false
+        val e = appSp?.edit() ?: return false
+        when (v) { is Boolean -> e.putBoolean(k, v); is Number -> e.putInt(k, v.toInt()); else -> return false }
+        e.apply()
+        return true
     }
 
     /** Tests only: what is kept right now, and a clean slate. */
     internal fun journalForTest(): List<String> = synchronized(lock) { journal.toList() }
-    internal fun resetForTest() { synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }; enabled = true; hasToken = false; sp = null; dir = null }
+    internal fun resetForTest() { Io.main.removeCallbacks(sendTask); synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }; stats.reset(); enabled = true; hasToken = false; sendQueued = false; snapshotSupplier = null; extraFacts = null; sp = null; appSp = null; appCtx = null; dir = null }
+    internal fun queuedForTest(): Boolean = sendQueued
+    internal fun statsForTest(): DiagStats = stats
 
     // ---- words for Settings / Diagnostics
 
