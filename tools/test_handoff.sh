@@ -280,5 +280,22 @@ check "digest --brief mentions the suggestions" 'python3 -B -I "$D/tools/diag_di
 check "digest ignores a damaged file" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "2 file(s)"'
 check "digest --brief is one line, and silent with no data" '[ "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/diag" | wc -l)" = 1 ] && [ -z "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/nothing")" ]'
 
+# ---------------------------------------------------------------- LD3d: the digest reads the private repo's MAIN branch from git (a session clone sits on its own branch and goes stale), proves the history is add-only, and the clone is found in any letter case
+LP="$T/ld3"; mkdir -p "$LP/par"; DAY="$(date -u +%F)"
+git init -q --bare "$LP/origin.git" && git -C "$LP/origin.git" symbolic-ref HEAD refs/heads/main
+git clone -q "$LP/origin.git" "$LP/writer" >/dev/null 2>&1
+ldput(){ ( cd "$LP/writer" && git checkout -q -B main >/dev/null 2>&1; mkdir -p "diag/$DAY"; printf '{"v":2,"install":"abc","app":"0.3.0-alpha83","code":184,"at":"%sT%s:%s:%sZ","dropped":0,"snapshot":[],"events":["+1.000s page loaded host=%s paint=900ms done=%s ok=true blocked=0 visit=1"]}' "$DAY" "$1" "$2" "$3" "$4" "$5" | sed 's/paint=900ms done=\([0-9]*\) ok=true blocked=0 visit=1/paint=900ms done=\1ms blocked=0 visit=1 ok=true/' > "diag/$DAY/$1$2$3-abc.json"; git add -A; git -c user.name=t -c user.email=t@t commit -q -m diag; git push -q origin main ) >/dev/null 2>&1; }
+ldput 10 00 00 first.example.com 9000
+git clone -q "$LP/origin.git" "$LP/par/Kestrel-Private" >/dev/null 2>&1; git -C "$LP/par/Kestrel-Private" checkout -q -b claude/session >/dev/null 2>&1
+ldput 11 00 00 second.example.com 4000
+check "digest reads origin/main from git, so a file the tablet wrote after the session branch was made is seen" '[ ! -e "$LP/par/Kestrel-Private/diag/$DAY/110000-abc.json" ] && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "2 file(s)" && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "second.example.com"'
+check "digest INTEGRITY says every file was added once and none was changed" 'python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "INTEGRITY.*OK: every file was added once"'
+check "the digest left the session clone's working tree and branch alone" '[ "$(git -C "$LP/par/Kestrel-Private" branch --show-current)" = "claude/session" ] && [ -z "$(git -C "$LP/par/Kestrel-Private" status --porcelain)" ]'
+( cd "$LP/writer" && printf ' ' >> "diag/$DAY/100000-abc.json" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m overwrite && git push -q origin main ) >/dev/null 2>&1
+check "digest INTEGRITY raises PROBLEM when an uploaded file was ever changed" 'python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "INTEGRITY.*PROBLEM" && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "CHANGED: M"'
+mkdir -p "$LP/rp/Browser/tools" "$LP/rp/Kestrel-Private/.git"; cp "$D/tools/private.sh" "$LP/rp/Browser/tools/"; : > "$LP/rp/Browser/tools/PRIVATE_ON"
+check "private.sh finds the clone whatever its letter case (the cloud harness makes ../Kestrel-Private)" '[ "$(bash "$LP/rp/Browser/tools/private.sh" path)" = "$LP/rp/Kestrel-Private" ]'
+check "private.sh: KESTREL_PRIVATE still wins" '[ "$(KESTREL_PRIVATE=/x/y bash "$LP/rp/Browser/tools/private.sh" path)" = "/x/y" ]'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
