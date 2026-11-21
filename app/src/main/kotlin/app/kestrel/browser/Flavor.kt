@@ -36,6 +36,8 @@ object Flavor {
     @JvmField var hasTapSeek = false
     /** Kestrel G (BK10): Back is instant for pages that forbid caching (background.js): Settings shows the "Instant Back" switch. */
     @JvmField var hasInstantBack = false
+    /** Kestrel G (LD1): the live diagnostics for Claude (diag/LiveDiag): Settings shows its section. */
+    @JvmField var hasLiveDiag = false
     /** Kestrel G (FS1): the screen turns with the tablet while a video is full screen, and a small rotate button shows there: Settings shows the "Turn the screen for full-screen video" choice. */
     @JvmField var hasFullscreenTurn = false
     /** Kestrel G (VC1): a video that has no controls of its own gets Kestrel's bar (videobar.js): Settings shows the "Video controls" choice. */
