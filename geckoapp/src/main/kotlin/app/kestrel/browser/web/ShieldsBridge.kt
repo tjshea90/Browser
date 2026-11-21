@@ -90,6 +90,10 @@ class ShieldsBridge(
     private val nameClues: (JSONObject) -> Unit = {},
     /** LD4: where one page load's time went (pagetime.js, top frame, checked by background.js): milliseconds, counts, three slow [host, kind, ms] and the page of its tab (p). Numbers and host names only. Worker thread. */
     private val pageTiming: (JSONObject) -> Unit = {},
+    /** VD1: what the press-to-play gate did on one page (`vgh`: n = held, opened, by play(), by a tap, by Kestrel's controls, script players kept, plays refused), the format answers that said no (`vch`: s, m, f, w) and a media element's failure (`verr`: c, ns, rs, s, f, e), each with the page of its tab (p). Numbers and kinds only. Worker thread. */
+    private val videoGate: (JSONObject) -> Unit = {},
+    private val videoCodec: (JSONObject) -> Unit = {},
+    private val videoError: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -154,6 +158,9 @@ class ShieldsBridge(
                     "ns" -> { if (m.optInt("rx") == 1) noStoreRelaxed(m.optString("p")) else noStore(m.optString("p")); "" }
                     "nm" -> { nameClues(m); "" }
                     "pt" -> { pageTiming(m); "" }
+                    "vgh" -> { videoGate(m); "" }
+                    "vch" -> { videoCodec(m); "" }
+                    "verr" -> { videoError(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""

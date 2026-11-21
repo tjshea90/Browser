@@ -558,7 +558,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -2599,6 +2599,40 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
+    /**
+     * VD1 (owner 2026-11-21: "diagnose why Instagram reels don't load and some videos don't load on websites"): what happened to the videos of ONE site, from the extension: the press-to-play gate held / refused something (`g`), the format
+     * policy answered no (`c`), a media element failed (`e`). The host is the TAB's own site (not what a script says); a private tab, an unknown page and a sensitive site (mail, bank ...) are dropped before anything is kept or logged
+     * (PV1). Kept in [app.kestrel.browser.web.VideoBySite] for the Diagnostics screen and as one `video ...` Health line for the live diagnostics and the digest. Numbers and kinds only: no address, no title.
+     */
+    private fun onVideoSite(m: org.json.JSONObject, kind: Char) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page)) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            val host = tab.topHost ?: return@post
+            if (tab.isPrivateTab || app.kestrel.core.livediag.SensitiveSites.isSensitive(host)) return@post
+            val sub = if (m.optInt("f", 1) == 1) "top" else "sub"
+            when (kind) {
+                'g' -> {
+                    val n = m.optJSONArray("n") ?: return@post
+                    val held = n.optInt(0); val opened = n.optInt(1); val kept = n.optInt(5); val refused = n.optInt(6)
+                    app.kestrel.browser.web.VideoBySite.sites.gate(host, held, opened, kept, refused)
+                    Health.log("video", "gate", "$host held=$held kept=$kept refused=$refused opened=$opened frame=$sub rule=" + (if (prefs.videoPressToPlay && !app.kestrel.browser.shield.Shields.effective(prefs, host).autostartVideo) "on" else "off-for-site"))
+                }
+                'c' -> {
+                    val size = m.optInt("s"); val mode = m.optInt("m"); val fps = m.optInt("f"); val last = m.optString("w")
+                    app.kestrel.browser.web.VideoBySite.sites.codec(host, size, mode, fps, last)
+                    Health.log("video", "codec-no", "$host size=$size mode=$mode fps=$fps last=${last.replace(' ', '_')}")
+                }
+                else -> {
+                    val code = m.optInt("c"); val src = m.optString("s", "none")
+                    app.kestrel.browser.web.VideoBySite.sites.error(host, code, src)
+                    Health.log("video", "error", "$host code=$code net=${m.optInt("ns")} ready=${m.optInt("rs")} src=$src frame=$sub el=${m.optString("e", "v")}")
+                }
+            }
+        }
+    }
+
     private fun liveDiagExtraFacts(): Map<String, Long> {
         val m = LinkedHashMap<String, Long>()
         m["slowFrames"] = slowFrames.toLong(); m["worstFrameMs"] = worstFrameMs
@@ -2643,6 +2677,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))
         out.add(app.kestrel.browser.web.VideoFormats.line(applicationContext, prefs))   // ANS52g: the page script's answers (core/media/VideoLimits) and what it refused
         out.add(app.kestrel.browser.web.VideoFormats.capLine(applicationContext, prefs))   // ANS52h: the picture size cap for HLS pages and what the extension did with playlists
+        out.add(app.kestrel.browser.web.VideoBySite.line())   // VD1: which site had its videos held back, refused or failed
         out.add(app.kestrel.browser.web.VideoFormats.gateLine(prefs))   // ANS53a / ANS53b: videos start only when the person presses play   // ANS52: hardware first, with the sizes and frame rates the vendor claims and measured
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
