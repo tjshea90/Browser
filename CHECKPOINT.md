@@ -1,13 +1,13 @@
-# CHECKPOINT 2817 — read me first, then TASKS.md
+# CHECKPOINT 2818 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T16:44:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `4a9f3b5e` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T17:18:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `db4c9602` (this checkpoint is the commit after it)
 
 ## Just done
-alpha84 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha84 (gecko code 185, run 44924979560 green, APK + sha256 + dm in the Release, BUILDLOG line pushed); heartbeat deleted. LD1, LD2, LD3a-e ticked; LD3f (owner test of the automatic send) and LD3g (ideas) open
+LD4 written into TASKS.md in the owner's words (richer live diagnostics + claude.ai and YouTube load slowly even on fast wifi); no new uploads since alpha84 (still the 4 files of 2026-11-21)
 
 ## Do this next
-Nothing is running. Waiting for the owner to install alpha84 and use it normally; then python3 -B -I tools/diag_digest.py must print 'Sends: N automatic' (PROVEN) - if not, look at LiveDiag.onFront/rearm first. Also open: YTC1/YTC2, ATT1, FLK1 PhoneBackendTest flake, PB8, LD3g ideas (re-arm after a successful send, scroll meter suggestion, decoder use per play)
+LD4a: gather evidence into research/SLOW_LOADS.md: grep research/*.md + TASKS for claude.ai / youtube / shields A/B (research/EM1_RESULTS.md, TABLET_DIAG_2026-11-13.md), geckoapp gecko-prefs.txt (JIT, processCount, cache), the real files' page-loaded + request counts (v1 snapshot: claude.ai 1044 requests), how Shields blocks (webRequest listener per request?); then design LD4b page-timing probe (content script ES5 -> background -> ShieldsBridge -> Health line)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Nothing is running. Waiting for the owner to install alpha84 and use it normally
 
 ## Last ten checkpoints
 ```
+  db4c9602 ckpt 2817: alpha84 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/
   bcfe8a73 ckpt 2816: alpha84 build running: run id 44924979560 (run_number 265, head 2cf128f4), d
   4a42d19d ckpt 2815: alpha84 gated (core+app tests, gecko compile, lint 0 errors, self-test 80/80
   2cf128f4 ckpt 2814: gated kestrel-g-v0.3.0-alpha84 (gecko code 185) and pushed it: handoff self-
@@ -25,5 +26,4 @@ Nothing is running. Waiting for the owner to install alpha84 and use it normally
   bb443992 ckpt 2810: LD3d tools done: private.sh + diag_digest.py find the clone in any letter ca
   2015daad ckpt 2809: LD3 audit written into research/LIVE_DIAG.md from the 4 real uploads: manual
   51209a26 ckpt 2808: LD3 written into TASKS.md in the owner's words (4 checks of the live diagnos
-  91a90882 ckpt 2807: alpha83 SHIPPED and RECORDED: run 44882471063 (run_number 264, head 805cabb9
 ```
