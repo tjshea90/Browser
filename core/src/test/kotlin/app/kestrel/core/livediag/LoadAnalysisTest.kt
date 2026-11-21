@@ -134,6 +134,6 @@ class LoadAnalysisTest {
         assertTrue("short enough for one journal line", line.length <= DiagScrub.MAX_LINE)
         val d = DiagStats(); d.observe("page", "timing", "+9.0s page timing $line")
         val s = d.sites().single()
-        assertEquals("claude.ai", s.site); assertEquals(1, s.timed); assertEquals(14000L, s.avgFcpMs); assertEquals(1044, s.avgReqs); assertEquals(8, s.lagPct)
+        assertEquals("claude.ai", s.site); assertEquals(1, s.timed); assertEquals(14000L, s.avgFcpMs); assertEquals(1044, s.avgReqs); assertEquals("11000 ms late of a 28000 ms load", 39, s.lagPct)
     }
 }
