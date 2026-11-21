@@ -360,6 +360,7 @@ object GeckoEngine {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", eff.http3, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.dns.disableIPv6", eff.disableIPv6, d)
             networkProfile = eff.text
+            networkProfileCode = if (eff.tunnel) "fast-wifi-tunnel" else if (eff.fastWifi) "fast-wifi" else "standard"
             pagesViaProxy = eff.pagesViaProxy
             // EX-14 (research/REVIEW-EXTERNAL-1.md 3.2): the engine honours `image.http.accept` only when it has a USER value, so this is the one pref set on that branch (and cleared when the profile ends).
             // Without AVIF, CDNs answer WebP / JPEG: bigger files, much less decode work for the four A53 cores; worth it only while bytes are cheap (Fast Wi-Fi).
@@ -370,6 +371,8 @@ object GeckoEngine {
     }
 
     /** The profile now in force, in words (Diagnostics and Settings). */
+    /** LD4: the profile in force as one word (standard / fast-wifi / fast-wifi-tunnel) for the live diagnostics' page timing line. */
+    @Volatile var networkProfileCode: String = "standard"
     @Volatile var networkProfile: String = "Standard profile: your own switches apply."
 
     /**

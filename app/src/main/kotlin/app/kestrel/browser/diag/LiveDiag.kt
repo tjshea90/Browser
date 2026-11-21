@@ -205,7 +205,7 @@ object LiveDiag {
                     RepoState.ERROR -> { fail(p, now, "GitHub not reachable"); done?.invoke("Could not reach GitHub. It will try again later."); return }
                 }
             }
-            val lines = snapshotText.lineSequence().mapNotNull { DiagScrub.line(it) }.take(DiagSchedule.MAX_SNAPSHOT).toList()
+            val lines = snapshotText.lineSequence().mapNotNull { DiagScrub.line(it, DiagScrub.MAX_SNAPSHOT_LINE) }.take(DiagSchedule.MAX_SNAPSHOT).toList()   // LD4: the long lines (CPU by process, Blocker) keep their tails
             val cut = journal.cut(DiagSchedule.MAX_EVENTS)                         // the newest lines + exactly where they end (LD3: what did not fit is counted, not forgotten)
             val events = cut.lines
             if (events.isEmpty() && lines.isEmpty() && x.kinds.isEmpty()) { done?.invoke("Nothing to send yet."); return }

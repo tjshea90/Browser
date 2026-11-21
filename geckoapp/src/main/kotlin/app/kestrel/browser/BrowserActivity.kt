@@ -557,7 +557,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -2565,6 +2565,33 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** LD2: numbers only this activity and the player know (screen-update counts, the player's counters, tab counts). No text. Read on the UI thread, only while the live-diagnostics switch is on. */
+    /**
+     * LD4: one page load's own account of where its time went (pagetime.js, via the extension): ONE `page timing` line in the Health ring, from which the live diagnostics' tables and the digest read. Never for a private tab. The host is
+     * the TAB's own site (not what the script says); what the tablet was doing is added here (Shields up or down for the site, the network profile, free memory, the busiest process's CPU, the tab counts).
+     */
+    private fun onPageTiming(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page)) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            val host = tab.topHost ?: return@post
+            if (tab.isPrivateTab) return@post
+            val keys = listOf("nt", "dns", "con", "tls", "fb", "ttfb", "fcp", "lcp", "dcl", "load", "rn", "rc", "kb", "r1", "r3", "rsum", "h2", "h1", "h3", "js", "css", "img", "xhr", "oth", "nodes", "scr", "fr", "rd", "hid", "pt", "at")
+            val v = HashMap<String, Long>()
+            for (k in keys) v[k] = m.optLong(k, -1L)
+            val lm = m.optJSONArray("lm")
+            val lag = listOf(lm?.optLong(0, 0L) ?: 0L, lm?.optLong(1, 0L) ?: 0L, lm?.optLong(2, 0L) ?: 0L)
+            val sl = ArrayList<app.kestrel.core.livediag.PageTimingLine.Slow>()
+            m.optJSONArray("sl")?.let { a -> for (i in 0 until minOf(a.length(), 3)) a.optJSONArray(i)?.let { e -> sl.add(app.kestrel.core.livediag.PageTimingLine.Slow(e.optString(0), e.optString(1), e.optLong(2, 0L))) } }
+            val eff = app.kestrel.browser.shield.Shields.effective(prefs, host)
+            val avail = try { val mi = android.app.ActivityManager.MemoryInfo(); getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(mi); mi.availMem shr 20 } catch (e: Exception) { -1L }
+            val cpu = app.kestrel.browser.diag.CpuMeter.numbers()
+            val ctx = "shields=" + (if (eff.shieldsUp) "up" else "down") + " ads=" + (if (eff.shieldsUp && eff.blockAds) 1 else 0) + " net=" + GeckoEngine.networkProfileCode + " avail=" + avail +
+                " cpuP=" + (cpu["cpuParentNow"] ?: -1L) + " cpuT=" + (cpu["cpuTabNow"] ?: -1L) + " tabs=" + tabs.size + " live=" + tabs.count { it.session != null }
+            Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx))
+        }
+    }
+
     private fun liveDiagExtraFacts(): Map<String, Long> {
         val m = LinkedHashMap<String, Long>()
         m["slowFrames"] = slowFrames.toLong(); m["worstFrameMs"] = worstFrameMs
@@ -2572,6 +2599,12 @@ open class BrowserActivity : Activity(), DockListener {
         m["plays"] = n.plays.toLong(); m["playErrors"] = n.errors.toLong(); m["framesShown"] = n.framesShown; m["framesDropped"] = n.framesDropped
         m["playStalls"] = n.stalls.toLong(); m["playStalledMs"] = n.stalledMs; m["linkKbps"] = n.linkBps / 1000L; m["decoderHw"] = when (n.decoderHardware) { true -> 1L; false -> 0L; else -> -1L }
         m["tabs"] = tabs.size.toLong(); m["liveTabs"] = tabs.count { it.session != null }.toLong()
+        // LD4: the numbers behind the Diagnostics screen's long text lines, as numbers: the extension's cost, the CPU, the memory of every process, the start-up marks, the slow-frame counter
+        try { ShieldsBridge.stats?.let { st -> m.putAll(app.kestrel.core.livediag.ExtCost.numbers(st.listeners, st.checks, st.totalUs, st.maxUs, st.slow)); m["extLoadMs"] = st.loadMs } } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.CpuMeter.numbers()) } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.LastRun.memoryNumbers(applicationContext)) } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.StartTimeline.numbers()) } catch (e: Exception) { /* optional */ }
+        m["jankFrames"] = Health.counter("frames.jank").toLong()
         return m
     }
 

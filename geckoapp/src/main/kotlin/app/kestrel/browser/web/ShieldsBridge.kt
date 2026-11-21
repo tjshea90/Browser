@@ -88,6 +88,8 @@ class ShieldsBridge(
     private val handOver: (JSONObject) -> Boolean = { false },
     /** NM1: what the page says about WHICH video is on (names.js: show, season, episode, episode title) and the page of its tab (p). Text only, cut by the app. Worker thread. */
     private val nameClues: (JSONObject) -> Unit = {},
+    /** LD4: where one page load's time went (pagetime.js, top frame, checked by background.js): milliseconds, counts, three slow [host, kind, ms] and the page of its tab (p). Numbers and host names only. Worker thread. */
+    private val pageTiming: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -151,6 +153,7 @@ class ShieldsBridge(
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { if (m.optInt("rx") == 1) noStoreRelaxed(m.optString("p")) else noStore(m.optString("p")); "" }
                     "nm" -> { nameClues(m); "" }
+                    "pt" -> { pageTiming(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
