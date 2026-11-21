@@ -25,7 +25,7 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
 
     /** Called for every event the whitelist let through. [line] is the whole Health line ("+12.3s layer event detail"). */
     @Synchronized fun observe(layer: String, event: String, line: String) {
-        if (!NAME.matches(layer) || !NAME.matches(event)) return
+        if (!LAYER.matches(layer) || !EVENT.matches(event)) return
         val key = "$layer $event"
         var k = kinds[key]
         if (k == null) { if (kinds.size >= maxKinds) { other++; return }; k = Kind(); kinds[key] = k }
@@ -85,7 +85,8 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
 
     companion object {
         private const val RECENT = 24
-        private val NAME = Regex("[a-z0-9._-]{1,32}")
+        private val LAYER = Regex("[a-z0-9._-]{1,32}")
+        private val EVENT = Regex("[A-Za-z0-9._-]{1,40}")
         private val HOST = Regex("[a-z0-9.-]{1,80}")
         private val MS = Regex("""(\d{1,7})\s?ms\b""")
         private val LOADED = Regex("""host=(\S+) paint=(-?\d+)ms done=(-?\d+)ms blocked=\d+ visit=\d+ ok=(true|false)""")
