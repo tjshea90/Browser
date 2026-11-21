@@ -89,11 +89,11 @@ test('LD4: a page whose own script blocks for most of its load shows it as laten
   await quiet.context.close();
 });
 
-test('LD4: leaving the page before the load ends sends a partial report at once; a page looked away from says so', async () => {
+test('LD4: pagehide before the load ends sends a partial report at once; a page looked away from says so', async () => {
   const { page, got, context } = await open(async (u, r) => { if (u.pathname === '/never.js') { await new Promise((x) => setTimeout(x, 20000)); await r.abort(); return true; } return false; }, { cap: 30000 }, { body: '<script src="/never.js"></script>' });
   page.goto('https://site.example/').catch(() => {});
   await page.waitForTimeout(1200);
-  await page.goto('about:blank').catch(() => {});
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));      // (a real unload cannot be watched through the test's request interception: the handler is what counts)
   await until(() => reports(got).length >= 1, 'the partial report');
   const m = reports(got)[0];
   assert.equal(m.pt, 1, 'partial'); assert.equal(m.load, -1, 'the load never ended');
