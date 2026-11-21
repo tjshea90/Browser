@@ -1,13 +1,13 @@
-# CHECKPOINT 2806 — read me first, then TASKS.md
+# CHECKPOINT 2807 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T07:55:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `805cabb9` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T08:08:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `47024cb0` (this checkpoint is the commit after it)
 
 ## Just done
-alpha83 DISPATCHED once at 07:55Z on 2026-11-21 (android.yml, app=gecko, full_build=true, head = the ship commit of 0.3.0-alpha83 / code 184). Do NOT dispatch again. alpha82 never dispatched.
+alpha83 SHIPPED and RECORDED: run 44882471063 (run_number 264, head 805cabb9) success; tag kestrel-g-v0.3.0-alpha83; Release has kestrel-g-0.3.0-alpha83.apk (96.6 MB) + .sha256 + .dm; certificate verified; BUILDLOG written. https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha83 . alpha80 and alpha81 also shipped+recorded. alpha82 never existed (folded in). LD1 and LD2 DONE.
 
 ## Do this next
-WAIT for the alpha83 run (tag loop: git ls-remote origin refs/tags/kestrel-g-v0.3.0-alpha83; full build ~15-20 min); verify list_workflow_jobs (check, test-js, test-jvm, build-gecko green) + mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha83 shows the APK; then bash tools/record-release.sh kestrel-g-v0.3.0-alpha83 with the IDENTICAL note from docs/handoff/ALPHA83_RELEASE_NOTE.txt; then answer the owner (alpha80 Back, alpha81 live diagnostics + token steps, alpha83 LD2: suggestions, off = asleep; what was NOT run on the tablet; open items). If only PhoneBackendTest fails (FLK1): rerun_failed_jobs on the SAME run
+Nothing is running. Waiting for the owner's tablet test of alpha83: (1) create the fine-grained token (only kestrel-private, Contents read+write), paste in Settings > Live diagnostics (for Claude) > GitHub token, tap Send now: the first real upload; (2) Claude sessions need ../kestrel-private cloned (add_repo kestrel-private push was DENIED this session: owner may have to allow it) then python3 -B -I tools/diag_digest.py; (3) still open: YTC1/YTC2 (owner's Settings bisect), ATT1 (File chooser Diagnostics line), FLK1 PhoneBackendTest flake, PB8, a lab scene for file input, tune Advisor thresholds with real data
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ WAIT for the alpha83 run (tag loop: git ls-remote origin refs/tags/kestrel-g-v0.
 
 ## Last ten checkpoints
 ```
+  6b5bf826 ckpt 2806: alpha83 DISPATCHED once at 07:55Z on 2026-11-21 (android.yml, app=gecko, ful
   805cabb9 ckpt 2805: gated kestrel-g-v0.3.0-alpha83 (gecko code 184) and pushed it: handoff self-
   6eac0f1a ckpt 2804: LD2e: full gate green (:core:test :app:testDebugUnitTest :geckoapp:compileDe
   d2831830 ckpt 2803: LD2a-d built and tested: app LiveDiag (tables fed after switch+whitelist, fa
@@ -25,5 +26,4 @@ WAIT for the alpha83 run (tag loop: git ls-remote origin refs/tags/kestrel-g-v0.
   946369a8 ckpt 2799: alpha82 prepared: versionCode 183 / 0.3.0-alpha82, extension version synced,
   2d4c1e81 ckpt 2798: alpha81 SHIPPED and RECORDED: run 44878029773 green (check, test-js, test-jv
   dba49a28 ckpt 2797: LD1 privacy fix 2 (for alpha82): DiagScrub removes dotted-quad network addre
-  db02a2b5 ckpt 2796: LD1 privacy fix (for alpha82): DiagScrub now drops the path after a BARE hos
 ```
