@@ -1332,6 +1332,7 @@ class Soak:
             sys.path.insert(0, os.path.join(root, "tools", "emu"))
             import back_emu
             back_emu.PKG = self.a.pkg
+            back_emu.ADB = getattr(self.adb, "bin", back_emu.ADB)       # the runner's adb (the sandbox's SDK path is not there)
             rows = {}
             for name, case, prefix in (("static", "static", ""), ("nostore-instant-back", "nostore", ""), ("nostore-sign-in-path-control", "nostore", "/login")):
                 try:
