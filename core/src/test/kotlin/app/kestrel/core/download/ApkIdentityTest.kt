@@ -46,4 +46,14 @@ class ApkIdentityTest {
         assertTrue(ApkIdentity.extensionCanLie("movie.MP4")); assertTrue(ApkIdentity.extensionCanLie("scan.pdf"))
         assertFalse(ApkIdentity.extensionCanLie("player.apk")); assertFalse(ApkIdentity.extensionCanLie("archive.zip")); assertFalse(ApkIdentity.extensionCanLie("noextension"))
     }
+
+    @Test fun aFileThatWouldGoToThePackageInstallerIsRecognisedByNameOrDeclaredType() {
+        // RVW1 S1: the notification's "Open" must not hand these straight to the system
+        assertTrue(ApkIdentity.installerMaybe("player.apk", null)); assertTrue(ApkIdentity.installerMaybe("Player.APK", "application/octet-stream"))
+        assertTrue(ApkIdentity.installerMaybe("bundle.xapk", null)); assertTrue(ApkIdentity.installerMaybe("split.apks", null))
+        assertTrue("the page chose a harmless name but the Android package type", ApkIdentity.installerMaybe("holiday.mp4", "application/vnd.android.package-archive"))
+        assertTrue(ApkIdentity.installerMaybe("x.bin", "application/vnd.android.package-archive; charset=binary"))
+        assertFalse(ApkIdentity.installerMaybe("holiday.mp4", "video/mp4")); assertFalse(ApkIdentity.installerMaybe("notes.pdf", null)); assertFalse(ApkIdentity.installerMaybe("noext", null))
+        assertFalse("an apk-looking word that is not the extension", ApkIdentity.installerMaybe("apk-guide.pdf", "application/pdf"))
+    }
 }

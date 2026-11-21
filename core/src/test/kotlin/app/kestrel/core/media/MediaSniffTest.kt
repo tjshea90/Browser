@@ -131,4 +131,49 @@ class MediaSniffTest {
         assertEquals("mpg", MediaSniff.classifyBytes(raw(0, 0, 1, 0xBA) + ByteArray(20))!!.ext)
         assertNull(MediaSniff.classifyBytes(ByteArray(64)))                                         // zeros
     }
+
+    // ---- RVW1 (research/REVIEW_2026-11-20_FINDER.md): F10 the extension and the app agree, F14 YouTube slices, F15 numbered segments, F22 sizes in the address
+
+    @Test fun aDownloadScriptThatNamesTheFileInTheQueryIsRecognisedLikeTheBrowserExtensionDoes() {
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/dl.php?file=movie.mp4", "application/octet-stream"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/get?id=7&name=My%20Film.MKV&t=1", "application/octet-stream"))
+        assertEquals(MediaKind.HLS, kind("https://cdn.test/proxy?f=x.m3u8", "text/plain"))
+        assertEquals(MediaKind.HLS, kind("https://cdn.test/p.php?u=https%3A%2F%2Fa.test%2Fb%2Findex.m3u8", "application/octet-stream"))
+        assertEquals(MediaKind.DASH, kind("https://cdn.test/m?src=/v/manifest.mpd", "text/plain"))
+        assertNull("not media: a zip", kind("https://cdn.test/dl.php?file=archive.zip", "application/octet-stream"))
+        assertNull("not media: a page", kind("https://cdn.test/watch.php?v=abc", "text/html"))
+        assertNull("a JSON answer is never media", kind("https://cdn.test/api?file=x.mp4", "application/json"))
+        assertEquals("mkv", MediaSniff.saveExtension("https://cdn.test/get?name=My%20Film.MKV", "application/octet-stream"))
+        assertEquals("the path's own media extension still wins", "mp4", MediaSniff.effectiveExtension("https://cdn.test/a/clip.mp4?file=other.mkv"))
+        assertEquals("", MediaSniff.queryExtension("https://cdn.test/a?x=1&y=2"))
+    }
+
+    @Test fun youtubeVideoplaybackSlicesAreNotCandidates() {
+        assertNull(kind("https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1&id=o-AB&itag=137&range=0-999999", "video/mp4"))
+        assertNull(kind("https://rr1---sn-xyz.googlevideo.com/videoplayback?itag=140", "audio/mp4"))
+        assertTrue(MediaSniff.isVideoPlaybackSlice("https://googlevideo.com/videoplayback?x=1"))
+        assertFalse("another path on that host is left to the other rules", MediaSniff.isVideoPlaybackSlice("https://rr1.googlevideo.com/other?x=1"))
+        assertFalse("another site's videoplayback", MediaSniff.isVideoPlaybackSlice("https://cdn.test/videoplayback?x=1"))
+        assertFalse("a look-alike host", MediaSniff.isVideoPlaybackSlice("https://notgooglevideo.com/videoplayback"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/film.mp4", "video/mp4"))
+    }
+
+    @Test fun numberedPartsOfAStreamAreNotCandidatesButAPersonsOwnSplitFilesAre() {
+        assertNull(kind("https://cdn.test/v/seg_00012.mp4", "video/mp4"))
+        assertNull(kind("https://cdn.test/v/chunk-3-v1-a1.m4s", "video/mp4"))
+        assertNull(kind("https://cdn.test/v/frag12.webm", "video/webm"))
+        assertNull(kind("https://cdn.test/v/segment-7.mp4?token=1", "application/octet-stream"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/v/part1.mp4", "video/mp4"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/v/video1.mp4", "video/mp4"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/v/segments-of-a-film.mp4", "video/mp4"))
+        assertEquals(MediaKind.FILE, kind("https://cdn.test/v/Seg.mp4", "video/mp4"))
+    }
+
+    @Test fun aWidthByHeightInTheAddressGivesTheHeight() {
+        assertEquals(720, MediaSniff.heightFromUrl("https://video.twimg.com/ext_tw_video/1/vid/1280x720/abc.mp4"))
+        assertEquals(1080, MediaSniff.heightFromUrl("https://cdn.test/v/clip_1920x1080.mp4"))
+        assertEquals("a portrait picture: the second number is not a known height", 0, MediaSniff.heightFromUrl("https://cdn.test/v/720x1280/a.mp4"))
+        assertEquals("the old rule still wins", 480, MediaSniff.heightFromUrl("https://cdn.test/v/clip_480p.mp4"))
+        assertEquals(0, MediaSniff.heightFromUrl("https://cdn.test/v/a.mp4"))
+    }
 }

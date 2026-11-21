@@ -1859,6 +1859,7 @@ open class BrowserActivity : Activity(), DockListener {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         endFullScreenOf(tab, "the tab was closed")
+        video.clearTab(tab)                                                      // RVW1 P7: what the video finder learned for this tab (the playlists' text among it, 0.3-3 MB for a tab that opened "Save video") went with the tab only when the process died
         tabs.removeAt(idx)
         syncPrivateAnchor()                                                      // ANS58c: the last private tab is gone: the anchor goes too
         if (tab === restoringTab) hideRestoring("closed")
@@ -2021,7 +2022,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun pullRefresh() {
         val t = current ?: return
-        Health.log("pull", "refresh", t.url.take(60)); Health.count("pull.refresh")
+        Health.log("pull", "refresh", Health.where(t.isPrivateTab, t.url, 60)); Health.count("pull.refresh")
         if (t.error != null) retry(t) else t.session?.reload()
     }
 
@@ -2775,7 +2776,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
             } else if (g.stateWritten != null && g.stateWrittenUrl != t.url) { stale.add(t.id); g.stateWritten = null } // it shows another page now and the engine has not sent a newer state yet
         }
-        Io.exec {
+        Io.fast {   // RVW2 P8: the interactive lane, not the nice-13 one (Io.exec sits in Android's BACKGROUND group, shared with thumbnail saves and the CPU meter): this write is what survives a kill, and onPause may be the last moment
             val tmp = File(f.parentFile, "session.tmp")
             tmp.writeText(text)
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
@@ -3069,7 +3070,7 @@ open class BrowserActivity : Activity(), DockListener {
         val withState = saved != null && tab.crashCount <= 1
         tab.gecko.state = if (withState) saved else null
         tab.pendingLoad = if (withState) null else url.takeIf { it.startsWith("http") }
-        Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${url.take(60)}")
+        Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${Health.where(tab.isPrivateTab, url, 60)}")
         Health.count(if (withState) "gecko.recover.state" else "gecko.recover.url")
         if (tab === current) {
             if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring("crash-loop") }

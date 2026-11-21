@@ -52,7 +52,8 @@ class MediaCandidate(
     /** RX3-V4: the picture heights of the stream's variants (an HLS master's variants, a DASH manifest's video representations) the early look read; empty = not known. A player that feeds a blob: address is matched by them. */
     var heights: IntArray = IntArray(0)
     /** RX3-V5: a stream whose playlist was read and that cannot be saved (live, protected) or is only a clip (under 20 s: an ad, a preview) is not offered to the badge. Before the look nothing is known and it counts as before. */
-    val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS))
+    // RVW1 F7: a short stream that REALLY PLAYED (an element played it for 3 s) or that the owner showed interest in is a video, not a preview: X / Twitter clips, Reels, Streamable HLS are 5-20 s long and were hidden for ever
+    val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS && !played && !interest))
     /**
      * VS2 (owner 2026-11-18, doraby + vidsrc / 111movies: "it would show a video file can be downloaded in the list, then it would disappear after a few seconds ... is there a way to capture the video source when it is
      * found so it doesn't disappear"): once a film-sized candidate was OFFERED (the badge counted it) it is CAPTURED: a frame that reloads or goes away, a clip rule or an advertisement label that arrives later cannot
@@ -62,7 +63,9 @@ class MediaCandidate(
     /** VS2: a captured entry whose player frame went away (or whose page was loaded again): still offered, last in the list, until a new film-sized find of a live player takes its place ([MediaList.add]). */
     var orphan = false
     /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. A captured one counts whatever is learned later (unless it cannot be saved). */
-    fun counts(): Boolean = (captured && !live && !drm) || (!decoy && verified && !unfit)
+    fun counts(): Boolean = !child && ((captured && !live && !drm) || (!decoy && verified && !unfit))
+    /** RVW2 F17: a variant or audio playlist of a master the finder read: one rung of a film, not a film. It is listed under its master and never counted next to it. */
+    var child = false
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -77,6 +80,19 @@ class MediaCandidate(
     var origin: String = ""
     /** The request headers that were seen to WORK for this address (its playlist was read with them): every later request of the download repeats them. Null until one worked. */
     var viaHeaders: Map<String, String>? = null
+
+    /**
+     * RVW1 V10: where the playlist really CAME FROM after redirects (a stream API address that 302s to a CDN edge): relative addresses inside it resolve against that, as every player does. Null = it was not redirected.
+     * [url] stays the address the page used (identity, de-duplication, what is asked for first).
+     */
+    var playlistBase: String? = null
+    /**
+     * RVW2 F16: the address the PAGE asked for when the request was REDIRECTED (a `<video src="/play?id=1">` that answers 302 to a signed CDN file): the wire reports the final address, the page's own element reports
+     * `currentSrc` = this one, so what the element says (length, picture, "it played") waited for ever under an address nobody listed. "" = not redirected.
+     */
+    var alias: String = ""
+    val aliasKey: String get() = if (alias.isEmpty()) "" else keyOf(alias)
+    val base: String get() = playlistBase ?: url
 
     val key: String get() = keyOf(url)
     val audioOnly: Boolean get() = kind == MediaKind.FILE && MediaSniff.isAudio(url, mime)
@@ -114,8 +130,8 @@ class MediaList(private val max: Int = 48) {
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
     /** The candidate for exactly this address (the #fragment aside), or null. */
-    fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
-    fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
+    fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } ?: items.firstOrNull { it.alias.isNotEmpty() && it.aliasKey == k } }   // RVW2 F16: also by the address before a redirect
+    fun clear() { items.clear(); pending.clear(); blobs.clear(); childKeys.clear(); version++ }
 
     /**
      * VS2: what is offered right now AND looks like a film is captured. Film evidence = a stream whose playlist was read and runs [FILM_EVIDENCE_MS] or more, a file of [BIG_FILE] or more (or 4 MB with that length
@@ -151,7 +167,7 @@ class MediaList(private val max: Int = 48) {
         val keep = if (id.isEmpty()) emptyList() else items.filter { it.captured && !it.live && !it.drm && PageIdentity.of(it.page) == id }
         val dropped = items.size - keep.size
         for (c in keep) { c.played = false; c.element = 0; c.areaPx = 0L; c.playedSeq = 0; c.orphan = true }
-        items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); version++
+        items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); childKeys.clear(); version++
         return dropped
     }
     /** The addresses of everything in the list (for forgetting what was learned about them). */
@@ -199,17 +215,26 @@ class MediaList(private val max: Int = 48) {
             var changed = false
             if (old.length < 0 && c.length >= 0) { old.length = c.length; changed = true }
             if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
+            if (old.label.isNullOrBlank() && !c.label.isNullOrBlank()) { old.label = c.label; changed = true }     // RVW1 F11: the label of a <source> found in the page text names the row the wire saw first
             if (old.referer.isEmpty() && c.referer.isNotEmpty()) { old.referer = c.referer; changed = true }
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
             if (c.frame.isNotEmpty() && old.frame != c.frame) { old.frame = c.frame; old.page = c.page; changed = true }
+            // RVW1 F2: an address first named in the page's text and then really REQUESTED (a request with a media type = the wire) is no longer "found only in the text": it stays unverified forever otherwise, so the badge
+            // and the menu entry (VideoFlow.available) never lit for a stream a script named before the player asked for it (inline JSON, then hls.js)
+            if (old.fromMarkup && !c.fromMarkup) { old.fromMarkup = false; changed = true }
             if (old.orphan) { old.orphan = false; changed = true }                        // VS2: the player asked for it again: it is live again
             if (c.seenAt > old.lastSeenAt) old.lastSeenAt = c.seenAt                       // (ANS55: not a change of the list, only of its order of news)
             if (changed) version++
             return changed
         }
+        if (c.alias.isNotEmpty()) {   // RVW2 F16: the page's own address of this file was listed first (found in its markup): it is the same file; what was learned about it moves to the one the wire saw
+            val j = items.indexOfFirst { it.key == c.aliasKey && it !== c }
+            if (j >= 0) inherit(c, items.removeAt(j))
+        }
+        if (c.key in childKeys) c.child = true                                         // RVW2 F17: the master was read before the player asked for this rung
         items.add(0, c)
-        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
+        (pending.remove(c.key) ?: if (c.alias.isNotEmpty()) pending.remove(c.aliasKey) else null)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
@@ -288,12 +313,13 @@ class MediaList(private val max: Int = 48) {
     }
 
     /** RX3-V5: up to [n] stream playlists nobody has read yet, newest first. */
-    fun streamsToLook(n: Int): List<MediaCandidate> = items.filter { it.kind != MediaKind.FILE && !it.looked }.take(n)
+    fun streamsToLook(n: Int): List<MediaCandidate> = items.filter { it.kind != MediaKind.FILE && !it.looked && !it.child }.take(n)   // RVW2 F17: a rung of a master already read is not looked at again (the budget is for masters)
 
     /** RX3-V2: up to [n] addresses found only in the page's text, newest first, worth one cheap check - but only when the page has nothing verified yet. */
     fun unverifiedToCheck(n: Int): List<MediaCandidate> {
         if (items.any { it.verified && !it.decoy }) return emptyList()
-        return items.filter { !it.verified && it.kind == MediaKind.FILE }.take(n)
+        // RVW1 F11: the best-looking first (a picture height the page's label or the address names), then the newest: with four qualities listed best-first the LAST three were checked and the best never was
+        return items.filter { !it.verified && it.kind == MediaKind.FILE }.sortedByDescending { it.knownHeight }.take(n)
     }
 
     /** Somebody showed interest in this address (long-pressed, opened in the sheet, downloaded): it is kept when the list is full and shown even when it looks like a preview. @return true if that changed the list. */
@@ -304,10 +330,23 @@ class MediaList(private val max: Int = 48) {
         return true
     }
 
+    /** RVW2 F17: these addresses are the variant / audio playlists of a master that was read: they never count as videos of their own, whenever the player asks for them (before or after the master was read). */
+    private val childKeys = HashSet<String>()
+    fun noteChildren(urls: Collection<String>) {
+        var changed = false
+        for (u in urls) {
+            val k = MediaCandidate.keyOf(u)
+            if (childKeys.size < 2000) childKeys.add(k)
+            val c = items.firstOrNull { it.key == k }
+            if (c != null && !c.child) { c.child = true; changed = true }
+        }
+        if (changed) version++
+    }
+
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
     fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         val key = MediaCandidate.keyOf(url)
-        val c = items.firstOrNull { it.key == key }
+        val c = items.firstOrNull { it.key == key } ?: items.firstOrNull { it.alias.isNotEmpty() && it.aliasKey == key }   // RVW2 F16
         if (c == null) { // the file has not been reported yet: what the element said waits for it
             pending[key] = Said(width, height, durationMs, label, role, played, element, areaPx)
             while (pending.size > PENDING_MAX) pending.remove(pending.keys.first())
@@ -316,6 +355,19 @@ class MediaList(private val max: Int = 48) {
         val changed = applyTo(c, width, height, durationMs, label, role, played, element, areaPx)
         if (changed) version++
         return changed
+    }
+
+    /** RVW2 F16: [c] is the same file as [o] under another address: it keeps what it knows and takes what only [o] knew. */
+    private fun inherit(c: MediaCandidate, o: MediaCandidate) {
+        if (c.width == 0) c.width = o.width
+        if (c.height == 0) c.height = o.height
+        if (c.durationMs == 0L) c.durationMs = o.durationMs
+        if (c.label.isNullOrBlank()) c.label = o.label
+        if (c.role == null) c.role = o.role
+        if (c.length < 0 && o.length >= 0) c.length = o.length
+        c.touched = c.touched || o.touched; c.interest = c.interest || o.interest
+        if (o.played && !c.played) { c.played = true; c.playedSeq = o.playedSeq; if (c.element == 0) c.element = o.element; if (c.areaPx == 0L) c.areaPx = o.areaPx }
+        c.fromMarkup = c.fromMarkup && o.fromMarkup                     // a request that really happened verifies it
     }
 
     private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
@@ -443,7 +495,16 @@ object MediaLabels {
 
     /** A readable file name stem for a video: "Page title - 720p", falling back to the host. No extension, nothing a file system dislikes beyond what [app.kestrel.core.download.FileNames.sanitize] cleans. */
     fun fileStem(pageTitle: String, pageHost: String, qualityLabel: String): String {
-        val base = pageTitle.trim().ifEmpty { pageHost.ifEmpty { "video" } }.replace(Regex("""\s+"""), " ").take(80).trim()
-        return if (qualityLabel.isEmpty()) base else "$base - $qualityLabel"
+        val base = app.kestrel.core.download.FileNames.cutChars(pageTitle.trim().ifEmpty { pageHost.ifEmpty { "video" } }.replace(Regex("""\s+"""), " "), 80).trim()   // RVW1 N5: never in the middle of a surrogate pair
+        val q = fileLabel(qualityLabel)
+        return if (q.isEmpty()) base else "$base - $q"
+    }
+
+    /**
+     * RVW1 N8: the quality word for a FILE NAME. The row label "2160p  ·  4K" is for the screen: the name gets "2160p"; "Stream" (no picture size known) and "1280px wide" say nothing worth keeping in a name, "Audio only" does.
+     */
+    fun fileLabel(label: String): String {
+        val first = label.substringBefore('·').replace(Regex("""\s+"""), " ").trim()
+        return if (first.isEmpty() || first.equals("Stream", ignoreCase = true) || first.endsWith("px wide")) "" else first
     }
 }

@@ -1,5 +1,7 @@
 package app.kestrel.browser.download
 
+import app.kestrel.core.url.NetHosts
+import app.kestrel.core.url.UrlParts
 import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
@@ -226,16 +228,32 @@ object DownloadController {
     fun fetchText(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?) -> Unit) = fetchTextStatus(ctx, url, headers, kind, priv) { text, _ -> onDone(text) }
 
     /** [fetchText] that also says what the server answered: the HTTP status (-1 = no answer at all: a network error, a timeout). Lets the caller try other request headers after a 401 / 403. */
-    fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) {
+    /**
+     * RVW1 S3: these two helpers are the finder's own probes (a playlist read, a size question, a first-bytes look) at addresses a PAGE named, with the profile's cookies and no click. Not at a device on the owner's own
+     * network unless the page asking is itself local ([NetHosts.probeAllowed]); the page's host is the Referer / Origin the probe repeats.
+     */
+    private fun probeAllowed(url: String, headers: Map<String, String>): Boolean {
+        val target = UrlParts.hostOf(url) ?: return false
+        val page = UrlParts.hostOf(headers["Referer"] ?: headers["Origin"] ?: "") ?: ""
+        return NetHosts.probeAllowed(target, page)
+    }
+
+    fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) = fetchTextFinal(ctx, url, headers, kind, priv) { text, status, _ -> onDone(text, status) }
+
+    /** [fetchTextStatus] that also says the address the answer really came from after redirects (RVW1 V10: relative addresses in a playlist resolve against it); null when the request got no answer. */
+    fun fetchTextFinal(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int, String?) -> Unit) {
         init(ctx)
+        if (!probeAllowed(url, headers)) { Io.ui { onDone(null, -1, null) }; return }
         Io.exec {
             var text: String? = null
             var status = -1
+            var finalUrl: String? = null
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
                 val resp = f.open(FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
                 try {
                     status = resp.status
+                    finalUrl = resp.finalUrl
                     if (resp.status in 200..299) {
                         val out = java.io.ByteArrayOutputStream()
                         val buf = ByteArray(16 * 1024)
@@ -245,13 +263,14 @@ object DownloadController {
                     }
                 } finally { try { resp.close() } catch (e: Exception) { /* ignore */ } }
             } catch (e: Exception) { /* null: the caller says so */ }
-            Io.ui { onDone(text, status) }
+            Io.ui { onDone(text, status, finalUrl) }
         }
     }
 
     /** A byte range of a file (a media file's first bytes, its `moov` box), at most [to]-[from]+1 bytes, handed to [onDone] on the UI thread; null = it could not be read. */
     fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onTotal: ((Long) -> Unit)? = null, onStatus: ((Int) -> Unit)? = null, onDone: (ByteArray?) -> Unit) {
         init(ctx)
+        if (!probeAllowed(url, headers)) { Io.ui { onStatus?.invoke(-1); onDone(null) }; return }
         Io.exec {
             var data: ByteArray? = null
             var total = -1L
@@ -344,6 +363,8 @@ object DownloadController {
         return bytes
     }
     fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
+    /** RVW2: pause everything because the SYSTEM asked (the foreground-service time limit): they resume by themselves when the app is opened or the system allows. */
+    fun pauseAllSystem() { engine?.pauseAllSystem(); streams?.pauseAllSystem() }
     fun resumeAll(ctx: Context) { for (v in views()) mini.requested(v.id); init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick(); streams?.tick() }
     fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false) || (phone?.needsService() ?: false)

@@ -62,10 +62,11 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
       // LAB5: the second whole-page pass (classes that scripts gave to EXISTING elements after DOMContentLoaded; the observer below only sees new nodes) runs when the page is idle, not inside the busiest moment of the load
       window.addEventListener('load', function () { if (window.requestIdleCallback) requestIdleCallback(first, { timeout: 1000 }); else setTimeout(first, 300); });
+      var missed = false;   // RVW1 P6: the page changed while it was hidden (the observer saw it and dropped it)
       if (window.MutationObserver) {
         var mo = new MutationObserver(function (recs) {
           if (off) { mo.disconnect(); return; }
-          if (document.hidden) return;                                        // nobody sees the page: visibilitychange looks again when it is shown
+          if (document.hidden) { missed = true; return; }                     // nobody sees the page: visibilitychange looks again when it is shown (RVW1 P6: only if something changed meanwhile)
           var t0 = nowMs();
           if (spent > BUDGET_MS || (startedAt && t0 - startedAt > WINDOW_MS)) { off = true; mo.disconnect(); return; }
           for (var r = 0; r < recs.length && r < 200; r++) {
@@ -83,7 +84,8 @@
           spent += nowMs() - t0;
         });
         mo.observe(document, { childList: true, subtree: true }); // the document itself: its root element may not exist yet
-        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off) { scan(document); later(); } });
+        // RVW1 P6: this rescanned the WHOLE page (querySelectorAll over every id / class, up to 6000 elements: 2-3 ms on a desktop, 15-25 ms on the tablet) at every unlock and tab return even when nothing had changed while it was hidden
+        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off && missed) { missed = false; scan(document); later(); } });
       }
     } catch (e) { /* never break the page */ }
   }
@@ -252,22 +254,36 @@
     // RX3-V4: a player that feeds a blob: address (a MediaSource: hls.js, shaka, dash.js, most embeds) has no address worth sending, but its length and picture height can be matched to a playlist the app has read. Only the
     // word "blob" goes (never the blob: address); the app's core MediaList.applyBlob does the matching.
     function isBlob(src) { return src.indexOf('blob:') === 0; }
-    function report(v) {
+    function report(v, force) {
       var src = v.currentSrc || v.src || '';
       var blob = isBlob(src);
       if (!src || (!blob && src.indexOf('http') !== 0)) return;
       var key = (blob ? 'blob|' + elId(v) : src) + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
-      if (sent[key]) return;
+      if (sent[key] && !force) return;
       sent[key] = true;
       var x = factsOf(v);
+      try { if (window.top !== window && window.KestrelVF) window.KestrelVF.offered = true; } catch (e) { /* ignore */ }
       browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
-    document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
+    function onMeta(e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }
+    document.addEventListener('loadedmetadata', onMeta, true);
+    // RVW1 F7: the role of an element is sent once per file; a muted autoplay clip with no controls (a feed's preview, X / Reels) says "decoration", and when the person UNMUTES it, it is the video they came for: say it
+    // again, once per element, so the app stops hiding it. (volumechange also fires when a script unmutes: the app only learns the element's facts, the 'played' proof still needs 3 s of real playback.)
+    var unmuted = {};
+    document.addEventListener('volumechange', function (e) {
+      try {
+        var t = e.target;
+        if (!t || t.tagName !== 'VIDEO' || t.muted || !(t.volume > 0)) return;
+        var id = elId(t);
+        if (!id || unmuted[id]) return;
+        unmuted[id] = 1; report(t, true);
+      } catch (x) { /* never break the page */ }
+    }, true);
     // RX3-V3 (research/FINDER_LAB.md section 4): which element really PLAYS. `el` names an element for the page's lifetime (a small whole number, nothing else about it), so the app can tell "the same player went from a
     // 15 s clip to the film" (a pre-roll) from "two different videos". After 3 s of real playback of a file, once per element and file, the same report goes again with ev:'played'.
     var elIds = (typeof WeakMap === 'function') ? new WeakMap() : null, elNext = 1, playedKeys = {};
     function elId(v) { try { if (!elIds) return 0; var i = elIds.get(v); if (!i) { i = elNext++; elIds.set(v, i); } return i; } catch (e) { return 0; } }
-    document.addEventListener('playing', function (e) {
+    function onPlaying(e) {
       try {
         var v = e.target;
         if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO') || !e.isTrusted) return;
@@ -289,7 +305,31 @@
         };
         setTimeout(check, 3000);
       } catch (err) { /* ignore */ }
-    }, true);
+    }
+    document.addEventListener('playing', onPlaying, true);
+
+    // RVW1 F5: a video INSIDE A SHADOW ROOT (Reddit's shreddit-player, Vidstack / Media Chrome, Yahoo's player) never told the document: media events do not cross a shadow boundary, so the two document-level listeners above never
+    // saw it (no picture size, no length, no "it played", no match with its playlist). The page's videos are looked for in the shadow trees (KestrelVF, bounded) at most three times per page: once after load and once
+    // after each of the first two real taps (the player is often built when it is pressed); each one found gets the same two listeners and, when it already has its metadata, reports at once.
+    var watched = (typeof WeakMap === 'function') ? new WeakMap() : null, shadowRuns = 0, shadowTimer = 0;
+    function watchShadow() {
+      try {
+        if (!watched || !window.KestrelVF || shadowRuns >= 3) return;
+        shadowRuns++;
+        var vs = window.KestrelVF.all('video', true);
+        for (var i = 0; i < vs.length; i++) {
+          var v = vs[i];
+          if (watched.has(v) || v.getRootNode() === document) continue;              // a light-DOM video is covered by the document-level listeners
+          watched.set(v, 1);
+          v.addEventListener('loadedmetadata', onMeta, true);
+          v.addEventListener('playing', onPlaying, true);
+          if (v.readyState >= 1) report(v);
+        }
+      } catch (x) { /* never break the page */ }
+    }
+    function shadowSoon(ms) { if (shadowRuns >= 3 || shadowTimer) return; shadowTimer = setTimeout(function () { shadowTimer = 0; watchShadow(); }, ms); }
+    window.addEventListener('load', function () { shadowSoon((window.__kstVfCfg && window.__kstVfCfg.shadowMs) || 3000); });
+    window.addEventListener('click', function (e) { if (e && e.isTrusted) shadowSoon((window.__kstVfCfg && window.__kstVfCfg.shadowTapMs) || 1500); }, { capture: true, passive: true });
 
     // RX4-M0a (research/REVIEW-EXTERNAL-4.md): how smoothly do REAL videos play on this tablet? While an element plays, every 15 s (and when it pauses or ends, or the page is hidden) its
     // getVideoPlaybackQuality() is read and only the DIFFERENCE since the last look is sent: frames shown, dropped, corrupted, seconds, picture size. Numbers; never an address. One timer for
@@ -628,20 +668,70 @@
 (function () {
   try {
     var EXT = /\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:$|[?#])/i;
-    var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:\?[^\s"'<>()\\]*)?/gi;
+    // RVW1 F9: the extension must END the file name: `.../a.mp4/index.m3u8` (Kaltura, Wowza) and `vid.mp4.m3u8` were cut at the FIRST `.mp4` and the app was told about a path that is not a video. The lookahead
+    // refuses a name that goes on (a letter, a digit, `_`, `/`, `%`, `-` or `.` plus a letter), so the lazy match grows to the next extension instead; a full stop after it (end of a sentence) is still the end.
+    var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+    // RVW1 F9: a player configuration's relative or scheme-relative address (JW Player `file:"//cdn.example/x.mp4"`, `src: "/media/b.m3u8"`): only after a key that says "this is the media", so a stylesheet or a picture path is never run
+    var FINDREL = /(?:file|src|source|url|hls|dash|mp4|stream|video|contentUrl|playlist|manifest)["']?\s*[:=]\s*["'](\/[^"'\s\\<>]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^"'\s\\<>]*)?)/gi;
+    // RVW1 F9: the same address percent-encoded inside another address (`player.php?url=https%3A%2F%2Fcdn.example%2Fa.m3u8`): decoded on its own, the text around it is never decoded
+    var FINDENC = /https?%3A%2F%2F[^\s"'<>()\\&]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_-]|\.[A-Za-z0-9]|%2F)(?:%3F[^\s"'<>()\\&]*)?/gi;
     var HINT = /\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)/i; // a script that names no media file at all is not run through the three replaces and FIND below
     var sent = {}, n = 0, scriptsDone = 0, linksDone = 0; // the scan at load only looks at what appeared since the first one
-    function report(u) {
+    // RVW1 F12: attributes that hold a source or a player configuration (lazy-loaded players, video.js data-setup, Reddit-style custom elements): an address, or JSON that names the files
+    var SRC_ATTRS = ['data-src', 'data-video-src', 'data-hls', 'data-hls-url', 'data-mp4', 'data-stream', 'data-video-url', 'data-file', 'src', 'data'];
+    var CFG_ATTRS = ['data-setup', 'data-config', 'data-sources', 'data-player-config'];
+    var ATTR_SELECTOR = '[data-src]:not(img):not(picture), [data-video-src], [data-hls], [data-hls-url], [data-mp4], [data-stream], [data-video-url], [data-file], embed[src], object[data], [data-setup], [data-config], [data-sources], [data-player-config]';
+    // RVW1 F11: the quality a <source> says it is ("720p", "HD", "1080"): video.js and plain markup put it in label / title / res / size. Sent with the address so a list of several qualities is not nameless (and the best
+    // one is checked first, not the last one the page happened to list).
+    // RVW2 F13: a FRAME that offered something says so when it is unloaded (pagehide): the player iframe REMOVED by a server switch never gets a request of its own that would tell the extension
+    function offered() { try { if (window.top !== window && window.KestrelVF) window.KestrelVF.offered = true; } catch (e) { /* ignore */ } }
+    window.addEventListener('pagehide', function () {
+      try { if (window.top !== window && window.KestrelVF && window.KestrelVF.offered) browser.runtime.sendMessage({ k: 'bye' }).catch(function () {}); } catch (e) { /* never break the page */ }
+    });
+    function labelOfSource(e) {
+      try {
+        if (!e || e.tagName !== 'SOURCE') return '';
+        var v = e.getAttribute('label') || e.getAttribute('title') || e.getAttribute('res') || e.getAttribute('data-res') || e.getAttribute('data-quality') || e.getAttribute('size') || '';
+        v = String(v).replace(/\s+/g, ' ').trim();
+        return (v.length > 0 && v.length <= 24) ? v : '';
+      } catch (x) { return ''; }
+    }
+    function report(u, label) {
       if (!u || n >= 40) return;
       try { u = new URL(u.replace(/&amp;/g, '&'), location.href).href; } catch (e) { return; }
       if (u.indexOf('http') !== 0 || sent[u] || !EXT.test(u)) return;
       sent[u] = 1; n++;
-      browser.runtime.sendMessage({ k: 'dom', u: u, p: location.href }).catch(function () {});
+      var msg = { k: 'dom', u: u, p: location.href };
+      offered();
+      if (label) msg.lb = label;
+      browser.runtime.sendMessage(msg).catch(function () {});
+    }
+    // the text of a script, a JSON blob or a configuration attribute: every media address it names (escaped slashes undone first)
+    function scanText(t) {
+      if (!HINT.test(t)) return;
+      t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
+      var m; FIND.lastIndex = 0;
+      while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
+      FINDREL.lastIndex = 0;
+      while ((m = FINDREL.exec(t)) !== null && n < 40) report(m[1]);
+      if (t.indexOf('%3A%2F%2F') >= 0 || t.indexOf('%3a%2f%2f') >= 0) {
+        FINDENC.lastIndex = 0;
+        while ((m = FINDENC.exec(t)) !== null && n < 40) { try { report(decodeURIComponent(m[0])); } catch (x) { /* a broken escape: not an address */ } }
+      }
     }
     function scan() {
       try {
-        var i, e, list = document.querySelectorAll('video, audio, source[src]');
+        // RVW1 F11: the <source> elements FIRST, each with its label: the video element's own currentSrc is usually one of them, and whoever reports an address first wins (the label was lost to the label-less report)
+        var i, e, list = document.querySelectorAll('source[src]');
+        for (i = 0; i < list.length; i++) { e = list[i]; report(e.src || e.getAttribute('src'), labelOfSource(e)); }
+        list = document.querySelectorAll('video, audio');
         for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
+        var holders = document.querySelectorAll(ATTR_SELECTOR), j, v;
+        for (i = 0; i < holders.length && i < 200 && n < 40; i++) {
+          e = holders[i];
+          for (j = 0; j < SRC_ATTRS.length; j++) { v = e.getAttribute(SRC_ATTRS[j]); if (v && v.length < 2000) report(v); }
+          for (j = 0; j < CFG_ATTRS.length; j++) { v = e.getAttribute(CFG_ATTRS[j]); if (v && v.length < 20000) scanText(v); }
+        }
         var metas = document.querySelectorAll('meta[property^="og:video"], meta[property^="og:audio"], meta[name="twitter:player:stream"], link[rel="preload"][as="video"]');
         for (i = 0; i < metas.length; i++) report(metas[i].getAttribute('content') || metas[i].getAttribute('href'));
         var links = document.links; // a live collection: no list of a few thousand anchors is built just to read the first 600
@@ -655,10 +745,7 @@
           if (!tn || s.childNodes.length !== 1 || tn.nodeType !== 3 || tn.length > 200000) continue;
           var t = tn.data;
           budget -= t.length;
-          if (!HINT.test(t)) continue;
-          t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
-          var m; FIND.lastIndex = 0;
-          while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
+          scanText(t);
         }
         scriptsDone = i;
       } catch (x) { /* never break the page */ }

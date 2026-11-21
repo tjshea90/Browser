@@ -86,8 +86,9 @@ function harness(app, opts) {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
         // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
-        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } else listeners.headers = f; } },
+        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
         filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
+        onBeforeRedirect: { addListener: (f) => { listeners.redirect = f; } },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
       },
@@ -411,7 +412,47 @@ test('sniffer: pieces of one file fetched by byte range in the query are one can
   await tick(10);
   const m = h.of('media');
   assert.equal(m.length, 3, 'id=7 once, id=8 once, other.mp4 once');
-  assert.ok(m[0].u.includes('bytestart=0&byteend=999999') && m[0].u.includes('id=7'), 'the first sighting is the one reported');
+  // RVW1 F4: the FILE is reported, not the first piece (its range would save one slice, and its length is the slice's)
+  assert.equal(m[0].u, 'https://cdn.example/v/clip.mp4?id=7', 'the address without the byte range is reported');
+  assert.equal(m[0].l, -1, 'a slice\'s length is not the file\'s');
+  assert.equal(m[1].u, 'https://cdn.example/v/clip.mp4?id=8');
+  assert.equal(m[2].u, 'https://cdn.example/v/other.mp4');
+});
+
+test('RVW1 F4: a piece answered with Content-Range reports the TOTAL as the length, and a plain file keeps its address and length', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers(hdr('https://cdn.example/v/a.mp4?oh=ab12&bytestart=0&byteend=999999#frag', 'video/mp4', 1_000_000, { statusCode: 206, responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Range', value: 'bytes 0-999999/52428800' }] }));
+  h.listeners.headers(hdr('https://cdn.example/v/b.mp4?token=x&start=30', 'video/mp4', 7_000_000));   // `start` may be a time: left alone
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].u, 'https://cdn.example/v/a.mp4?oh=ab12#frag');
+  assert.equal(m[0].l, 52428800, 'the total from Content-Range');
+  assert.equal(m[1].u, 'https://cdn.example/v/b.mp4?token=x&start=30');
+  assert.equal(m[1].l, 7_000_000);
+});
+
+test('RVW1 F22: a cache-buster in the query does not make a new candidate for every request', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  for (let i = 0; i < 12; i++) h.listeners.headers(hdr(`https://cdn.example/v/stream.mp4?_=${1700000000 + i}&cb=${i}&nocache=${i}`, 'video/mp4', 2_000_000));
+  await tick(10);
+  assert.equal(h.of('media').length, 1);
+});
+
+test('RVW1 F18: a stream fetched by a service worker (no tab) is news again after the next page load, not suppressed for ever', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const U = 'https://cdn.example/sw/movie.mp4';
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  await tick(10);
+  assert.equal(h.of('media').length, 1, 'the same request twice is one candidate');
+  h.mainFrame('https://other.example/next', { requestId: '9' });
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  await tick(10);
+  assert.equal(h.of('media').length, 2, 'after a page load it is reported again');
 });
 
 test('sniffer: headers that matter are still read when they come after many that do not', async () => {
@@ -1320,6 +1361,37 @@ test('RX3-V3: the played report and the element number are relayed as small whol
   assert.equal(got[2].el, 1000000, 'clamped');
 });
 
+test('RVW1 F1: a report from a cross-origin player FRAME names the tab\'s page, not the frame\'s own address, and its element number cannot collide with another frame\'s', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  const FRAME = 'https://player.example/embed/9', FRAME2 = 'https://other.example/e';
+  h.message({ k: 'vid', ev: 'played', el: 1, u: 'blob', w: 1280, h: 720, d: 300, l: '', p: FRAME }, 1, FRAME, 5);          // the player in an iframe: element 1 of ITS document
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/a.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);       // the page's own video: element 1 of ITS document
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '', p: FRAME2 }, 1, FRAME2, 6);   // another frame, element 1 again
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/c.mp4', w: 640, h: 360, d: 90, l: '', p: FRAME }, 1, FRAME, 5);     // the same frame again: the same number
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 4);
+  assert.deepEqual(got.map((g) => g.p), [PAGE, PAGE, PAGE, PAGE], 'every report names the page the tab is on');
+  assert.equal(got[1].el, 1, 'the top page keeps its own numbers');
+  assert.ok(got[0].el > 1000000 && got[0].el % 1000000 === 1, 'a frame\'s element number sits above the page\'s: ' + got[0].el);
+  assert.notEqual(got[0].el, got[2].el, 'two frames do not share a number');
+  assert.equal(got[0].el, got[3].el, 'one frame keeps its number');
+  assert.ok(got.every((g) => g.el <= 1999999999), 'it fits the app\'s Int');
+});
+
+test('RVW1 F1: a frame report with no page known for the tab names none (the app then takes the tab in front); a top-frame report keeps its own address', async () => {
+  const h = harness(standardApp());                       // no main-frame request seen: tabTop is empty
+  h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 640, h: 360, d: 90, l: '', p: 'https://player.example/embed/9' }, 1, 'https://player.example/embed/9', 5);
+  h.message({ k: 'vid', u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 2);
+  assert.equal(got[0].p, '');
+  assert.equal(got[1].p, PAGE);
+});
+
 test('RX3-S2: the numbers for Diagnostics say how often each web request listener ran and how long it held the thread', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '1' });
@@ -1652,4 +1724,160 @@ test('NM1: a media message carries the addresses of the frames AROUND the one th
   await until(() => h.of('media').length >= 1, 'the media message');
   assert.equal(h.of('media')[0].fa, outer);
   assert.equal(h.of('media')[0].f, inner);
+});
+
+test('RVW1 N6: a long percent-encoded file name in Content-Disposition is not cut in the middle of an escape', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const enc = encodeURIComponent('Очень длинное название фильма '.repeat(6)).slice(0, 900);          // about 900 characters of %D0%9E...
+  const cd = "attachment; filename*=UTF-8''" + enc;
+  h.listeners.headers(hdr('https://cdn.example/v/dl.mp4', 'video/mp4', 9_000_000, { responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }, { name: 'Content-Disposition', value: cd }] }));
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 1);
+  assert.ok(m[0].n.length > 300, 'more than the old 300 characters arrive: ' + m[0].n.length);
+  assert.ok(!/%[0-9A-Fa-f]?$/.test(m[0].n), 'it does not end in half an escape: ...' + m[0].n.slice(-6));
+  const short = "attachment; filename=\"a.mp4\"";
+  h.listeners.headers(hdr('https://cdn.example/v/other.mp4', 'video/mp4', 9_000_000, { responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }, { name: 'Content-Disposition', value: short }] }));
+  await tick(10);
+  assert.equal(h.of('media')[1].n, short, 'a short one is untouched');
+});
+
+test('RVW1 P10: the per-tab maps of the sniffer do not grow with the number of tabs ever opened', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  for (let t = 1; t <= 300; t++) {
+    h.listeners.before({ type: 'main_frame', url: 'https://page.example/' + t, tabId: t, frameId: 0, requestId: String(1000 + t) });
+    h.listeners.before({ type: 'sub_frame', url: 'https://player.example/e/' + t, tabId: t, frameId: 7, parentFrameId: 0, documentUrl: 'https://page.example/' + t, requestId: String(2000 + t), frameAncestors: [{ url: 'https://page.example/' + t, frameId: 0 }] });
+  }
+  await tick(20);
+  const sz = { navId: h.ctx.navId.size, frameParent: h.ctx.frameParent.size, frameDoc: h.ctx.frameDoc.size };
+  assert.ok(sz.navId > 0 && sz.frameParent > 0 && sz.frameDoc > 0, 'the code path ran: ' + JSON.stringify(sz));
+  assert.ok(sz.navId <= 80 && sz.frameParent <= 60 && sz.frameDoc <= 60, 'bounded: ' + JSON.stringify(sz));
+});
+
+
+// ---------------------------------------------------------------- RVW1 F8: JSON answers that name media (Vimeo's player configuration and its kind)
+const jsonReq = (id, extra) => Object.assign({ requestId: id, tabId: 1, statusCode: 200, method: 'GET', url: 'https://player.example/video/123/config', frameId: 5, parentFrameId: 0, documentUrl: 'https://player.example/embed/123', frameAncestors: [{ url: PAGE, frameId: 0 }, { url: 'https://player.example/embed/123', frameId: 5 }], responseHeaders: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }] }, extra || {});
+const feed = (fl, text, chunk) => { const b = Buffer.from(text); for (let i = 0; i < b.length; i += chunk || b.length) { const part = b.subarray(i, i + (chunk || b.length)); fl.ondata({ data: part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength) }); } fl.onstop(); };
+const VIMEO = JSON.stringify({ request: { files: { progressive: [{ url: 'https://vod-progressive.example/exp=1/video/a/720.mp4?x=1', quality: '720p' }, { url: 'https://vod-progressive.example/exp=1/video/a/360.mp4?x=1', quality: '360p' }], hls: { cdns: { fire: { url: 'https://vod.example/a/playlist.m3u8?z=1' } } } } }, title: 'A film' }).replace(/\//g, '\\/');
+
+test('RVW1 F8: the answer of a video-looking endpoint is passed through to the page untouched and every media address in it is reported like one found in the page text', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  assert.ok(h.listeners.jsonHeaders, 'the listener is registered');
+  assert.ok(h.listeners.jsonFilter.urls.every((u) => /^https?:\/\/\*\/\*[a-z]+\*$/.test(u)), 'only narrow video-word patterns reach it: ' + h.listeners.jsonFilter.urls.slice(0, 3));
+  eq(h.listeners.jsonFilter.types, ['xmlhttprequest']);
+  eq(h.listeners.jsonHeaders(jsonReq('j1')), {});
+  const fl = h.filters[h.filters.length - 1];
+  feed(fl, VIMEO, 50);                                          // arrives in pieces
+  assert.equal(fl.body(), VIMEO, 'the page gets exactly the bytes the server sent');
+  assert.ok(fl.closed && !fl.disconnected);
+  await tick(10);
+  const m = h.of('media');
+  assert.deepEqual(m.map((x) => x.u).sort(), ['https://vod-progressive.example/exp=1/video/a/360.mp4?x=1', 'https://vod-progressive.example/exp=1/video/a/720.mp4?x=1', 'https://vod.example/a/playlist.m3u8?z=1']);
+  assert.ok(m.every((x) => x.s === 'dom' && x.p === PAGE && x.l === -1 && x.f === 'https://player.example/embed/123'), JSON.stringify(m[0]));
+});
+
+test('RVW1 F8: not JSON, too big, a failed answer or a request without a tab: no filter is taken at all', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  const n0 = h.filters.length;
+  eq(h.listeners.jsonHeaders(jsonReq('a', { responseHeaders: [{ name: 'Content-Type', value: 'text/html' }] })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('b', { responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Content-Length', value: '900000' }] })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('c', { statusCode: 404 })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('d', { tabId: -1 })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('e', { method: 'PUT' })), {});
+  assert.equal(h.filters.length, n0);
+  eq(h.listeners.jsonHeaders(jsonReq('f', { responseHeaders: [{ name: 'Content-Type', value: 'application/vnd.api+json' }] })), {});
+  assert.equal(h.filters.length, n0 + 1, 'a +json type is read');
+});
+
+test('RVW1 F8: a body over 256 KB is still passed through whole but never scanned; at most 24 answers per page, a new page starts afresh', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.listeners.jsonHeaders(jsonReq('big'));
+  const big = h.filters[h.filters.length - 1];
+  const body = '{"u":"https://cdn.example/x.mp4","pad":"' + 'x'.repeat(300000) + '"}';
+  feed(big, body, 65536);
+  assert.equal(big.body().length, body.length, 'everything went through');
+  await tick(10);
+  assert.equal(h.of('media').length, 0, 'too big: not scanned');
+  const n0 = h.filters.length;
+  for (let i = 0; i < 40; i++) h.listeners.jsonHeaders(jsonReq('p' + i));
+  assert.equal(h.filters.length - n0, 23, 'the budget of 24 per page (one was used above)');
+  h.mainFrame('https://other.example/next', { requestId: '50' });
+  const n1 = h.filters.length;
+  h.listeners.jsonHeaders(jsonReq('q1', { requestId: '60' }));
+  assert.equal(h.filters.length, n1 + 1, 'a new page: a fresh budget');
+});
+
+test('RVW1 F8: a stream filter that is not available, or that fails half way, never breaks the answer', async () => {
+  const none = harness(standardApp(), { noFilter: true });
+  none.mainFrame(PAGE, { requestId: '1' });
+  eq(none.listeners.jsonHeaders(jsonReq('n1')), {});
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.listeners.jsonHeaders(jsonReq('x1'));
+  const fl = h.filters[h.filters.length - 1];
+  fl.ondata({ data: null });
+  assert.ok(fl.disconnected, 'no data: the filter lets go');
+  h.listeners.jsonHeaders(jsonReq('x2'));
+  const f2 = h.filters[h.filters.length - 1];
+  f2.onerror();
+  assert.ok(f2.disconnected);
+});
+
+
+test('RVW1 F11: the label of a page-text source is passed on with the address (only when there is one)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.message({ k: 'dom', u: 'https://cdn.example/v/a.mp4', p: PAGE, lb: '1080p' }, 1, PAGE, 0);
+  h.message({ k: 'dom', u: 'https://cdn.example/v/b.mp4', p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'dom', u: 'https://cdn.example/v/c.mp4', p: PAGE, lb: 'x'.repeat(100) }, 1, PAGE, 0);
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 3);
+  assert.equal(m[0].lb, '1080p'); assert.equal('lb' in m[1], false); assert.equal(m[2].lb.length, 24);
+});
+
+test('RVW2 F13: a frame that offered media and is then unloaded (its element removed) takes its rows with it; a bye from the top page or from a frame that offered nothing does nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  const FR = 'https://player.example/embed/1', FR2 = 'https://player.example/embed/2';
+  const frameHdr = (url, frameId, doc) => hdr(url, 'video/mp4', 9_000_000, { frameId, parentFrameId: 0, documentUrl: doc, frameAncestors: [{ url: PAGE, frameId: 0 }, { url: doc, frameId }] });
+  h.listeners.headers(frameHdr('https://cdn.example/s/movie.mp4', 5, FR));
+  await tick(10);
+  assert.equal(h.of('media').length, 1);
+  h.message({ k: 'bye' }, 1, PAGE, 0);                      // the top page
+  h.message({ k: 'bye' }, 1, 'https://other.example/x', 7); // a frame that offered nothing
+  await tick(10);
+  assert.equal(h.of('gone').length, 0);
+  h.message({ k: 'bye' }, 1, FR, 5);
+  await tick(10);
+  const g = h.of('gone');
+  assert.equal(g.length, 1, JSON.stringify(g));
+  assert.deepEqual(Array.from(g[0].d), [FR]);
+  assert.equal(g[0].p, PAGE);
+  h.listeners.headers(frameHdr('https://cdn.example/s/movie.mp4', 9, FR2));   // the replacement frame (a new id) offers the same file
+  await tick(10);
+  assert.equal(h.of('media').length, 2, 'news again');
+});
+
+
+test('RVW2 F16: a redirected media request reports the FINAL address and the address the page first asked for', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  assert.ok(h.listeners.redirect, 'the redirect listener is registered');
+  const A = 'https://site.example/play?id=1', B = 'https://edge.example/r/1', C = 'https://cdn.example/signed/movie.mp4?sig=abc';
+  h.listeners.redirect({ type: 'media', url: A, redirectUrl: B, tabId: 1 });
+  h.listeners.redirect({ type: 'media', url: B, redirectUrl: C, tabId: 1 });                   // a chain: the FIRST address is kept
+  h.listeners.headers(hdr(C, 'video/mp4', 9_000_000));
+  h.listeners.headers(hdr('https://cdn.example/plain/other.mp4', 'video/mp4', 9_000_000));     // not redirected: no `ru`
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].u, C); assert.equal(m[0].ru, A);
+  assert.equal('ru' in m[1], false);
 });

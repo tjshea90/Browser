@@ -100,4 +100,24 @@ class UrlPartsTest {
         }
         assertNotNull(UrlParts.parse("http://192.168.43.1/"))
     }
+
+    @Test fun aBackslashEndsTheAuthorityOfAWebAddressLikeTheEngineReadsIt() {
+        // RVW1 S9: "https://evil.com\\@good.com/" is the site evil.com to the engine
+        assertEquals("evil.com", UrlParts.parse("https://evil.com\\@good.com/")!!.host)
+        assertEquals("evil.com", UrlParts.parse("http://evil.com\\path")!!.host)
+        assertEquals("good.com", UrlParts.parse("https://user@good.com/a\\b")!!.host)
+        assertEquals("a backslash later in the path changes nothing", "good.com", UrlParts.parse("https://good.com/a\\@evil.com")!!.host)
+        assertEquals("another scheme keeps its own rules", "evil.com\\@good.com", UrlParts.parse("foo://evil.com\\@good.com/")!!.let { it.userInfo?.plus("@")?.plus(it.host) ?: it.host })
+    }
+
+    @Test fun aPublicPageCannotMakeTheAppProbeAddressesOnTheOwnersNetwork() {
+        // RVW1 S3
+        assertTrue(NetHosts.probeAllowed("cdn.example.com", "site.example"))
+        assertTrue(NetHosts.probeAllowed("cdn.example.com", ""))
+        for (h in listOf("192.168.1.1", "10.0.0.5", "172.16.4.4", "127.0.0.1", "169.254.169.254", "localhost", "nas.local", "router", "100.64.0.7", "[::1]".trim('[', ']'), "fd12::1"))
+            assertFalse("$h from a public page", NetHosts.probeAllowed(h, "site.example"))
+        assertFalse("no page known counts as public", NetHosts.probeAllowed("192.168.1.1", ""))
+        assertTrue("a page on the router itself may name its own files", NetHosts.probeAllowed("192.168.1.1", "192.168.1.1"))
+        assertTrue("a NAS page may name NAS files", NetHosts.probeAllowed("nas.local", "media.local"))
+    }
 }
