@@ -44,15 +44,32 @@ object Advisor {
         val kills = n("gecko onKill") + n("gecko onCrash")
         val tk = i("tabs_kept", 0)
         if (kills >= 2 && tk != 1) out.add(Advice("kills-tabs", 3, "Appearance", "Tabs kept ready", TABS[tk.coerceIn(0, 2)], TABS[1], "tabs_kept", 1,
-            "the page engine was killed or crashed $kills times since the last report (on a 2 GB tablet that is usually memory); fewer tabs kept ready leave it more room"))
+            "the page engine was killed or crashed $kills times in the last week (on a 2 GB tablet that is usually memory); fewer tabs kept ready leave it more room"))
         if (kills >= 4 && tk == 1) out.add(Advice("kills-close", 3, "Everyday use", "Open tabs", "", "close the tabs you are not using", null, null,
             "the engine was killed or crashed $kills times even with Few (2) tabs kept ready: memory is the limit"))
         val hib = n("tabs hibernate")
         if (tk == 1 && kills == 0L && hib >= 12 && v("ramAvailMb") >= 450) out.add(Advice("hibernate-auto", 1, "Appearance", "Tabs kept ready", TABS[1], TABS[0], "tabs_kept", 0,
-            "tabs were put to sleep $hib times with no engine kill, and about ${mb(v("ramAvailMb"))} of memory is free: Automatic keeps more tabs ready, so switching stays instant"))
+            "tabs were put to sleep $hib times in the last week with no engine kill, and about ${mb(v("ramAvailMb"))} of memory is free: Automatic keeps more tabs ready, so switching stays instant"))
 
         // slow and failing pages
-        val slow = sites.filter { it.loads >= 3 && it.medianDoneMs >= 12_000 && !it.site.startsWith("<") }
+        // LD4: a slow load is one of three different problems, and only one of them is cured by a faster link. The page's own timing (core DiagStats, `page timing` lines) says which:
+        //  - busy page: the page was too busy to answer for 40 % or more of the load (lagPct): its own scripts keep the four slow cores busy; the link is not the problem;
+        //  - blocker-heavy page: the Shields' judging (average microseconds per request from the extension, times the page's request count) is 8 % or more of the load and 1.5 s or more.
+        val busy = sites.filter { it.timed >= 2 && it.lagPct >= 40 && it.medianDoneMs >= 8_000 && !it.site.startsWith("<") }
+        for (x in busy.sortedByDescending { it.medianDoneMs }.take(2))
+            out.add(Advice("busy-" + x.site, 1, "Everyday use", "Pages like " + x.site, "", "no setting makes this page's own scripts faster; a faster link will not help",
+                null, null, "${x.site}: the page was too busy to answer for ${x.lagPct} % of its load (median ${sec(x.medianDoneMs)} s, ${x.avgReqs} requests); close other tabs and wait for the tablet's own work (see the page timing lines)"))
+        val reqCalls = v("extReqCalls"); val reqUs = v("extReqUs")
+        if (reqCalls >= 200 && reqUs > 0) {
+            val perReq = reqUs / reqCalls
+            for (x in sites.filter { it.timed >= 2 && it.avgReqs >= 300 && it.medianDoneMs >= 8_000 && !it.site.startsWith("<") }.sortedByDescending { it.avgReqs }.take(2)) {
+                val cost = x.avgReqs.toLong() * perReq / 1000                      // milliseconds the blocker holds the engine's main thread for one load of this site
+                if (cost >= 1500 && cost * 100 >= x.medianDoneMs * 8)
+                    out.add(Advice("shields-heavy-" + x.site, 1, "The shield button in the address bar", "Shields for " + x.site, "on", "turn Shields off for this site and reload (it loses ad and tracker blocking there)",
+                        null, null, "${x.site} makes about ${x.avgReqs} requests and the blocker judges each in about ${perReq / 100 / 10.0} ms: roughly ${sec(cost)} s of a ${sec(x.medianDoneMs)} s load"))
+            }
+        }
+        val slow = sites.filter { it.loads >= 3 && it.medianDoneMs >= 12_000 && !it.site.startsWith("<") && !(it.timed >= 2 && it.lagPct >= 40) }   // a busy page is not helped by the phone's connection
         if (slow.size >= 2) {
             val worst = slow.maxByOrNull { it.medianDoneMs }!!
             val why = "${slow.size} sites took 12 s or more to finish loading (slowest: ${worst.site}, median ${sec(worst.medianDoneMs)} s over ${worst.loads} loads); the phone fetches pages with its own connection, which the carrier does not cap"
