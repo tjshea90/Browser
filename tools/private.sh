@@ -4,7 +4,7 @@
 # writes "INBOX.md" works unchanged and `git add -A` can never publish them.
 #   bash tools/private.sh setup   idempotent: exclude + links (run at session start by resume.sh and by every autosave)
 #   bash tools/private.sh push    commit + push the private clone (run by autosave)
-# The clone: $KESTREL_PRIVATE or ../kestrel-private. Missing clone = LOUD warning, and the three paths stay plain local files that are still excluded
+# The clone: $KESTREL_PRIVATE, else ../kestrel-private or ../Kestrel-Private (any letter case, see find_clone). Missing clone = LOUD warning, and the three paths stay plain local files that are still excluded
 # from git (nothing leaks into the public repo, but nothing is saved either until the clone exists):
 #   mcp__claude-code-remote__add_repo tjshea90/Kestrel-Private (access push), then git clone --depth 1 https://github.com/tjshea90/kestrel-private ../kestrel-private
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 1
