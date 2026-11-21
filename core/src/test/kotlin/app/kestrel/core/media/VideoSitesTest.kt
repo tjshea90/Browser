@@ -44,6 +44,6 @@ class VideoSitesTest {
         val v = VideoSites()
         v.error("spin.example", 99, "blob"); v.error("spin.example", 99, "blob")
         val l = v.line()
-        assert(l.contains("spin.example: errors stuck loading (no error, no data) blob x2")) { l }
+        assertTrue(l, l.contains("spin.example: errors stuck loading (no error, no data) blob x2"))
     }
 }
