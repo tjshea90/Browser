@@ -29,9 +29,9 @@ class VideoSites(private val max: Int = 16) {
         val s = of(host); s.sizeNo += size; s.modeNo += mode; s.fpsNo += fps; if (last.isNotEmpty()) s.last = last.take(30)
     }
 
-    /** A media element on a page of [host] failed: the code (MediaError 1..4, 9 = a <source> child) and where its file comes from (none / blob / hls / dash / http). */
+    /** A media element on a page of [host] failed: the code (MediaError 1..4, 9 = a <source> child, 99 = it kept loading for 15 s with no data and no error) and where its file comes from (none / blob / hls / dash / http). */
     @Synchronized fun error(host: String, code: Int, src: String) {
-        val s = of(host); val k = "code $code $src"; s.errors[k] = (s.errors[k] ?: 0) + 1
+        val s = of(host); val k = (if (code == 99) "stuck loading (no error, no data) $src" else "code $code $src"); s.errors[k] = (s.errors[k] ?: 0) + 1
         while (s.errors.size > 6) s.errors.remove(s.errors.keys.first())
     }
 

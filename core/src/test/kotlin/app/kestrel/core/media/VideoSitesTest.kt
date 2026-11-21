@@ -39,4 +39,11 @@ class VideoSitesTest {
         val v = VideoSites(); v.gate("fine.example", 0, 3, 0, 0)
         assertTrue(v.line(), v.line().contains("no site had a video held back")); assertFalse(v.isEmpty())
     }
+
+    @Test fun anElementStuckLoadingWithNoErrorIsSaidInWords() {
+        val v = VideoSites()
+        v.error("spin.example", 99, "blob"); v.error("spin.example", 99, "blob")
+        val l = v.line()
+        assert(l.contains("spin.example: errors stuck loading (no error, no data) blob x2")) { l }
+    }
 }

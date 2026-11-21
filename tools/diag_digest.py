@@ -399,7 +399,9 @@ def video_analysis(batches):
         elif fmt:
             why.append('the format policy said no %d time(s) (last %s) but nothing failed: the site found another format' % (fmt, d['last'] or '-'))
         for k in d['err']:
-            if k.startswith('code 4'):
+            if k.startswith('code 99'):
+                why.append('%s: the element tried to load or play for 15 s and never got data, with no error: the page player waits for something (a request that never answers or is blocked, a script that never goes on, a source the engine cannot open); read the page report lines of this site (blocked / FAILED) and the `video codec-no` lines' % k)
+            elif k.startswith('code 4'):
                 why.append('%s: "no usable source" (format, DRM or a blocked file: see causes 3, 4, 5)' % k)
             elif k.startswith('code 2'):
                 why.append('%s: network error while loading (the hotspot, cause 6)' % k)

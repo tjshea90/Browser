@@ -2627,7 +2627,7 @@ open class BrowserActivity : Activity(), DockListener {
                 else -> {
                     val code = m.optInt("c"); val src = m.optString("s", "none")
                     app.kestrel.browser.web.VideoBySite.sites.error(host, code, src)
-                    Health.log("video", "error", "$host code=$code net=${m.optInt("ns")} ready=${m.optInt("rs")} src=$src frame=$sub el=${m.optString("e", "v")}")
+                    Health.log("video", "error", "$host code=$code net=${m.optInt("ns")} ready=${m.optInt("rs")} src=$src frame=$sub el=${m.optString("e", "v")}" + (if (code == 99) " paused=${m.optInt("pa")} buf=${m.optInt("b")}" else ""))   // 99 = stuck loading: no error event, no data (videoprobe.js)
                 }
             }
         }
