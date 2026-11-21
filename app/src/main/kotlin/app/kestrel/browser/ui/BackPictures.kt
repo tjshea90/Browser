@@ -11,7 +11,8 @@ import android.graphics.Bitmap
  * system asks for memory. Keyed by tab and address (without the #fragment).
  */
 object BackPictures {
-    const val MAX = 4
+    /** BK10: eight pages (it was four for all tabs together): about 6 MB of picture memory, none of it on disk; with fewer, Back to an older page had no picture and the page just left stayed on the screen while the old one loaded. */
+    const val MAX = 8
 
     private class Key(val tab: Long, val url: String) {
         override fun equals(other: Any?) = other is Key && other.tab == tab && other.url == url

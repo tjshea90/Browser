@@ -44,6 +44,10 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
     private var lineBright = false
     private val line = Paint()
 
+    // ---- BK10: the cue on a Back picture that has waited (a thin line along the top edge, then a note at the bottom naming the site)
+    private var waitLine = false
+    private var waitNote = ""
+
     init {
         visibility = GONE
         isClickable = true // the page under it is not there yet: touches stop here
@@ -56,6 +60,7 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
     /** Show [preview] (may be null: then a plain dark panel) with [message] on a chip in the middle. */
     fun show(preview: Bitmap?, message: String, dimAlpha: Int = 0xB3) {
         bmp = preview
+        waitLine = false; waitNote = ""
         this.dimAlpha = dimAlpha
         dim.color = dimAlpha shl 24
         text = message
@@ -79,12 +84,18 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
     /** The slim note at the bottom of a look ("" = none). Ignored when no look is showing. */
     fun setLookNote(note: String) { if (look != null && lookNote != note) { lookNote = note; invalidate() } }
 
+    /** BK10: a Back picture has been up for a while: [line] = the loading line along the top edge, [note] = the slim note at the bottom ("" = none). Ignored unless a plain picture is showing. */
+    fun setWait(line: Boolean, note: String) {
+        if (bmp == null || visibility != VISIBLE) return
+        if (waitLine != line || waitNote != note) { waitLine = line; waitNote = note; invalidate() }
+    }
+
     val showingLook: Boolean get() = look != null && visibility == VISIBLE
 
     fun hide() {
         if (visibility != VISIBLE) return
         visibility = GONE
-        bmp = null
+        bmp = null; waitLine = false; waitNote = ""
         val l = look; look = null; lookDrawn = null; lookNote = ""
         if (l != null && !l.isRecycled) l.recycle()
     }
@@ -114,6 +125,8 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
             dst.set(0f, 0f, w, srcH * scale)
             c.drawBitmap(b, src, dst, picture)
             c.drawRect(0f, 0f, w, h, dim)
+            if (waitLine) { line.color = pal.accent; c.drawRect(0f, 0f, w, context.dpf(2f), line) }
+            if (waitNote.isNotEmpty()) drawChip(c, waitNote, w, h - context.dpf(44f), 14f, 34f, 13f)
         }
         if (text.isEmpty()) return
         drawChip(c, text, w, h * 0.38f, 22f, 48f, 15f)
