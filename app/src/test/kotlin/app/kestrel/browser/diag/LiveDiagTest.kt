@@ -47,7 +47,7 @@ class LiveDiagTest {
     }
 
     @Test fun anEventIsScrubbedBeforeItIsKept() {
-        LiveDiag.observe("page", "slow", "load of https://www.example.com/watch/42?token=abc123def456 took 9.1 s, mail me at someone@example.org")
+        LiveDiag.observe("page", "slow", "load of https://www.example.com/watch/42?t=30s took 9.1 s, session=abc123def456, mail me at someone@example.org")
         val j = LiveDiag.journalForTest()
         assertEquals(1, j.size)
         assertTrue(j[0], j[0].contains("example.com"))
