@@ -164,6 +164,16 @@ class PrivateTabsTest {
         assertTrue(app("ui/Panels.kt").contains("IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING"))
     }
 
+    @Test fun theEnginesAddressChecksArePausedWhileAPrivateTabExistsAndComeBackAfterwards() {
+        val b = gecko("BrowserActivity.kt")
+        assertTrue(b.substringAfter("private fun syncPrivateAnchor()").substringBefore("if (need && privateAnchor == null)").contains("GeckoEngine.pauseSafeBrowsing(need)"))
+        val e = gecko("GeckoEngine.kt")
+        val f = e.substringAfter("fun pauseSafeBrowsing(on: Boolean)").substringBefore("/** The profile now in force")
+        assertTrue(f.contains("setGeckoPref(\"browser.safebrowsing.malware.enabled\", false") && f.contains("setGeckoPref(\"browser.safebrowsing.phishing.enabled\", false"))
+        assertTrue(f.contains("clearGeckoUserPref(\"browser.safebrowsing.malware.enabled\")") && f.contains("clearGeckoUserPref(\"browser.safebrowsing.phishing.enabled\")"))
+        assertTrue("it is a USER-branch override, so clearing it brings the engine's own default back", f.contains("PREF_BRANCH_USER"))
+    }
+
     @Test fun crashReportsAreScrubbedAtStartAndAfterEveryEngineCrashOrKill() {
         assertTrue(gecko("GeckoApp.kt").contains("CrashNote.scrubEngineReports(this)"))
         val t = gecko("web/TabDelegates.kt")

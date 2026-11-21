@@ -1427,6 +1427,7 @@ open class BrowserActivity : Activity(), DockListener {
         val need = tabs.any { it.isPrivateTab }
         PrivateGuard.setOpen(need)                                                // PV1: the last private tab gone starts the two minutes in which late events are still masked
         if (!need) Shields.endPrivate()                                           // PV1: a Shields change made from a private tab is taken back (it was never saved)
+        if (need != GeckoEngine.safeBrowsingPaused) GeckoEngine.pauseSafeBrowsing(need)   // PV1: the engine asks Google about address hashes in a private tab too: not while one exists
         if (need && privateAnchor == null) {
             try {
                 val a = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
@@ -2620,7 +2621,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
-        out.add(PrivateGuard.line())   // PV1
+        out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
         out.add(previewLine())
         out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")

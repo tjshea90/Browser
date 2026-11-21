@@ -370,6 +370,30 @@ object GeckoEngine {
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
 
+    /** PV1: are the engine's malware / phishing lookups paused because a private tab exists? (Diagnostics) */
+    @Volatile var safeBrowsingPaused = false
+
+    /**
+     * PV1 (owner 2026-11-21: nothing sent anywhere from a private tab): the engine's Safe Browsing (SECURITY.md item 8, on by default through Mozilla's own key) asks Google's servers about the hash prefix of an address
+     * whenever a local list matches it, and it does so in a private tab too. While a private tab exists those two lookups are switched off by user-branch overrides of the engine's own switches (`browser.safebrowsing
+     * .malware.enabled`, `.phishing.enabled`; both are read per request); when the last private tab is gone the overrides are cleared and the engine's defaults are back. Regular tabs have no malware / phishing check
+     * in the meantime: a trade the owner's rule makes (the lists keep updating; only the per-address questions stop).
+     */
+    fun pauseSafeBrowsing(on: Boolean) {
+        if (hopToMain { pauseSafeBrowsing(on) }) return
+        try {
+            if (on) {
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("browser.safebrowsing.malware.enabled", false, org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER)
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("browser.safebrowsing.phishing.enabled", false, org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER)
+            } else {
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("browser.safebrowsing.malware.enabled")
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("browser.safebrowsing.phishing.enabled")
+            }
+            safeBrowsingPaused = on
+            app.kestrel.browser.diag.Health.log("engine", "safebrowsing", if (on) "paused: a private tab exists" else "back on: no private tab")
+        } catch (e: Throwable) { app.kestrel.browser.diag.Health.log("engine", "safebrowsing-failed", e.toString().take(80)) }
+    }
+
     /** The profile now in force, in words (Diagnostics and Settings). */
     /** LD4: the profile in force as one word (standard / fast-wifi / fast-wifi-tunnel) for the live diagnostics' page timing line. */
     @Volatile var networkProfileCode: String = "standard"
