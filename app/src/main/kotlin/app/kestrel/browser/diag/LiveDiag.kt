@@ -171,6 +171,12 @@ object LiveDiag {
         val p = sp ?: return
         if (!enabled) { done?.invoke("Live diagnostics is off: nothing is sent."); return }
         if (!hasToken) { done?.invoke("No token yet."); return }
+        if (PrivateGuard.active()) {                                               // PV1: while a private tab exists (and two minutes after the last one) nothing is built and nothing is sent
+            Health.count("private.holds")
+            if (manual) done?.invoke("A private tab is open (or was closed less than two minutes ago): nothing is sent until none has been open for two minutes.")
+            else { status = describe("held: a private tab is open"); val left = PrivateGuard.msLeft(); rearm(if (left < 0L) RECHECK_MAX_MS else left, snapshotOnMain) }
+            return
+        }
         val now = System.currentTimeMillis()
         val pending = journal.size()
         if (!manual) {
@@ -197,6 +203,7 @@ object LiveDiag {
         var msg: String
         try {
             if (!enabled || token.isEmpty()) return
+            if (PrivateGuard.active()) { Health.count("private.holds"); done?.invoke("A private tab was opened while this was being prepared: nothing was sent."); return }   // PV1
             if (now - repoChecked > 24 * 3600_000L) {
                 when (repoState(token)) {
                     RepoState.PRIVATE -> repoChecked = now
@@ -212,6 +219,7 @@ object LiveDiag {
             val at = utc(now)
             val batch = DiagBatch(installId(p), appVersion(), appCode(), Build.VERSION.SDK_INT, Build.MODEL ?: "?", at, lines, events, cut.lost, x.settings, x.device, x.kinds, x.sites, advice, cut.thinned)
             if (!enabled) return                                                   // switched off while the repository was being asked: not one byte goes
+            if (PrivateGuard.active()) { Health.count("private.holds"); done?.invoke("A private tab was opened while this was being prepared: nothing was sent."); return }   // PV1: the last look before the bytes go
             val json = batch.toJson()
             var code: Int
             var attempt = 0
