@@ -34,6 +34,7 @@ import app.kestrel.browser.R
 import app.kestrel.browser.web.KestrelGeckoView
 import app.kestrel.browser.ui.DiagnosticsView
 import app.kestrel.browser.ui.DownloadPopup
+import app.kestrel.browser.diag.PrivateGuard
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.diag.StartTimeline
 import app.kestrel.browser.data.BrowserDb
@@ -340,7 +341,7 @@ open class BrowserActivity : Activity(), DockListener {
             val quiet = SystemClock.uptimeMillis() - lookScrollAt
             if (quiet < LastLookRules.SETTLE_MS) { Io.main.postDelayed(this, LastLookRules.SETTLE_MS - quiet); return }
             lookScrollArmed = false
-            captureLook(current, "settled")
+            captureLook(current, "settled", LastLookRules.SETTLED_MIN_GAP_MS.toLong())   // PERF2: a convenience for the next start: rare, never during a video or Battery Saver
         }
     }
     private val restoreTimeout = Runnable { hideRestoring("timeout") }
@@ -557,7 +558,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }, typingWait = { m -> onTypingWait(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -697,6 +698,7 @@ open class BrowserActivity : Activity(), DockListener {
         onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false; stopFrameWatch()
         if (::inline.isInitialized) inline.stop("the app was left")      // ANS55f: SND1: no sound when the app is not in front
         Health.log("life", "pause"); fsTurner.paused()
+        app.kestrel.browser.diag.LiveDiag.onBack()                          // LD3: no live-diagnostics check is set again while the app is not in front
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
         pausedAt = SystemClock.uptimeMillis()
@@ -1092,6 +1094,7 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         home = HomeView(this, pal, "KESTREL", this)
+        dock.urlField.addTextChangedListener(typingWatcher); home.field.addTextChangedListener(typingWatcher)   // PERF3c: how long a typed character waits for its frame
         errorView = ErrorView(this, pal, errorListener)
         content.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -1270,6 +1273,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun newTabInternal(parent: Tab? = null, privateTab: Boolean = false): Tab {
         val t = Tab(nextTabId++)
         t.gecko.privateTab = privateTab
+        if (privateTab) PrivateGuard.setOpen(true)                               // PV1: from this moment no site name goes into the event ring, and the live diagnostics hold back
         t.parentId = parent?.id ?: 0L
         tabs.add(t)
         return t
@@ -1422,6 +1426,9 @@ open class BrowserActivity : Activity(), DockListener {
     private var debugTouch: android.content.BroadcastReceiver? = null
     private fun syncPrivateAnchor() {
         val need = tabs.any { it.isPrivateTab }
+        PrivateGuard.setOpen(need)                                                // PV1: the last private tab gone starts the two minutes in which late events are still masked
+        if (!need) Shields.endPrivate()                                           // PV1: a Shields change made from a private tab is taken back (it was never saved)
+        if (need != GeckoEngine.safeBrowsingPaused) GeckoEngine.pauseSafeBrowsing(need)   // PV1: the engine asks Google about address hashes in a private tab too: not while one exists
         if (need && privateAnchor == null) {
             try {
                 val a = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
@@ -2164,8 +2171,34 @@ open class BrowserActivity : Activity(), DockListener {
         if ((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) != want) {
             window.setSoftInputMode((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or want)
             Health.log("win", "typing-mode", on.toString())
+            if (!on) flushAddressTyping()
         }
         if (urlTyping != on) { urlTyping = on; if (Build.VERSION.SDK_INT >= 30) root.requestApplyInsets() }
+    }
+
+    /**
+     * PERF3c (owner 2026-11-22: "typing is very laggy"): the app's side of the typing probe. Address bar and Home field: from every text change to the next frame the UI thread starts; the account is logged once when the typing is over
+     * (`win typing-address`). Page fields: how long typed characters waited before the page saw them (the extension's `typ`, numbers only, `win typing-page`). No text, no address, nothing from a private tab.
+     */
+    private val addressTyping = app.kestrel.core.diag.TypingLatency()
+    private val typingWatcher = object : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+        override fun afterTextChanged(s: android.text.Editable?) {}
+        override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {
+            if (current?.isPrivateTab == true) return
+            val t0 = SystemClock.uptimeMillis()
+            android.view.Choreographer.getInstance().postFrameCallback { addressTyping.add(SystemClock.uptimeMillis() - t0) }
+        }
+    }
+    private fun flushAddressTyping() { addressTyping.take()?.let { Health.log("win", "typing-address", it) } }
+    private fun onTypingWait(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            if (tab.isPrivateTab) return@post
+            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"} resp=${m.optInt("ra", -1)}ms respworst=${m.optInt("rm")}ms resp150=${m.optInt("ro")}")
+        }
     }
 
     private var typingModeSince = 0L
@@ -2558,19 +2591,88 @@ open class BrowserActivity : Activity(), DockListener {
      * line. Lines that name the page in front are left out while a private tab is in front.
      */
     private fun liveDiagSnapshot(): String {
+        if (PrivateGuard.active()) return ""                                      // PV1: nothing is built for the live diagnostics while a private tab exists (LiveDiag does not ask either)
         val inPrivate = current?.isPrivateTab == true
         val facts = engineFacts().filter { !(inPrivate && (it.startsWith("Firefox's own tracking protection, this page") || it.contains("this page"))) }
         return try { Health.report(this, facts, 0) } catch (e: Throwable) { "" }
     }
 
     /** LD2: numbers only this activity and the player know (screen-update counts, the player's counters, tab counts). No text. Read on the UI thread, only while the live-diagnostics switch is on. */
+    /**
+     * LD4: one page load's own account of where its time went (pagetime.js, via the extension): ONE `page timing` line in the Health ring, from which the live diagnostics' tables and the digest read. Never for a private tab. The host is
+     * the TAB's own site (not what the script says); what the tablet was doing is added here (Shields up or down for the site, the network profile, free memory, the busiest process's CPU, the tab counts).
+     */
+    private fun onPageTiming(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page)) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            val host = tab.topHost ?: return@post
+            if (tab.isPrivateTab) return@post
+            val keys = listOf("nt", "dns", "con", "tls", "fb", "ttfb", "fcp", "lcp", "dcl", "load", "rn", "rc", "kb", "r1", "r3", "rsum", "h2", "h1", "h3", "js", "css", "img", "xhr", "oth", "nodes", "scr", "fr", "rd", "hid", "pt", "at")
+            val v = HashMap<String, Long>()
+            for (k in keys) v[k] = m.optLong(k, -1L)
+            val lm = m.optJSONArray("lm")
+            val lag = listOf(lm?.optLong(0, 0L) ?: 0L, lm?.optLong(1, 0L) ?: 0L, lm?.optLong(2, 0L) ?: 0L)
+            val sl = ArrayList<app.kestrel.core.livediag.PageTimingLine.Slow>()
+            m.optJSONArray("sl")?.let { a -> for (i in 0 until minOf(a.length(), 3)) a.optJSONArray(i)?.let { e -> sl.add(app.kestrel.core.livediag.PageTimingLine.Slow(e.optString(0), e.optString(1), e.optLong(2, 0L))) } }
+            val eff = app.kestrel.browser.shield.Shields.effective(prefs, host)
+            val avail = try { val mi = android.app.ActivityManager.MemoryInfo(); getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(mi); mi.availMem shr 20 } catch (e: Exception) { -1L }
+            val span = maxOf(m.optLong("at", 0L), 5_000L) + 2_000L                 // the CPU over the load itself (readings come every 5 s), not the newest single reading
+            val cpuP = app.kestrel.browser.diag.CpuMeter.recentMean("parent", span); val cpuT = app.kestrel.browser.diag.CpuMeter.recentMean("tab", span)
+            val ctx = "shields=" + (if (eff.shieldsUp) "up" else "down") + " ads=" + (if (eff.shieldsUp && eff.blockAds) 1 else 0) + " net=" + GeckoEngine.networkProfileCode + " avail=" + avail +
+                " cpuP=" + cpuP + " cpuT=" + cpuT + " tabs=" + tabs.count { !it.isPrivateTab } + " live=" + tabs.count { it.session != null && !it.isPrivateTab }
+            Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx))
+        }
+    }
+
+    /**
+     * VD1 (owner 2026-11-21: "diagnose why Instagram reels don't load and some videos don't load on websites"): what happened to the videos of ONE site, from the extension: the press-to-play gate held / refused something (`g`), the format
+     * policy answered no (`c`), a media element failed (`e`). The host is the TAB's own site (not what a script says); a private tab, an unknown page and a sensitive site (mail, bank ...) are dropped before anything is kept or logged
+     * (PV1). Kept in [app.kestrel.browser.web.VideoBySite] for the Diagnostics screen and as one `video ...` Health line for the live diagnostics and the digest. Numbers and kinds only: no address, no title.
+     */
+    private fun onVideoSite(m: org.json.JSONObject, kind: Char) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page)) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            val host = tab.topHost ?: return@post
+            if (tab.isPrivateTab || app.kestrel.core.livediag.SensitiveSites.isSensitive(host)) return@post
+            val sub = if (m.optInt("f", 1) == 1) "top" else "sub"
+            when (kind) {
+                'g' -> {
+                    val n = m.optJSONArray("n") ?: return@post
+                    val held = n.optInt(0); val opened = n.optInt(1); val kept = n.optInt(5); val refused = n.optInt(6)
+                    app.kestrel.browser.web.VideoBySite.sites.gate(host, held, opened, kept, refused)
+                    Health.log("video", "gate", "$host held=$held kept=$kept refused=$refused opened=$opened frame=$sub rule=" + (if (prefs.videoPressToPlay && !app.kestrel.browser.shield.Shields.effective(prefs, host).autostartVideo) "on" else "off-for-site"))
+                }
+                'c' -> {
+                    val size = m.optInt("s"); val mode = m.optInt("m"); val fps = m.optInt("f"); val last = m.optString("w")
+                    app.kestrel.browser.web.VideoBySite.sites.codec(host, size, mode, fps, last)
+                    Health.log("video", "codec-no", "$host size=$size mode=$mode fps=$fps last=${last.replace(' ', '_')}")
+                }
+                else -> {
+                    val code = m.optInt("c"); val src = m.optString("s", "none")
+                    app.kestrel.browser.web.VideoBySite.sites.error(host, code, src)
+                    Health.log("video", "error", "$host code=$code net=${m.optInt("ns")} ready=${m.optInt("rs")} src=$src frame=$sub el=${m.optString("e", "v")}" + (if (code == 99) " paused=${m.optInt("pa")} buf=${m.optInt("b")}" else ""))   // 99 = stuck loading: no error event, no data (videoprobe.js)
+                }
+            }
+        }
+    }
+
     private fun liveDiagExtraFacts(): Map<String, Long> {
         val m = LinkedHashMap<String, Long>()
         m["slowFrames"] = slowFrames.toLong(); m["worstFrameMs"] = worstFrameMs
         val n = app.kestrel.browser.web.NativePlayerStats
         m["plays"] = n.plays.toLong(); m["playErrors"] = n.errors.toLong(); m["framesShown"] = n.framesShown; m["framesDropped"] = n.framesDropped
         m["playStalls"] = n.stalls.toLong(); m["playStalledMs"] = n.stalledMs; m["linkKbps"] = n.linkBps / 1000L; m["decoderHw"] = when (n.decoderHardware) { true -> 1L; false -> 0L; else -> -1L }
-        m["tabs"] = tabs.size.toLong(); m["liveTabs"] = tabs.count { it.session != null }.toLong()
+        m["tabs"] = tabs.count { !it.isPrivateTab }.toLong(); m["liveTabs"] = tabs.count { it.session != null && !it.isPrivateTab }.toLong()   // PV1: private tabs are not even counted
+        // LD4: the numbers behind the Diagnostics screen's long text lines, as numbers: the extension's cost, the CPU, the memory of every process, the start-up marks, the slow-frame counter
+        try { ShieldsBridge.stats?.let { st -> m.putAll(app.kestrel.core.livediag.ExtCost.numbers(st.listeners, st.checks, st.totalUs, st.maxUs, st.slow)); m["extLoadMs"] = st.loadMs } } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.CpuMeter.numbers()) } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.LastRun.memoryNumbers(applicationContext)) } catch (e: Exception) { /* optional */ }
+        try { m.putAll(app.kestrel.browser.diag.StartTimeline.numbers()) } catch (e: Exception) { /* optional */ }
+        m["jankFrames"] = Health.counter("frames.jank").toLong()
         return m
     }
 
@@ -2580,6 +2682,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
+        out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
         out.add(previewLine())
         out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
@@ -2588,7 +2691,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsBarsLine())
         out.add(turnSettler.line())
         out.add("Frames around turns (FrameMetrics, 8 s from each turn): $slowFrames first draws and frames of 100 ms and over; worst frame $worstFrameMs ms (layout+measure $worstLayoutMs ms, draw $worstDrawMs ms, sync $worstSyncMs ms, waited before it $worstDelayMs ms)")
-        out.add("Heat and speed: " + try { val pm = getSystemService(android.os.PowerManager::class.java); "thermal status ${pm.currentThermalStatus} (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode ${if (pm.isSustainedPerformanceModeSupported) "supported" else "not supported"}" } catch (e: Throwable) { "not readable" })
+        out.add("Heat and speed: " + try { val pm = getSystemService(android.os.PowerManager::class.java); "thermal status ${pm.currentThermalStatus} (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode ${if (pm.isSustainedPerformanceModeSupported) "supported" else "not supported"}, Android Battery Saver ${if (pm.isPowerSaveMode) "ON (it slows the processor: turn it off in Android Settings > Battery if the browser feels laggy)" else "off"}" } catch (e: Throwable) { "not readable" })
         out.add(turnPageLine())
         out.add(viewportLine())
         out.add(player.line())
@@ -2601,11 +2704,12 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))
         out.add(app.kestrel.browser.web.VideoFormats.line(applicationContext, prefs))   // ANS52g: the page script's answers (core/media/VideoLimits) and what it refused
         out.add(app.kestrel.browser.web.VideoFormats.capLine(applicationContext, prefs))   // ANS52h: the picture size cap for HLS pages and what the extension did with playlists
+        out.add(app.kestrel.browser.web.VideoBySite.line())   // VD1: which site had its videos held back, refused or failed
         out.add(app.kestrel.browser.web.VideoFormats.gateLine(prefs))   // ANS53a / ANS53b: videos start only when the person presses play   // ANS52: hardware first, with the sizes and frame rates the vendor claims and measured
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
-        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
+        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null && !it.isPrivateTab }} of ${tabs.count { !it.isPrivateTab }} tabs (private tabs are not counted or named here; the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${if (current?.isPrivateTab == true) "a private tab" else (current?.url?.take(60) ?: "-")}")   // PV1: this line goes into the live diagnostics too
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add(DownloadController.windowGapLine())
@@ -3220,8 +3324,11 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
+    private fun powerSaveOn(): Boolean = try { (getSystemService(android.os.PowerManager::class.java))?.isPowerSaveMode == true } catch (e: Exception) { false }
+
     private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
         !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
+        why == "settled" && LastLookRules.settledSkip(tab.gecko.videoPlaying, powerSaveOn()) != null -> LastLookRules.settledSkip(tab.gecko.videoPlaying, powerSaveOn())
         homeShown(tab) -> "home"
         tab.error != null -> "error"
         tab.loading && !LastLookRules.mayTakeWhileLoading(why, tab.gecko.paintedFor, tab.url) -> "loading"
@@ -3526,7 +3633,7 @@ open class BrowserActivity : Activity(), DockListener {
         val on = tab.shields.let { it.shieldsUp && it.blockAds } && app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.notp") != "1"
         if (st.useTrackingProtection != on) {
             st.useTrackingProtection = on
-            Health.log("engine", "etp", "${tab.topHost ?: "?"} ${if (on) "on" else "off"}")
+            Health.log("engine", "etp", "${if (tab.isPrivateTab) "private tab" else (tab.topHost ?: "?")} ${if (on) "on" else "off"}")   // PV1: a private tab's site is never named
         }
     }
 
@@ -3614,7 +3721,37 @@ open class BrowserActivity : Activity(), DockListener {
             // content:// only: a rogue picker app could answer with file:///data/data/<this app>/... and the page would upload the browser's own files
             val given = uris.filter { it.scheme == "content" }.distinct()
             filePicks.result(given.size, resultCode); Health.log("filepick", "result", "code=$resultCode files=${given.size} dropped=${uris.size - given.size} answered=${cb != null}")
+            if (given.isNotEmpty() && current?.isPrivateTab != true && !PrivateGuard.active()) { val look = given.take(3); Io.exec { for (u in look) pickedFacts(u) } }   // IMG1: what Android sees in the file (never a name; nothing while a private tab exists)
             cb?.invoke(given)
+        }
+    }
+
+    /**
+     * IMG1 (owner 2026-11-21: "I'm trying to upload screenshots to claude and it says can't process images"): what a picked file looks like to Android, off the UI thread: the type, the size, whether the picture's header can be read, whether the name has an
+     * extension and how much room the cache has (the engine copies the file there for the page). One `filepick picked` line and the Diagnostics sentence; no name, no path (core FilePickFacts). Opening the file also proves the picker's permission still holds.
+     */
+    private fun pickedFacts(u: Uri) {
+        try {
+            val cr = contentResolver
+            var bytes = -1L; var ext = false
+            cr.query(u, arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val si = c.getColumnIndex(android.provider.OpenableColumns.SIZE); if (si >= 0 && !c.isNull(si)) bytes = c.getLong(si)
+                    val ni = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (ni >= 0 && !c.isNull(ni)) ext = c.getString(ni).let { n -> n.lastIndexOf('.') in 1 until n.length - 1 }
+                }
+            }
+            val type = cr.getType(u) ?: ""
+            var w = 0; var h = 0
+            if (type.isEmpty() || type.startsWith("image/")) cr.openInputStream(u)?.use { st ->
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeStream(st, null, o); w = maxOf(o.outWidth, 0); h = maxOf(o.outHeight, 0)
+            }
+            val f = app.kestrel.core.prompt.FilePickFacts.Picked(type, bytes, w, h, ext, cacheDir.usableSpace shr 20)
+            filePicks.picked(app.kestrel.core.prompt.FilePickFacts.verdict(f))
+            Health.log("filepick", "picked", app.kestrel.core.prompt.FilePickFacts.logLine(f))
+        } catch (e: Exception) {
+            filePicks.picked("Android could not open the picked file (" + e.javaClass.simpleName + "): the picker or its permission is the problem, not the page")
+            Health.log("filepick", "picked-failed", e.javaClass.simpleName)
         }
     }
 

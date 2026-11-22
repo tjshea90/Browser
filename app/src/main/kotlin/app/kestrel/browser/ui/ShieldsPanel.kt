@@ -68,7 +68,7 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
         fun refreshDim() { val up = master.isChecked; for ((_, sw) in rows) { sw.isEnabled = up; (sw.parent as View).alpha = if (up) 1f else 0.4f } }
         fun commit(flag: Int, value: Boolean, global: Boolean) {
             current = if (value == global) current.without(flag) else current.with(flag, value)
-            Shields.setOverride(host, current)
+            Shields.setOverride(host, current, fromPrivate = pal.isPrivate)   // PV1: from a private tab a change lives for the session only and is never written down
             onChanged(host)
         }
 
@@ -89,7 +89,13 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
             col.addView(row(label(ctx, s.title, 15f, pal.fg).apply { includeFontPadding = true }, s.subtitle, sw))
         }
         refreshDim()
-        col.addView(label(ctx, "Changes reload the page. These are this site's settings; defaults are in Settings." + (if (app.kestrel.browser.Flavor.hasEmbedWait) " With Shields off, Firefox's own tracker blocking is off for this site too." else ""), 12f, pal.muted).apply { setPadding(0, ctx.dp(8), 0, 0); includeFontPadding = true })
+        if (app.kestrel.browser.Flavor.hasEmbedWait) {   // VD1: a per-site exception to the press-to-play rule; not a Shields feature, so it is not dimmed with the others
+            val auto = Switch(ctx).apply { isChecked = effective().autostartVideo }
+            auto.setOnCheckedChangeListener { _, checked -> commit(ShieldFlag.AUTOSTART, checked, global.autostartVideo) }
+            col.addView(row(label(ctx, "Videos may start by themselves", 15f, pal.fg).apply { includeFontPadding = true },
+                "Off (default): videos here wait for your press, like on every site. On: videos on this site may load and start muted by themselves, as a feed such as Instagram Reels needs (sound still needs a tap)", auto))
+        }
+        col.addView(label(ctx, "Changes reload the page. These are this site's settings; defaults are in Settings." + (if (pal.isPrivate) " In a private tab a change is not saved: it is taken back when the last private tab closes." else "") + (if (app.kestrel.browser.Flavor.hasEmbedWait) " With Shields off, Firefox's own tracker blocking is off for this site too." else ""), 12f, pal.muted).apply { setPadding(0, ctx.dp(8), 0, 0); includeFontPadding = true })
         return col
     }
 

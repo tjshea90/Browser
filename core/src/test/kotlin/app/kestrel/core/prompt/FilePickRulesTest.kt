@@ -1,6 +1,7 @@
 package app.kestrel.core.prompt
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,5 +54,12 @@ class FilePickRulesTest {
         assertTrue("Android 11 and later: without these the check for a picker app would always say none", mf.contains("android.intent.action.GET_CONTENT") && mf.contains("android.intent.action.OPEN_DOCUMENT"))
         val del = src("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
         assertTrue("a whole-folder ask is answered, not left waiting", del.contains("FilePrompt.Type.FOLDER") && del.contains("refuseFolder"))
+    }
+
+    @Test fun theDiagnosticsLineCarriesWhatTheLastPickedFileLookedLike() {
+        val st = FilePickStats()
+        assertFalse(st.line(), st.line().contains("the last picked file"))
+        st.picked(FilePickFacts.verdict(FilePickFacts.Picked("image/png", 830_000, 600, 973, true, 300)))
+        assertTrue(st.line(), st.line().contains("the last picked file: an ordinary picture (image/png, 600x973, 811 KB)"))
     }
 }

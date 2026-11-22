@@ -42,3 +42,9 @@ object VideoFormats {
             "; told to pages: " + policy(ctx, prefs) + "; refused so far: " + (if (said.isEmpty()) "nothing yet (no page asked for a format outside the limits since the app started)" else said)
     }
 }
+
+/** VD1: the per-site table of what happened to videos in this run (core/media/VideoSites), filled by BrowserActivity.onVideoSite from the extension's `vgh` / `vch` / `verr`; memory only, never fed from a private tab. */
+object VideoBySite {
+    val sites = app.kestrel.core.media.VideoSites()
+    fun line(): String = sites.line()
+}

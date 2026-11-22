@@ -92,4 +92,12 @@ class AdvisorTest {
             f = mapOf("phonePaired" to 1L, "slowFrames" to 80L, "framesShown" to 5000L, "framesDropped" to 500L, "plays" to 1L, "playStalls" to 5L))
         for (x in all) if (x.key != null) assertTrue(x.id, Advisor.canApply(x.key, x.value))
     }
+
+    @Test fun androidsBatterySaverIsNamedAsTheCauseOfLagWhenItWasOn() {
+        val a = adv(f = mapOf("powerSave" to 1L, "ramAvailMb" to 600L, "storageFreeMb" to 4000L)).single()
+        assertEquals("battery-saver", a.id); assertNull(a.key)
+        assertTrue(a.text(), a.text().startsWith("Android Settings > Battery > Battery Saver: turn it off while you use the tablet"))
+        assertTrue(a.why, a.why.contains("lag in typing, scrolling and video"))
+        assertTrue("off: no advice", adv(f = mapOf("powerSave" to 0L, "ramAvailMb" to 600L, "storageFreeMb" to 4000L)).isEmpty())
+    }
 }

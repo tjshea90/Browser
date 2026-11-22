@@ -60,6 +60,14 @@ object LastLookRules {
     /** The page's own scroll report waits this long after the last scroll before it is sent (content.js). */
     const val PAGE_DEBOUNCE_MS = 300
     const val MIN_GAP_MS = 4000
+    /**
+     * PERF2 (owner 2026-11-21: "everything is running laggy including typing and YouTube"): the owner's own upload shows a picture read back from the compositor every 4 to 6 seconds for as long as a page was scrolled
+     * (27 saves, the encode on the app's IO thread at 35 % of a core); the read-back is a synchronous call into the engine (see [SLOW_READBACK_MS]). A picture taken because the scrolling settled is only a convenience for the next
+     * start, so it is taken at most this often, never while a video plays in the page and never while Android's Battery Saver is on. Leaving the page and the end of a load keep their own, short rules.
+     */
+    const val SETTLED_MIN_GAP_MS = 30_000
+    /** Why a "scrolling settled" picture is NOT taken now (null = it may be): a video is playing in the page, or Android's Battery Saver is on. */
+    fun settledSkip(videoPlaying: Boolean, powerSave: Boolean): String? = when { videoPlaying -> "video"; powerSave -> "power"; else -> null }
     const val LEAVE_MIN_AGE_MS = 1500
     const val AFTER_STOP_MS = 1500
     /** Pictures kept: the page in front and this many most recently used pages. */
