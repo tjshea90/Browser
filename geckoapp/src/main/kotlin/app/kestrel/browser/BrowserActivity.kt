@@ -1094,6 +1094,7 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         home = HomeView(this, pal, "KESTREL", this)
+        dock.urlField.addTextChangedListener(typingWatcher); home.field.addTextChangedListener(typingWatcher)   // PERF3c: how long a typed character waits for its frame
         errorView = ErrorView(this, pal, errorListener)
         content.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))

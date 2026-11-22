@@ -210,4 +210,15 @@ class PrivateTabsTest {
         assertFalse("the name itself never goes into a line", Regex("Health\\.log\\([^\\n]*(getString|displayName)").containsMatchIn(f))
         assertTrue(f.contains("FilePickFacts.logLine(f)"))
     }
+
+    /** PERF3c: the typing probe counts only numbers, and only outside a private tab. */
+    @Test fun theTypingProbeKeepsOnlyNumbersAndSkipsPrivateTabs() {
+        val b = gecko("BrowserActivity.kt")
+        val w = b.substringAfter("private val typingWatcher").substringBefore("private fun flushAddressTyping()")
+        assertTrue("the address-bar probe asks the tab kind first", w.contains("if (current?.isPrivateTab == true) return"))
+        assertFalse("it never reads the typed text", w.contains("s.toString()") || w.contains("s?.toString()") || w.contains("s.length") && w.contains("Health.log"))
+        val h = b.substringAfter("private fun onTypingWait(").substringBefore("private var typingModeSince")
+        assertTrue(h.contains("pageIsPrivate(page)") && h.contains("PrivateGuard.active()") && h.contains("tab.isPrivateTab"))
+        assertFalse("no address or title in the line", h.contains("tab.url") || h.contains("tab.title") || h.contains("topHost"))
+    }
 }
