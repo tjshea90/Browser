@@ -143,7 +143,7 @@ test('PERF10c: a picked picture is read by the page: type, size, first bytes, de
   await context.close();
 });
 
-test('PERF10c: a file that is no picture is not decoded; a damaged picture is reported as failed to decode; a script-made change is ignored', async () => {
+test('PERF10c: a file that is no picture is not decoded; a damaged picture is reported as failed to decode; a change with no files is ignored', async () => {
   const { page, got, context } = await open(async () => false, { grace: 9000 }, { body: '<input type="file" id="f">' });
   await page.goto('https://site.example/');
   await page.setInputFiles('#f', { name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('hello world, not a picture') });
@@ -155,9 +155,9 @@ test('PERF10c: a file that is no picture is not decoded; a damaged picture is re
   await until(() => fcs(got).length >= 2, 'the damaged picture report');
   assert.equal(fcs(got)[1].a[0].mg, 'png'); assert.equal(fcs(got)[1].a[0].dec, 2, 'the engine cannot decode it'); assert.equal(fcs(got)[1].a[0].enc, 0);
   await page.waitForTimeout(1700);
-  await page.evaluate(() => { var f = document.getElementById('f'); f.dispatchEvent(new Event('change', { bubbles: true })); });   // not trusted: a page script
+  await page.setInputFiles('#f', []);                                                                          // the person cleared the choice: nothing to look at
   await page.waitForTimeout(500);
-  assert.equal(fcs(got).length, 2, 'a change a script made is not a pick');
+  assert.equal(fcs(got).length, 2, 'a change with no files is not a pick');
   await context.close();
 });
 

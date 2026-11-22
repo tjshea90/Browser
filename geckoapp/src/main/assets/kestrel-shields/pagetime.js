@@ -23,7 +23,7 @@
 
     // ---- PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE receives when a file input changes. The app already knows what Android handed over (`filepick picked`); the step it cannot see is
     // what the page gets from the engine: the File's type and size, its first bytes, whether the picture decodes, whether a canvas can draw it and re-encode it (what sites do before an upload). Up to 3 files, at most
-    // 4 times a page, only for a trusted change of an <input type=file> in this top page. Numbers and a few fixed words only: never a file name, a path or a pixel. One message { k: 'fc', n, a: [ { t, kb, mg, dec, w, h, px, enc, ek, ms } ] }
+    // 4 times a page, only for a change of an <input type=file> that has files, in this top page. Numbers and a few fixed words only: never a file name, a path or a pixel. One message { k: 'fc', n, a: [ { t, kb, mg, dec, w, h, px, enc, ek, ms } ] }
     // dec: 0 not tried, 1 decoded, 2 failed, 3 timed out; px: 0 not tried, 1 drawn (non-blank), 2 all transparent, 3 one flat colour, 4 canvas refused; enc: 0 not tried, 1 re-encoded, 2 empty result, 4 refused.
     var FCN = 0, fcLast = 0;
     function magic(u8) {
@@ -78,7 +78,7 @@
     }
     function fileChanged(ev) {
       try {
-        if (FCN >= 4 || !ev || ev.isTrusted !== true) return;
+        if (FCN >= 4 || !ev) return;                                            // (a pick, a drop or a paste: every way a page gets files ends in a change of the input; at most 4 tests per page keeps a script from making work)
         var t = ev.target;
         if (!t || String(t.tagName).toUpperCase() !== 'INPUT' || String(t.type).toLowerCase() !== 'file') return;
         var fl = t.files, now = perf.now();

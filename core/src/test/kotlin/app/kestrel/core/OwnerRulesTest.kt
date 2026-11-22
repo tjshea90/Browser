@@ -815,7 +815,7 @@ class OwnerRulesTest {
         val st = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("Settings has a row that opens Android's page for this app, only where the permission is declared", st.contains("Flavor.hasFilePermission) button(\"Photos and files permission\"") && st.contains("ACTION_APPLICATION_DETAILS_SETTINGS"))
         val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
-        assertTrue("the attach probe runs from the top page script, trusted changes of a file input only, at most 4 per page and 3 files", pt.contains("ev.isTrusted !== true") && pt.contains("FCN >= 4") && pt.contains("Math.min(fl.length, 3)") && pt.contains("k: 'fc'"))
+        assertTrue("the attach probe runs from the top page script, changes of a file input that has files only, at most 4 per page and 3 files", pt.contains("t.type).toLowerCase() !== 'file'") && pt.contains("FCN >= 4") && pt.contains("Math.min(fl.length, 3)") && pt.contains("k: 'fc'"))
         assertTrue("it never sends a name or a path", !pt.contains("f.name") && !pt.contains("webkitRelativePath") && !pt.contains("getAsFile"))
         val bg = source("geckoapp/src/main/assets/kestrel-shields/background.js")
         assertTrue("the background page checks it and only the top frame of a tab may send it", bg.contains("if (m.k === 'fc')") && bg.contains("sender.frameId !== 0") && bg.contains("fcMg[fcE.mg] === 1"))
