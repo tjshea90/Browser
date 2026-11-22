@@ -706,6 +706,15 @@ class OwnerRulesTest {
         assertTrue("the engine's graphics prefs are logged once after the start", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("fun logDrawPrefs()") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("GeckoEngine.logDrawPrefs()"))
     }
 
+    /** PERF9 (owner 2026-11-22: "I pressed play again and it did the loading animation for about 1 second then stopped and it never played"): a tap that hits no control of a held script player asks Kestrel's player first, and the calm mark is labelled as a play button. */
+    @Test fun perf9ATapOnAHeldScriptPlayersPictureAsksFirstAndTheCalmMarkIsAPlayButton() {
+        val gate = source("geckoapp/src/main/assets/kestrel-shields/gate-main.js")
+        assertTrue("a tap on a held script player (a MediaSource or no source, not a loop, not on a control) asks the app first", gate.contains("else if (hand && !el.controls && el.paused && !el.loop && (rec(el).hasSrc || !(el.currentSrc || el.src)) && !interactive(target, el)) {") && gate.contains("function interactive(t, el)"))
+        val calm = source("geckoapp/src/main/assets/kestrel-shields/calm.js")
+        assertTrue("the mark says Play video and is a button, and what the page had is put back", calm.contains("t.setAttribute('aria-label', 'Play video'); t.setAttribute('role', 'button');") && calm.contains("if (c.label === null) c.el.removeAttribute('aria-label')"))
+        assertTrue("the new gate test has its own file (handover.test.js is near the 60 s limit)", java.io.File("../web-tests/handover2.test.js").exists() || java.io.File("web-tests/handover2.test.js").exists())
+    }
+
     /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
     @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
         assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
