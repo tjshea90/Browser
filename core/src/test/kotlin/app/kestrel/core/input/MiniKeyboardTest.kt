@@ -10,6 +10,15 @@ import org.junit.Test
 class MiniKeyboardTest {
     private fun typed(m: MiniKeyboardModel, s: String) { for (c in s) m.press(Key.Ch(c.toString())) }
 
+    @Test fun afterOneSpecialCharacterTheMiniKeyboardGoesBackToTheLettersAndDigitsStay() {      // M5, like Gboard
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.ToSymbols); assertTrue(m.symbols); m.press(Key.Ch("?")); assertFalse("back on the letters at once", m.symbols)
+        m.press(Key.ToSymbols); m.press(Key.Ch("5")); assertTrue("a digit keeps the page", m.symbols); m.press(Key.Ch("7")); assertTrue(m.symbols)
+        m.press(Key.Backspace); assertTrue("Backspace changes nothing", m.symbols)
+        m.press(Key.Ch(".")); assertFalse(m.symbols)
+        m.press(Key.ToSymbols); m.press(Key.Ch(" ")); assertFalse("a space also ends the symbols page", m.symbols)
+    }
+
     @Test fun theFirstKeyReplacesTheSelectedAddress() {
         val m = MiniKeyboardModel(); m.open("https://doraby.com/")
         assertTrue(m.allSelected)
@@ -323,7 +332,7 @@ class MiniKeyboardTest {
 
     @Test fun restartingTheTextForAPageFieldStartsEmptyAndKeepsTheKeyboardPage() {
         val m = MiniKeyboardModel(); m.open("")
-        m.press(Key.ToSymbols); typed(m, "abc"); m.commitGlide("word")
+        m.press(Key.ToSymbols); typed(m, "abc"); m.commitGlide("word"); m.press(Key.ToSymbols)      // (typing a letter leaves the symbols page since M5: back on it for the restart)
         m.restartText()
         assertEquals("", m.text); assertEquals(0, m.cursor); assertFalse(m.glideActive); assertTrue("the symbols page stays", m.symbols)
         typed(m, "x"); assertEquals("x", m.text); assertEquals(1, m.cursor)

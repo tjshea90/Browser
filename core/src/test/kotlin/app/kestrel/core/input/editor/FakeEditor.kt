@@ -25,10 +25,16 @@ class FakeEditor(text: String = "", sel: Int = text.length, val multiline: Boole
     fun beforeText(n: Int): String = sb.substring(maxOf(0, minOf(selS, selE) - n), minOf(selS, selE))
     fun afterText(n: Int): String = sb.substring(maxOf(selS, selE), minOf(sb.length, maxOf(selS, selE) + n))
 
+    /**
+     * When set, a report is delivered AT ONCE, INSIDE the call that caused it, instead of being queued in [updates]: what Android 10 and older do for an editor in the keyboard's own process (the calls run inline).
+     * (Like InputMethodManager, a report is sent only when the selection or the composing region changed.)
+     */
+    var inlineSink: ((IntArray) -> Unit)? = null
+
     private fun emit() {
         if (batch > 0) return
         val now = intArrayOf(selS, selE, compS, compE)
-        if (!now.contentEquals(last)) { updates.addLast(now); last = now }
+        if (!now.contentEquals(last)) { last = now; val sink = inlineSink; if (sink != null) sink(now) else updates.addLast(now) }
     }
     private fun lo() = minOf(selS, selE)
     private fun hi() = maxOf(selS, selE)

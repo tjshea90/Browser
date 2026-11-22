@@ -1,0 +1,50 @@
+{
+ "build": {
+  "app": "Kestrel G (Firefox engine)",
+  "versionName": "0.3.0-alpha64",
+  "versionCode": 165,
+  "commit": "4ba903fc",
+  "run": "44077888907"
+ },
+ "suite": "daily",
+ "profile": "tablet",
+ "net": "full",
+ "date": "2026-11-17",
+ "metrics": {
+  "page_paint_p50_ms": 360.0,
+  "page_paint_p90_ms": 909.0,
+  "page_done_p50_ms": 1266.0,
+  "page_done_p90_ms": 4880.599999999999,
+  "pages_loaded": 57,
+  "lab_pages_loaded": 13,
+  "scroll_gap50_per_1000_frames": 36.67136812411848,
+  "scroll_gap100_per_1000_frames": 10.719322990126939,
+  "scroll_worst_gap_ms": 1650,
+  "ui_stall_count": 0,
+  "ui_worst_ms": null,
+  "ui_late_beats": 2,
+  "ui_late_worst_ms": 1100,
+  "cold_start_am_total_ms": 1629,
+  "cold_start_engine_ready_s": 2.1,
+  "typing_21_chars_s": 0.21,
+  "film_tap_to_picture_s": 0.6,
+  "tab_switch_s": null,
+  "resume_s": 0.33,
+  "memory_max_pss_mb": 303,
+  "memory_min_avail_mb": 484,
+  "memory_after_trim_pss_mb": 291,
+  "security_pass": 17,
+  "security_fail": 0,
+  "security_info": 13,
+  "issues_high": 0,
+  "issues_medium": 0,
+  "issues_low": 1,
+  "bench_total_ms": 230
+ },
+ "findings": [
+  "speed/ui-late-beat",
+  "console/noisy",
+  "memory/trim-gives-little",
+  "low/video/wikimedia-commons: the app never saw playback start after a tap"
+ ]
+}
