@@ -67,7 +67,7 @@ test('LD4: one report per load: phases, paints, request counts by kind and the s
 
 test('LD4: the requests are counted past the 250-entry buffer of the browser (claude.ai makes over a thousand)', async () => {
   const { page, got, context } = await open(async (u, r) => { if (u.pathname.startsWith('/q/')) { await r.fulfill({ contentType: 'text/plain', body: 'x' }); return true; } return false; },
-    { grace: 600 }, { body: '<script>for (var i = 0; i < 600; i++) fetch("/q/" + i);</script>' });
+    { grace: 4000 }, { body: '<script>for (var i = 0; i < 600; i++) fetch("/q/" + i);</script>' });   // (the report waits this long after the load event: the 600 fetches are still in flight then, and on a busy machine 600 ms was not enough: 450 counted, seen 2026-11-22)
   await page.goto('https://site.example/');
   await until(() => reports(got).length >= 1, 'the report', 12000);
   assert.ok(reports(got)[0].rn >= 590, 'counted ' + reports(got)[0].rn);
