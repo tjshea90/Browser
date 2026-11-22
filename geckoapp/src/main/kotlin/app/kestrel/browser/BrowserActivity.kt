@@ -2197,7 +2197,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.post {
             val tab = tabForPage(page) ?: return@post
             if (tab.isPrivateTab) return@post
-            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"}")
+            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"} resp=${m.optInt("ra", -1)}ms respworst=${m.optInt("rm")}ms resp150=${m.optInt("ro")}")
         }
     }
 

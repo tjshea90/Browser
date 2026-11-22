@@ -14,7 +14,8 @@ class CosmeticFixesTest {
     @Test fun onlyTheNamedSelectorsOfTheNamedSiteAreDropped() {
         assertTrue(CosmeticFixes.drops("www.pornhub.com", "div.container$sep" + "margin-top:0px !important"))
         assertTrue(CosmeticFixes.drops("pornhub.com", ".video-wrapper > #player ~ .hd.clear"))
-        assertFalse("another rule of the same site stays", CosmeticFixes.drops("www.pornhub.com", ".mgp_overlayContainer"))
+        assertFalse("another rule of the same site stays", CosmeticFixes.drops("www.pornhub.com", ".sideAds"))
+        assertTrue(CosmeticFixes.drops("www.pornhub.com", ".watchpageAd"))
         assertFalse("the same selector on another site stays", CosmeticFixes.drops("news.example", "div.container$sep" + "margin-top:0px !important"))
         assertFalse("a look-alike host is not the site", CosmeticFixes.drops("notpornhub.com", "div.container"))
         val rules = listOf(".a", "div.container$sep" + "margin-top:0px !important", ".b")
@@ -29,7 +30,8 @@ class CosmeticFixesTest {
         val css = fs!!.cosmeticCss("www.pornhub.com", includeGeneric = false)
         assertFalse(css, css.contains("div.container{margin-top"))
         assertFalse(css, css.contains(".video-wrapper > #player ~ .hd.clear"))
-        assertTrue("the ad rules of the site are still there: $css", css.contains(".sideAds{display:none!important}") && css.contains(".watchpageAd{display:none!important}") && css.contains("trafficjunky"))
+        for (gone in listOf(".watchpageAd{", ".mgp_overlayContainer{", ".middleAdContainer{", ".noBottom{", ".ad-tabSplit{", ".clear.hd:has(.adsbytrafficjunky)")) assertFalse("$gone is dropped: $css", css.contains(gone))
+        assertTrue("the other ad rules of the site are still there: $css", css.contains(".sideAds{display:none!important}") && css.contains("trafficjunky") && css.contains("#globalCookieBanner{display:none!important}"))
         val other = fs.cosmeticCss("www.example.org", includeGeneric = false)
         assertFalse("nothing of pornhub's leaks onto another host", other.contains(".sideAds"))
     }

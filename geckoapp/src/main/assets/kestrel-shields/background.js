@@ -261,7 +261,7 @@ onMsg(function (m, sender) {
   if (!m || m.k !== 'typ' || !sender || !sender.tab) return undefined;
   var c = function (x, hi) { x = +x; return x >= 0 && x <= hi ? Math.floor(x) : 0; };
   if (!vhAllow('t|' + sender.tab.id + '|' + (tabTop.get(sender.tab.id) || ''), 6)) return undefined;
-  send({ k: 'typ', p: tabTop.get(sender.tab.id) || '', n: c(m.n, 99999), a: c(m.a, 60000), m: c(m.m, 60000), o: c(m.o, 99999), f: m.f === 1 ? 1 : 0 }).catch(function () {});
+  send({ k: 'typ', p: tabTop.get(sender.tab.id) || '', n: c(m.n, 99999), a: c(m.a, 60000), m: c(m.m, 60000), o: c(m.o, 99999), f: m.f === 1 ? 1 : 0, ra: (+m.ra === -1 ? -1 : c(m.ra, 60000)), rm: c(m.rm, 60000), ro: c(m.ro, 99999) }).catch(function () {});
   return undefined;
 });
 // GL1: content.js says which of the site's element-hiding rules matched elements on the page ([selector, count, hides 1|0], at most 8): kept in the page log as short words and sent with the page report

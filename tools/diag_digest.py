@@ -473,6 +473,15 @@ def typing_analysis(batches):
         worst = max(r.get('worst', 0) for r in rows)
         slow = sum(r.get(over, 0) for r in rows)
         return name, keys, avg, worst, slow
+    # the page's own response (key to the page's next frame): the typing the person feels
+    resp = [(r.get('keys', 0), r.get('resp', -1), r.get('respworst', 0), r.get('resp150', 0)) for r in page if r.get('resp', -1) >= 0]
+    if resp:
+        k = sum(x[0] for x in resp)
+        ravg = sum(x[0] * x[1] for x in resp) // max(1, k)
+        rworst = max(x[2] for x in resp)
+        slow = sum(x[3] for x in resp)
+        print('  %-40s %4d keys, mean %d ms, worst %d ms, %d waited 150 ms or more -> %s' % ('page RESPONSE (key to the next frame)', k, ravg, rworst, slow,
+              'fine' if (ravg < 60 and slow * 5 < max(1, k)) else 'SLOW: the page (its scripts) is what makes typing laggy, not the keyboard or the app'))
     for name, rows, over, limit in (('address bar / Home field (the app)', addr, 'over100', 100), ('page fields (the page and the engine)', page, 'over150', 150)):
         r = line(name, rows, over)
         if not r:
