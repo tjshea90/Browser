@@ -694,4 +694,50 @@ class OwnerRulesTest {
         assertTrue("the release workflow runs that gate right after the release build", source(".github/workflows/android.yml").contains("bash tools/check-profile-coverage.sh"))
         assertTrue("Diagnostics says what Android compiled for this install (line `start oat`: the sizes of odex / vdex / art), so the owner can send proof from the tablet", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"start\", \"oat\", oatSizes())"))
     }
+    /** CR1 (owner: "The app crashed when i went to youtube ... i'm just concerned that it crashed in the first place. Investigate."): Android 10 gives no exit reason, so how the last run ended is kept on disk. */
+    @Test fun cr1TheLastRunNoteIsWiredIntoTheRealStartAndEnd() {
+        assertTrue("the UI process starts the note before anything else can end it", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoApp.kt").contains("diag.LastRun.begin(this)"))
+        assertTrue("every Health line the note wants goes through the one filter", source("app/src/main/kotlin/app/kestrel/browser/diag/Health.kt").contains("if (LastRun.wants(layer, event)) LastRun.note(layer, event, line)"))
+        assertTrue("an end on purpose is written before the process is killed", source("app/src/main/kotlin/app/kestrel/browser/ProcessLife.kt").contains("LastRun.markExit()"))
+        assertTrue("Diagnostics carries the lines", source("app/src/main/kotlin/app/kestrel/browser/diag/Health.kt").contains("LastRun.reportLines(ctx)"))
+        val lr = source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt")
+        assertTrue("only notable events are kept: no touch, frame or scroll line", lr.contains("\"life\" -> true") && lr.contains("event == \"trim\"") && !lr.contains("\"touch\""))
+        assertTrue("no timer of its own (the tablet's rules: no background work)", !lr.contains("Timer(") && !lr.contains("scheduleAtFixedRate") && !lr.contains("AlarmManager"))
+        val pt = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("page lines come from PageTimes, which is told whether the tab is private (and then keeps nothing)", pt.contains("PageTimes.start(tab, url, tab.isPrivateTab)"))
+    }
+    /** DM1 (owner: "the download manager pops up on browser restart or other times, the download manager shouldn't pop up by itself unless there is a new download"). */
+    @Test fun dm1TheDownloadsPanelOnlyComesUpForANewDownloadOrARealTap() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the open-Downloads flag of a notification is read through the one rule, never straight from the intent", !act.contains("getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true") && act.contains("openDownloadsAsked(intent, savedInstanceState != null)") && act.contains("openDownloadsAsked(intent, false)"))
+        assertTrue("the flag is taken out of the intent once read (it stays on the task and Android plays it again after a restart)", act.contains("i.removeExtra(Notifier.EXTRA_OPEN_DOWNLOADS)") && act.contains("FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY"))
+        val pop = source("app/src/main/kotlin/app/kestrel/browser/ui/DownloadPopup.kt")
+        assertTrue("the small window waits until the last run's rows are read before it decides what is old news", pop.contains("if (!DownloadController.restored) return") && pop.contains("if (!tracker.began) tracker.begin("))
+        assertTrue("its memory is the process's, not the window's", pop.contains("DownloadController.mini") && !pop.contains("MiniTracker()"))
+        val ctl = source("app/src/main/kotlin/app/kestrel/browser/download/DownloadController.kt")
+        assertTrue("restored turns true after the interrupted downloads were carried on", ctl.indexOf("e.resumeInterrupted()") in 0 until ctl.indexOf("restored = true"))
+        assertTrue("only the person's Resume / Retry / Restart can bring an old row into the window", ctl.contains("fun resume(ctx: Context, id: Long) { mini.requested(id)") && ctl.contains("fun restart(ctx: Context, id: Long) { mini.requested(id)"))
+    }
+    /** QL1 (owner: "When i put YouTube video in full screen, it doesn't let me choose the video quality. I want to be able to choose the video quality on as many sites and videos as possible"). */
+    @Test fun ql1TheFullScreenQualityButtonComesFromThePagesOwnPlayerToo() {
+        val man = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        assertTrue("the page-world hook runs at document start in the MAIN world next to the codec policy, the adapters before player.js", man.contains("\"codec-main.js\",\n        \"quality-main.js\"") && man.contains("\"turn.js\",\n        \"quality.js\",\n        \"player.js\""))
+        val pj = source("geckoapp/src/main/assets/kestrel-shields/player.js")
+        assertTrue("the report carries the list, the pick and the family; the app's command ql reaches the adapter", pj.contains("m.q = qi.q") && pj.contains("m.qc = qi.c") && pj.contains("case 'ql':") && pj.contains("s.qa.set(c.q)"))
+        val q = source("geckoapp/src/main/assets/kestrel-shields/quality.js")
+        assertTrue("the families the owner's sites need: YouTube first, then the player libraries and <source> lists", listOf("ytAdapter", "jwAdapter", "vjsAdapter", "hlsAdapter", "dashAdapter", "shakaAdapter", "srcAdapter").all { q.contains(it) } && q.indexOf("ytAdapter, jwAdapter") > 0)
+        assertTrue("the page's text is cut short before it leaves the page", q.contains("MAXLABEL = 22") && q.contains("MAXID = 24"))
+        val pc = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
+        assertTrue("the list is cleaned by the core rules and a pick can only name a row of the held list", pc.contains("PageLevels.clean(raw)") && pc.contains("PageLevels.valid(id, pageLevels)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the Quality button shows for the page's own list as well as for a known playlist, and the page's list is opened first", act.contains("player.hasPageLevels() || fullscreenTab?.let { video.pageFilm(it) } != null") && act.contains("if (player.hasPageLevels()) { openPageLevels(); return }"))
+    }
+    /** FD1 (owner: "make the download manager float and be resizeable and moved around the screen just like the keyboard"). */
+    @Test fun fd1TheDownloadWindowFloatsAndIsRememberedLikeTheKeyboardPanel() {
+        val pop = source("app/src/main/kotlin/app/kestrel/browser/ui/DownloadPopup.kt")
+        assertTrue("the window is moved by the finger, picked up by a long press and resized from a corner through the shared geometry rules", pop.contains("FloatBox.moved(") && pop.contains("FloatBox.resizedFromBottomLeft(") && pop.contains("PICK_MS") && pop.contains("fun resetGeometry()"))
+        assertTrue("where it was left is kept in the preferences and read back", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("prefs.dlGeom") && source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("\"dl_geom\""))
+        assertTrue("Settings can put it back", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Reset the downloads window"))
+        assertTrue("the frame it floats in lets every touch through where the window is not", pop.contains("val view = FrameLayout(ctx)") && !pop.contains("view.isClickable"))
+    }
 }

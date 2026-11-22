@@ -5,6 +5,7 @@ AL1 / AL5 additions: /watch2 (port 8000) has Server 1 / Server 2 / Server 3 butt
 (so its list differs from server 1's), server 3 first loads a short "ad" video and 4 s later the real stream in the SAME document (an ad before the real video must NOT count as a server switch);
 /plain is a page with no video at all (a page change must empty the list)."""
 import http.server, os, struct, subprocess, sys, threading, time, zlib, binascii
+from urllib.parse import parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GEN = os.environ.get("VIDLAB_GEN") or os.path.join(HERE, "gen")  # the .ts files made by vidlab_gen.sh
@@ -35,6 +36,11 @@ def build():
         FILES["/hls/abc/v%s.txt" % q] = ("text/plain", pl.encode())
     FILES["/hls/abc/playlist.txt"] = ("text/plain", master.encode())
     FILES["/hls/abc/key"] = ("application/octet-stream", KEY)
+    # VS2: the same three parts under another prefix whose playlist CLAIMS 60 s a part (3 minutes): a stream with film evidence (read, 2 minutes or more), which the capture rule keeps
+    for i in range(3): FILES["/hls/long/v360_%d.jpg" % i] = FILES["/hls/abc/v360_%d.jpg" % i]
+    FILES["/hls/long/key"] = FILES["/hls/abc/key"]
+    FILES["/hls/long/v360.txt"] = ("text/plain", FILES["/hls/abc/v360.txt"][1].replace(b"#EXTINF:4.000000", b"#EXTINF:60.000000").replace(b"TARGETDURATION:4", b"TARGETDURATION:60"))
+    FILES["/hls/long/playlist.txt"] = ("text/plain", ("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.42c01e,mp4a.40.2\"\nv360.txt\n").encode())
     # server 2: the same parts under another prefix, but its master lists only the 240p quality
     for i in range(3): FILES["/hls/def/v240_%d.jpg" % i] = FILES["/hls/abc/v240_%d.jpg" % i]
     FILES["/hls/def/v240.txt"] = FILES["/hls/abc/v240.txt"]
@@ -45,6 +51,14 @@ def build():
     if not os.path.exists(ad):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(GEN, "v240_0.ts"), "-c", "copy", "-movflags", "+faststart", ad], check=True)
     FILES["/ads/ad.mp4"] = ("video/mp4", open(ad, "rb").read())
+    # VS1d: a fragmented MP4 for the MSE embed (/embed/mse): the player makes a MediaSource, waits for `sourceopen`, appends this file and plays (like the custom players of embed sites)
+    mse = os.path.join(GEN, "mse.mp4")
+    try:
+        if not os.path.exists(mse):
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(GEN, "v360_0.ts"), "-c", "copy", "-bsf:a", "aac_adtstoasc", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", mse], check=True)
+        FILES["/mse/film.mp4"] = ("video/mp4", open(mse, "rb").read())
+    except Exception as e:
+        print("no MSE film:", e, flush=True)
 
 PAGE_A = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie page</title>
 <body style="background:#111;color:#eee;font:16px sans-serif"><h1>Lab movie</h1><p>The player below comes from another site.</p>
@@ -127,6 +141,95 @@ v.addEventListener('error', info); v.addEventListener('loadeddata', info);
 v.addEventListener('play', function () { var st = document.getElementById('st'); st.textContent = 'PLAYING after ' + presses + ' real press(es)'; st.style.color = '#6f6'; });
 </script></body>"""
 
+# VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, the stream is not found): more of the ways a real embed behaves, all reading the SAME Referer-gated stream (base /hls/abc/).
+#   /watch3?v=auto|click|nest|worker  (port 8000) a movie page with ONE iframe to the player page /embed/<v> (port 8003):
+#   auto   = PAGE_B (the playlist is fetched 0.8 s after the load)           click  = nothing is fetched until a tap on the player's big button (a click-to-play embed)
+#   nest   = the player page holds ANOTHER iframe that is the real player (a chain of frames, like vidsrc -> cloudnestra -> player)
+#   worker = the player's script does its fetches inside a Worker made from a blob (a player that keeps its network code off the main thread)
+PLAYER_JS = b"""
+  var base = 'http://10.0.2.2:8004/hls/abc/', out = document.getElementById('s');
+  function get(u, bin) { return fetch(base + u).then(function (r) { if (!r.ok) throw new Error(u + ' ' + r.status); return bin ? r.arrayBuffer() : r.text(); }); }
+  function stream() {
+    get('playlist.txt').then(function (m) {
+      var v = m.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+      return get(v[0]).then(function (t) {
+        var segs = t.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+        return get('key', true).then(function () { return get(segs[0], true); }).then(function () { return get(segs[1], true); }).then(function () { out.textContent = 'player loaded: ' + segs.length + ' parts'; });
+      });
+    }).catch(function (e) { out.textContent = 'player error: ' + e; });
+  }
+"""
+WORKER_JS = ("self.onmessage=function(e){var base=e.data;function get(u,bin){return fetch(base+u).then(function(r){if(!r.ok)throw new Error(u+' '+r.status);return bin?r.arrayBuffer():r.text();});}"
+             "get('playlist.txt').then(function(m){var v=m.split('\\n').filter(function(l){return l&&l[0]!=='#';});return get(v[0]).then(function(t){var s=t.split('\\n').filter(function(l){return l&&l[0]!=='#';});"
+             "return get('key',true).then(function(){return get(s[0],true);}).then(function(){return get(s[1],true);}).then(function(){postMessage('worker loaded '+s.length);});});}).catch(function(x){postMessage('worker error '+x);});};")
+def player_mode(mode):
+    head = b"""<!doctype html><meta charset=utf-8><title>player %s</title><body style="margin:0;background:#222;color:#9f9;font:14px monospace"><div id=s>starting</div>""" % mode.encode()
+    if mode == "click":
+        return head + b"""<button id=big style="display:block;width:100%%;height:260px;font-size:34px;background:#136;color:#fff;border:0">Play</button><script>(function () {%s
+  document.getElementById('big').onclick = function () { out.textContent = 'starting'; stream(); this.style.display = 'none'; };
+})();</script>""" % PLAYER_JS
+    if mode == "worker":
+        return head + b"""<video controls muted playsinline style="width:100%%;height:120px;background:#000"></video><script>(function () {
+  var out = document.getElementById('s'), code = %s;
+  setTimeout(function () { try { var w = new Worker(URL.createObjectURL(new Blob([code]))); w.onmessage = function (e) { out.textContent = e.data; }; w.postMessage('http://10.0.2.2:8004/hls/abc/'); } catch (e) { out.textContent = 'no worker: ' + e; } }, 800);
+})();</script>""" % repr(WORKER_JS).encode()
+    if mode == "nest":
+        return head + b"""<iframe src="%s/embed/movie?id=7" style="width:100%%;height:240px;border:0"></iframe>""" % PLAYER.encode()
+    return head + b"""<video controls muted playsinline style="width:100%%;height:120px;background:#000"></video><script>(function () {%s  setTimeout(stream, 800);
+})();</script>""" % PLAYER_JS
+
+# VS1d (owner message 2026-11-18: "Even the vidfast server on doraby.Com can't find the video. it just stays stuck on loading"): doraby's way. The movie page has a big Play / server button; ITS tap sets the iframe's
+# address (servers.min.js: jQuery("#iframe").attr("src", ...)); the embed is another site whose player builds a MediaSource, waits for `sourceopen`, appends the film and plays by itself. The embed tells the lab
+# how far it got through requests to /state (the lab log): sourceopen, playing, playrejected_<name>, stuck (14 s without a picture). A person's tap on the PARENT page is the only press there is.
+def page_mse(embed, pressed):
+    """The movie page: a big Play button whose tap sets the iframe's address (doraby's servers.min.js), or - pressed=False - an iframe that is there from the start (nobody pressed anything)."""
+    src = "about:blank" if pressed else "http://10.0.2.2:8003/embed/%s?id=7" % embed
+    js = ("document.getElementById('play').onclick = function () { document.getElementById('iframe').src = 'http://10.0.2.2:8003/embed/%s?id=7'; };" % embed) if pressed else ""
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (mse)</title>
+<body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (mse)</h3>
+<button id=play class="play-btn server" style="display:block;width:100%%;height:120px;font-size:30px;background:#136;color:#fff;border:0">Play</button>
+<iframe id=iframe src="%s" style="display:block;width:100%%;height:230px;border:0"></iframe>
+<script>%s</script></body>""" % (src.encode(), js.encode()))
+
+def player_mse(delay_ms):
+    """The embed's player: builds a MediaSource after [delay_ms] (a real player loads its scripts and asks its API first: seconds on a hotspot), waits for `sourceopen`, appends a fragmented MP4 and plays.
+    It tells the lab how far it got through requests to /state: sourceopen, playing, playrejected_<name>, stuck (14 s + the delay without a picture)."""
+    return (b"""<!doctype html><meta charset=utf-8><title>player mse</title><body style="margin:0;background:#222;color:#9f9;font:14px monospace">
+<video id=v muted playsinline autoplay style="width:100%%;height:150px;background:#000"></video><div id=s>Loading...</div>
+<script>(function () {
+  var v = document.getElementById('v'), s = document.getElementById('s'), played = false;
+  function rep(x) { try { new Image().src = 'http://10.0.2.2:8000/state?s=' + x + '&t=' + Date.now(); } catch (e) {} }
+  v.addEventListener('playing', function () { played = true; s.textContent = 'playing'; rep('playing'); });
+  function start() {
+    var ms = new MediaSource(); v.src = URL.createObjectURL(ms);
+    ms.addEventListener('sourceopen', function () {
+      rep('sourceopen');
+      var sb = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
+      fetch('http://10.0.2.2:8004/mse/film.mp4').then(function (r) { return r.arrayBuffer(); }).then(function (b) {
+        sb.addEventListener('updateend', function () { try { ms.endOfStream(); } catch (e) {} var p = v.play(); if (p && p.catch) p.catch(function (e) { rep('playrejected_' + e.name); }); }, { once: true });
+        sb.appendBuffer(b);
+      }).catch(function (e) { rep('fetcherror'); });
+    });
+  }
+  setTimeout(start, %d);
+  setTimeout(function () { if (!played) { s.textContent = 'stuck loading'; rep('stuck'); } }, %d);
+})();</script>""" % (delay_ms, delay_ms + 14000))
+
+
+# VS2 (owner 2026-11-18: "it would show a video file can be downloaded in the list, then it would disappear after a few seconds ... capture the video source when it is found"): the movie page has a Switch
+# server button that sends the player's frame to ANOTHER document after the finder has found the stream. Capture means the row is still in the list afterwards.
+def page_keep():
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (keep)</title>
+<body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (keep)</h3>
+<button id=sw style="display:block;width:100%%;height:120px;font-size:30px;background:#613;color:#fff;border:0">Switch server</button>
+<iframe id=iframe src="%s/embed/autolong?id=7" style="display:block;width:100%%;height:300px;border:0"></iframe>
+<script>document.getElementById('sw').onclick = function () { document.getElementById('iframe').src = '%s/embed/blank?id=7'; };</script></body>""" % (PLAYER.encode(), PLAYER.encode()))
+
+def page_watch3(mode):
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie %s</title>
+<body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (%s)</h3>
+<iframe src="%s/embed/%s?id=7" style="display:block;width:100%%;height:300px;border:0;border-top:1px solid #444"></iframe></body>""" % (mode.encode(), mode.encode(), PLAYER.encode(), mode.encode()))
+
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     def log_message(self, fmt, *a): pass
@@ -143,6 +246,15 @@ class H(http.server.BaseHTTPRequestHandler):
         if port == 8000 and path == "/watch": return self.send(200, "text/html; charset=utf-8", PAGE_A)
         if port == 8003 and path == "/embed/movie": return self.send(200, "text/html; charset=utf-8", PAGE_B)
         if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
+        if port == 8000 and path == "/watch3" and "v=mse" in self.path:
+            v = (parse_qs(self.path.partition("?")[2]).get("v") or ["mse"])[0]          # mse, msel (the embed waits 7 s), msel0 (slow embed, already in the page: nobody pressed)
+            return self.send(200, "text/html; charset=utf-8", page_mse("msel" if v.startswith("msel") else "mse", pressed=(v != "msel0")))
+        if port == 8003 and path in ("/embed/mse", "/embed/msel"): return self.send(200, "text/html; charset=utf-8", player_mse(7000 if path.endswith("msel") else 0))
+        if port == 8000 and path == "/watch3" and "v=keep" in self.path: return self.send(200, "text/html; charset=utf-8", page_keep())
+        if port == 8003 and path == "/embed/autolong": return self.send(200, "text/html; charset=utf-8", player_mode("auto").replace(b"/hls/abc/", b"/hls/long/"))
+        if port == 8003 and path == "/embed/blank": return self.send(200, "text/html; charset=utf-8", b"<!doctype html><title>another server</title><body style='background:#222;color:#9f9'>another server: nothing playing yet")
+        if port == 8000 and path == "/watch3": return self.send(200, "text/html; charset=utf-8", page_watch3((parse_qs(self.path.partition("?")[2]).get("v") or ["auto"])[0]))
+        if port == 8003 and path in ("/embed/auto", "/embed/click", "/embed/nest", "/embed/worker"): return self.send(200, "text/html; charset=utf-8", player_mode(path.rsplit("/", 1)[1]))
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
         if port == 8000 and path == "/fakeplay": return self.send(200, "text/html; charset=utf-8", PAGE_FAKE)
         if port == 8000 and path == "/clip.mp4": return self.send(200, "video/mp4", FILES["/ads/ad.mp4"][1])

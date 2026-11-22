@@ -18,6 +18,8 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.graphics.Rect
+import android.graphics.Bitmap
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.Interpolator
@@ -25,11 +27,13 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import app.kestrel.browser.R
 import app.kestrel.core.input.Key
+import app.kestrel.core.ui.TabTrayModel
 import app.kestrel.core.input.KeyBox
 import app.kestrel.core.input.KeyResult
 import app.kestrel.core.input.KeySpec
 import app.kestrel.core.input.MiniKeyboardGeometry
 import app.kestrel.core.input.MiniKeyboardLayout
+import app.kestrel.core.input.BackspaceRepeat
 import app.kestrel.core.input.MiniKeyboardModel
 import app.kestrel.core.input.TextEdit
 import app.kestrel.core.input.glide.GlideKeys
@@ -39,6 +43,9 @@ import app.kestrel.core.input.glide.LearnedExport
 import app.kestrel.core.input.glide.PersonalModel
 import app.kestrel.core.input.glide.UserWords
 import java.util.concurrent.Executors
+
+/** MT1: one open tab as the panel's tray shows it. [thumb] is the tab grid's preview of THIS tab's page (TP1), or null. */
+class NavTab(val id: Long, val title: String, val host: String, val thumb: Bitmap?, val current: Boolean, val isPrivate: Boolean)
 
 /**
  * The one-hand mini navigation panel (AR2, owner message 32: "My tablet screen is big, and I sometimes browse with one hand only at the top of the tablet. Make a small quick menu at the top right corner of the screen
@@ -101,6 +108,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
          * false puts it away. Returns true when it did; false (the default) = Swoop is not the chosen keyboard, or the person switched this off in Settings: the panel's own keys are used.
          */
         fun navSwoop(open: Boolean): Boolean = false
+        /** MT1: the open tabs the tray lists (the kind of the tab in front: regular with regular, private with private), in the tab grid's order. */
+        fun navTabs(): List<NavTab> = emptyList()
+        /** MT1: the person tapped this tab in the tray. */
+        fun navSwitchTab(id: Long) {}
+        /** MT1: the person tapped the x of this tab in the tray. */
+        fun navCloseTab(id: Long) {}
+        /** MT1: the person tapped "New tab": open one (a tab of the kind in front) and bring it to the front. */
+        fun navNewTab() {}
     }
 
     private val model = MiniKeyboardModel()
@@ -108,6 +123,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private val back = NavButton(ctx, R.drawable.ic_back, "Back") { l.navBack() }
     private val home = NavButton(ctx, R.drawable.ic_home, "Home") { l.navHome() }
     private val forward = NavButton(ctx, R.drawable.ic_forward, "Forward") { l.navForward() }
+    private val tabsBtn = NavButton(ctx, R.drawable.ic_tabs, "Open tabs") { toggleTray() }       // MT1
+    private val trayModel = TabTrayModel(rowH = TRAY_ROW_DP.toFloat(), maxRows = TRAY_ROWS, footerH = TRAY_ROW_DP.toFloat(), closeW = TRAY_CLOSE_DP.toFloat())
+    private val tray = TrayView(ctx)
+    private var trayTabs: List<NavTab> = emptyList()
+    /** MT1: the tab tray is open between the buttons and the address bar. */
+    var trayOpen = false; private set
     private val bar = BarView(ctx)
     private val keys = KeysView(ctx)
     private val closeTarget = CloseTarget(ctx)   // the large X at the bottom while the panel is carried (owner message 41)
@@ -171,8 +192,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val edge = ctx.dp(PANEL_PAD_DP) + ctx.dp(BAND_DP) // the frame inside the outline plus the transparent band around it (where the grip and the corner marks are)
         panel.setPadding(edge, edge, edge, edge)
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
-        for (b in listOf(back, home, forward)) row.addView(b, LinearLayout.LayoutParams(ctx.dp(NAV_W_DP), ctx.dp(NAV_H_DP)))
+        for (b in listOf(back, home, forward, tabsBtn)) row.addView(b, LinearLayout.LayoutParams(ctx.dp(NAV_W_DP), ctx.dp(NAV_H_DP)))
         panel.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        panel.addView(tray, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(TRAY_ROW_DP)).apply { topMargin = ctx.dp(4) })
+        tray.visibility = GONE
         panel.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(BAR_H_DP)).apply { topMargin = ctx.dp(4) })
         panel.addView(keys, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(KEYS_H_DP)).apply { topMargin = ctx.dp(4) })
         keys.visibility = GONE
@@ -181,6 +204,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         closeTarget.visibility = GONE
         addView(closeTarget, LayoutParams(ctx.dp(CLOSE_SIZE_DP), ctx.dp(CLOSE_SIZE_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ctx.dp(CLOSE_BOTTOM_DP) }) // above the panel in the stack; it never takes a touch
         keys.onKey = { key -> typed(key) }
+        keys.onDeleteWord = { deleteWordHeld() }
         keys.onCursor = { n -> cursorSlid(n) }
         applyColors()
     }
@@ -204,6 +228,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     /** The Back key / gesture: closes the keyboard first. True when it did something. */
     fun onBackPressed(): Boolean {
         swoopUp = false                       // Android's Back closes the system keyboard before the app sees it: nothing is left to close here
+        if (trayOpen) { closeTray(); return true }       // MT1
         if (!keyboardShowing) return false
         closeKeyboard()
         return true
@@ -253,6 +278,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             if (animate) slide(if (wasVisible) panel.translationY else hidden, 0f, DecelerateInterpolator(2f)) {} else panel.translationY = 0f
         } else {
             if (keyboardShowing || swoopUp) closeKeyboard()
+            if (trayOpen) closeTray()
             val hidden = -(panelTopPx() + panel.height.coerceAtLeast(panel.measuredHeight)).toFloat()
             if (animate) slide(panel.translationY, hidden, AccelerateInterpolator(1.4f)) { panel.visibility = GONE; panel.translationY = 0f }
             else { panel.visibility = GONE; panel.translationY = 0f }
@@ -265,11 +291,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     fun openKeyboard() {
         if (!isOpen || keyboardShowing || swoopUp) return
+        if (trayOpen) closeTray()                       // MT1: the tray and the keys take the same place
         if (l.navSwoop(true)) { swoopUp = true; swoopOpenings++; barMode(); return }       // Swoop is the chosen keyboard: it floats over the page, the typing goes through Android's own path (and into Swoop's one memory)
         val f = l.navPageField()              // a text field of the page has focus: the keys go there, from an empty text (the address is not selected)
         pageField = f; fieldIdentity = f?.identity ?: 0; learnedText = null
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label } else addressOpenings++
         model.open(if (f != null) "" else address)
+        model.smartText = f != null && !f.password            // R22: sentence capitals, a lone I, no spaces inside quotes and the automatic space after punctuation are for text fields of pages, never the address bar
         keyboardShowing = true
         keys.visibility = VISIBLE
         applyGeometry()
@@ -302,6 +330,52 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private fun barMode() {
         bar.contentDescription = if (swoopUp) "Typing with the Swoop keyboard. Tap to put it away." else if (!keyboardShowing) "Address. Tap to type a new one." else if (pageField != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
         bar.invalidate()
+    }
+
+    // ------------------------------------------------------------------ the tab tray (MT1)
+
+    /** The Tabs button: open the tray, or put it away. */
+    fun toggleTray() { if (trayOpen) closeTray() else openTray() }
+
+    fun openTray() {
+        if (!isOpen || trayOpen) return
+        if (keyboardShowing || swoopUp) closeKeyboard()
+        trayTabs = l.navTabs()
+        trayModel.setCount(trayTabs.size)
+        trayModel.ensureVisible(trayTabs.indexOfFirst { it.current })
+        trayOpen = true
+        tray.visibility = VISIBLE; tray.layoutParams.height = context.dp(trayModel.height.toInt())
+        tabsBtn.active = true; tabsBtn.badge = trayTabs.size.toString()
+        applyGeometry(); tray.invalidate()
+        app.kestrel.browser.diag.Health.log("panel", "tray-open", "rows=${trayTabs.size}")
+    }
+
+    fun closeTray() {
+        if (!trayOpen) return
+        trayOpen = false
+        tray.visibility = GONE
+        tabsBtn.active = false
+        applyGeometry()
+    }
+
+    /** Lab (debug builds): the tray's actions without a finger: "switch" / "close" on row [n], or "new". @return false when the tray is not open or the row does not exist. */
+    fun labTrayAct(kind: String, n: Int): Boolean {
+        if (!trayOpen) return false
+        val hit = when (kind) { "switch" -> TabTrayModel.Hit.Row(n); "close" -> TabTrayModel.Hit.Close(n); "new" -> TabTrayModel.Hit.New; else -> return false }
+        if (hit !is TabTrayModel.Hit.New && (n < 0 || n >= trayTabs.size)) return false
+        tray.actForLab(hit); return true
+    }
+
+    /** The host tells the panel that the tab list, a title or a preview changed: the badge and, when the tray is open, its rows follow (nothing is done while the panel is away). */
+    fun tabsChanged() {
+        if (!isOpen || panel.visibility != VISIBLE) return
+        val list = l.navTabs()
+        if (tabsBtn.badge != list.size.toString()) tabsBtn.badge = list.size.toString()
+        if (!trayOpen) return
+        val before = trayModel.height
+        trayTabs = list; trayModel.setCount(list.size)
+        if (trayModel.height != before) { tray.layoutParams.height = context.dp(trayModel.height.toInt()); applyGeometry() }
+        tray.invalidate()
     }
 
     // ------------------------------------------------------------------ glide typing (AT1)
@@ -355,7 +429,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
         l.navGlideWordsChanged(own.serialize())
         val h = l.navGlideHabit(); val ph = parsed.habit
-        if (ph != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(ph)
+        if (ph != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(if (parsed.touch != null && parsed.touch!!.size == app.kestrel.core.input.glide.TouchField.SIZE) ph + parsed.touch!! else ph)   // R20d: the touch plane of the file comes along
         done(parsed.summary)
     }
 
@@ -441,7 +515,55 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pendingWord = best.text; pendingWeight = 1f; pendingGuessed = null
         topGuess = best.text
         pendingPrev = lastGlidePrev; pendingPrev2 = lastGlidePrev2
-        keys.showCandidates(cands.map { it.text })
+        showGlideStrip(cands.map { it.text })
+        bar.invalidate()
+    }
+
+    // ------------------------------------------------------------------ the strip after a glide: [other guess] [predicted next word] [other guess] (R20b, ported by R22)
+    private var glideBest = ""
+    private var glideAlts: List<String> = emptyList()
+    private var glideNext: List<String> = emptyList()
+    private var glideNextWaiting = false
+    private var glideSeq = 0
+    /** The next words the strip shows: a tap on exactly one of them means "this word comes next", not a replacement of the glided word. */
+    private var glideNextShown: Set<String> = emptySet()
+
+    /** In the text field of a page the middle box predicts the next word after the glided one (the address bar and the passwords keep the plain list of guesses). */
+    private fun showGlideStrip(words: List<String>) {
+        glideNextShown = emptySet()
+        val g = glide
+        val f = pageField
+        if (g == null || f == null || f.password || words.isEmpty()) { keys.showCandidates(words); return }
+        glideBest = words[0]; glideAlts = words.drop(1).take(2); glideNext = emptyList(); glideNextWaiting = true
+        renderGlideStrip()
+        val (p2, p1) = model.previousTwo()
+        val my = ++glideSeq
+        g.suggest("", p1, p2, 4) { res -> post { if (my == glideSeq && keyboardShowing && model.glideActive) { glideNext = res.words; glideNextWaiting = false; renderGlideStrip() } } }
+    }
+
+    private fun renderGlideStrip() {
+        val taken = (listOf(glideBest) + glideAlts).map { it.lowercase() }
+        val next = glideNext.filter { it.lowercase() !in taken }
+        if (next.isEmpty() && !glideNextWaiting) { glideNextShown = emptySet(); keys.showCandidates(listOf(glideBest) + glideAlts); return }          // no prediction: the plain guesses
+        val fill = next.drop(1).iterator()
+        val left = glideAlts.getOrNull(0) ?: (if (fill.hasNext()) fill.next() else "")
+        val right = glideAlts.getOrNull(1) ?: (if (fill.hasNext()) fill.next() else "")
+        val mid = next.firstOrNull() ?: ""
+        glideNextShown = next.take(3).toSet()
+        keys.showCandidates(listOf(left, mid, right), accent = 1)                      // the middle box carries the accent outline: it is the one that adds a word
+    }
+
+    /** The middle box was tapped: the glided word stays (and is learned), the predicted word goes in after it with its space, and counts double like any word taken from the strip. */
+    private fun pickNextAfterGlide(word: String) {
+        confirmGlide()
+        syncField()
+        glideSeq++; glideNextShown = emptySet()
+        val (p2, p1) = model.previousTwo()
+        val before = model.text
+        if (!model.insertWord(word)) return
+        pageField?.let { sendEdit(it, before) }
+        glide?.let { g -> if (learnAllowed()) g.learn(p1, word.lowercase(), 2f, p2) }
+        keys.clearCandidates()
         bar.invalidate()
     }
 
@@ -449,6 +571,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private fun pickCandidate(word: String) {
         val g = glide
         syncField()
+        if (word in glideNextShown && model.glideActive) { pickNextAfterGlide(word); return }
         val before = model.text
         if (!model.swapGlide(word)) return
         pageField?.let { sendEdit(it, before) }
@@ -457,7 +580,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
-        keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
+        glideNextShown = emptySet(); glideSeq++
+        keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word && it.isNotEmpty() } }.take(3))
         bar.invalidate()
     }
 
@@ -478,7 +602,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     val isResized: Boolean get() = Math.abs(gW - PANEL_KEYS_W_DP) > 0.5f || Math.abs(gH - KEYS_H_DP) > 0.5f
 
     private fun outlineW(): Float = if (keyboardShowing) gW else PANEL_W_DP.toFloat()
-    private fun outlineH(): Float = 12f + NAV_H_DP + 4f + BAR_H_DP + (if (keyboardShowing) 4f + gH + (if (glideOn) STRIP_H_DP else 0) else 0f)
+    private fun outlineH(): Float = 12f + NAV_H_DP + 4f + BAR_H_DP + (if (trayOpen) 4f + trayModel.height else 0f) + (if (keyboardShowing) 4f + gH + (if (glideOn) STRIP_H_DP else 0) else 0f)
     private fun maxW(): Float = Math.max(MIN_KEYS_W_DP, Math.min(MAX_KEYS_W_DP, availWdp - 4f))
     private fun maxH(): Float = Math.max(MIN_KEYS_H_DP, Math.min(MAX_KEYS_H_DP, availHdp - (12f + NAV_H_DP + 4f + BAR_H_DP + 4f + (if (glideOn) STRIP_H_DP else 0)) - 2f * BAND_DP))
     /** Where the outline is shown: what was asked for, kept inside the page area (the stored place is not changed by this: a screen that is smaller for a moment must not move the panel for good). */
@@ -578,6 +702,18 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         }
     }
 
+    /** Backspace held for a long time: one repeat takes a whole word (owner R23a). Right after a glide it is the same as one Backspace (the glided word was wrong). */
+    private fun deleteWordHeld() {
+        syncField()
+        if (model.glideActive) { typed(Key.Backspace); return }
+        confirmGlide()
+        val before = model.text
+        model.deleteWord()
+        if (model.text == before) return
+        pageField?.let { sendEdit(it, before, true) }
+        keys.clearCandidates(); bar.invalidate(); keys.invalidate()
+    }
+
     /**
      * The space key was slid sideways (AY3, owner message 39): the text cursor moves [delta] characters. In a page's text field the page's own caret moves (the arrow keys, a field the keyboard does not
      * mirror), and what was typed so far is handed to the keyboard's memory first; in the address bar the keyboard's own cursor moves.
@@ -613,6 +749,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label }
         learnedText = null
         model.open(if (f != null) "" else address)
+        model.smartText = f != null && !f.password
+        glideSeq++; glideNextShown = emptySet()
         pendingWord = null; afterUndo = false; retypeWatch = false
         keys.clearCandidates(); barMode(); keys.invalidate()
     }
@@ -747,7 +885,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         panel.background = InsetDrawable(chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = if (lifted) pal.accentHi else pal.deep, strokeDp = if (lifted) 2f else 1f, pressable = false), context.dp(BAND_DP))
         val edge = context.dp(PANEL_PAD_DP) + context.dp(BAND_DP)
         panel.setPadding(edge, edge, edge, edge) // setting a background takes the padding from the drawable (the inset): the frame and the band are set again here
-        for (v in listOf<View>(back, home, forward, bar, keys)) v.invalidate()
+        for (v in listOf<View>(back, home, forward, tabsBtn, tray, bar, keys)) v.invalidate()
     }
 
     // ------------------------------------------------------------------ for tests
@@ -803,6 +941,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal fun backDim() = back.dim
     internal fun forwardDim() = forward.dim
     internal fun homeActive() = home.active
+    /** Tests (MT1): the Tabs button, the tray and a finger on it (pixels of the tray view). */
+    internal fun pressTabsForTest() = tabsBtn.performClick()
+    internal val tabsBadgeForTest: String get() = tabsBtn.badge
+    internal val trayShownForTest: Boolean get() = tray.visibility == VISIBLE
+    internal val trayHeightForTest: Int get() = tray.layoutParams.height
+    internal fun trayTouchForTest(action: Int, xDp: Float, yDp: Float) { val t = SystemClock.uptimeMillis(); val e = MotionEvent.obtain(t, t, action, xDp * density, yDp * density, 0); tray.dispatchTouchEvent(e); e.recycle() }
+    internal fun trayTapForTest(xDp: Float, yDp: Float) { trayTouchForTest(MotionEvent.ACTION_DOWN, xDp, yDp); trayTouchForTest(MotionEvent.ACTION_UP, xDp, yDp) }
+    internal fun trayWidthDpForTest(): Float = tray.width / density
+    internal fun trayRowsForTest(): List<NavTab> = trayTabs
 
     // ================================================================== views
 
@@ -821,6 +968,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private val box = RectF()
         var dim = false; set(v) { if (field != v) { field = v; invalidate() } }
         var active = false; set(v) { if (field != v) { field = v; invalidate() } }
+        /** MT1: a small number at the top right of the icon (the Tabs button: how many tabs are open); "" = none. */
+        var badge = ""; set(v) { if (field != v) { field = v; invalidate() } }
+        private val badgeText = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 9.5f, resources.displayMetrics); typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
 
         init { contentDescription = desc; isClickable = true }
 
@@ -837,6 +987,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             d.setTint(if (lit) pal.accentHi else if (active) pal.accent else pal.fg)
             d.alpha = if (dim && !lit) 90 else 255
             d.draw(c)
+            if (badge.isNotEmpty()) {
+                val r = context.dpf(7.5f); val cx = x + s - context.dpf(1f); val cy = y + context.dpf(1f)
+                fill.color = pal.accent; c.drawCircle(cx, cy, r, fill)
+                badgeText.color = 0xFF000000.toInt()
+                c.drawText(badge, cx, cy - (badgeText.fontMetrics.ascent + badgeText.fontMetrics.descent) / 2f, badgeText)
+            }
         }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -945,6 +1101,137 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     /**
+     * MT1: the tab tray. One view draws the rows and the footer and finds what a finger touched ([TabTrayModel]); a tap on a row switches to the tab, a tap on its x closes it, the last row opens a new tab, a drag moves
+     * the list. A row is lit in the accent for a moment when pressed (a timer, like the buttons: no animators).
+     */
+    private inner class TrayView(ctx: Context) : View(ctx) {
+        private val dens = ctx.resources.displayMetrics.density
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1f) }
+        private val titleP = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics); typeface = Typeface.DEFAULT_BOLD }
+        private val hostP = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics); typeface = Typeface.DEFAULT }
+        private val picP = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val box = RectF(); private val src = Rect(); private val dst = RectF()
+        private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+        private var downHit: TabTrayModel.Hit = TabTrayModel.Hit.None
+        private var lastY = 0f; private var downY = 0f; private var dragging = false
+        private var litRow = -2                       // -1 = the footer, >= 0 = a row, -2 = none
+        private var litClose = false
+        private val unlight = Runnable { litRow = -2; litClose = false; invalidate() }
+
+        init { contentDescription = "Open tabs"; isClickable = true }
+
+        private fun widthDp() = width / dens
+
+        override fun onDraw(c: Canvas) {
+            val w = width.toFloat(); val listH = trayModel.listH * dens
+            val pad = context.dpf(2f); val r = context.dpf(6f)
+            c.save(); c.clipRect(0f, 0f, w, listH)
+            for (i in trayTabs.indices) {
+                val top = trayModel.rowTop(i) * dens
+                if (top + trayModel.rowH * dens < 0f || top > listH) continue
+                drawRow(c, trayTabs[i], i, top, w, pad, r)
+            }
+            c.restore()
+            // the footer: "+ New tab"
+            val ft = listH
+            box.set(0f, ft + pad, w, ft + trayModel.footerH * dens - pad)
+            fill.color = if (litRow == -1) (pal.accent and 0x00FFFFFF) or 0x66000000 else 0xFF0A1218.toInt()
+            line.color = if (litRow == -1) pal.accent else pal.deep
+            c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
+            titleP.color = pal.accent
+            val label = "+  New tab"
+            c.drawText(label, (w - titleP.measureText(label)) / 2f, box.centerY() - (titleP.fontMetrics.ascent + titleP.fontMetrics.descent) / 2f, titleP)
+        }
+
+        private fun drawRow(c: Canvas, t: NavTab, i: Int, top: Float, w: Float, pad: Float, r: Float) {
+            val h = trayModel.rowH * dens
+            box.set(0f, top + pad, w, top + h - pad)
+            val lit = litRow == i
+            fill.color = if (lit) (pal.accent and 0x00FFFFFF) or 0x66000000 else if (t.current) (pal.accent and 0x00FFFFFF) or 0x22000000 else 0xFF0A1218.toInt()
+            line.color = if (lit || t.current) pal.accent else pal.deep
+            line.strokeWidth = context.dpf(if (t.current) 1.6f else 1f)
+            c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
+            // the preview (or a letter chip), 34 x 26 dp at the left
+            val pw = context.dpf(34f); val ph = context.dpf(26f); val px = box.left + context.dpf(5f); val py = box.centerY() - ph / 2f
+            dst.set(px, py, px + pw, py + ph)
+            val bmp = t.thumb
+            if (bmp != null && !bmp.isRecycled && bmp.width > 0 && bmp.height > 0) {
+                val aspect = pw / ph
+                val bw = bmp.width; val bh = bmp.height
+                if (bw.toFloat() / bh > aspect) { val cw = (bh * aspect).toInt().coerceAtLeast(1); src.set((bw - cw) / 2, 0, (bw - cw) / 2 + cw, bh) } else { val chh = (bw / aspect).toInt().coerceAtLeast(1); src.set(0, 0, bw, chh.coerceAtMost(bh)) }
+                c.drawBitmap(bmp, src, dst, picP)
+                line.color = pal.deep; line.strokeWidth = context.dpf(1f); c.drawRect(dst, line)
+            } else {
+                fill.color = 0xFF16303A.toInt(); c.drawRoundRect(dst, context.dpf(4f), context.dpf(4f), fill)
+                val ch = (t.host.ifEmpty { t.title }.firstOrNull { it.isLetterOrDigit() } ?: '+').uppercaseChar().toString()
+                titleP.color = pal.accent
+                c.drawText(ch, dst.centerX() - titleP.measureText(ch) / 2f, dst.centerY() - (titleP.fontMetrics.ascent + titleP.fontMetrics.descent) / 2f, titleP)
+            }
+            // title and host
+            val tx = px + pw + context.dpf(7f); val closeW = trayModel.closeW * dens
+            val room = (w - closeW - tx).coerceAtLeast(1f)
+            val title = t.title.ifBlank { t.host.ifBlank { "New tab" } }
+            titleP.color = pal.fg
+            val showHost = t.host.isNotEmpty() && !title.equals(t.host, true)
+            val ty = if (showHost) box.centerY() - context.dpf(2.5f) else box.centerY() - (titleP.fontMetrics.ascent + titleP.fontMetrics.descent) / 2f
+            c.drawText(TextUtils.ellipsize(title, titleP, room, TextUtils.TruncateAt.END).toString(), tx, ty, titleP)
+            if (showHost) { hostP.color = pal.muted; c.drawText(TextUtils.ellipsize(t.host, hostP, room, TextUtils.TruncateAt.END).toString(), tx, box.centerY() + context.dpf(11f), hostP) }
+            // the x at the right edge
+            val cx = w - closeW / 2f; val cy = box.centerY(); val a = context.dpf(5f)
+            line.strokeWidth = context.dpf(1.8f); line.strokeCap = Paint.Cap.ROUND
+            line.color = if (lit && litClose) pal.accentHi else pal.muted
+            c.drawLine(cx - a, cy - a, cx + a, cy + a, line); c.drawLine(cx - a, cy + a, cx + a, cy - a, line)
+            line.strokeCap = Paint.Cap.BUTT
+        }
+
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downY = e.y; lastY = e.y; dragging = false
+                    downHit = trayModel.hit(e.x / dens, e.y / dens, widthDp())
+                    removeCallbacks(unlight)
+                    litRow = when (val h = downHit) { is TabTrayModel.Hit.Row -> h.index; is TabTrayModel.Hit.Close -> h.index; TabTrayModel.Hit.New -> -1; else -> -2 }
+                    litClose = downHit is TabTrayModel.Hit.Close
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    invalidate()
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragging && Math.abs(e.y - downY) > slop) { dragging = true; litRow = -2; litClose = false }
+                    if (dragging) { if (trayModel.scrollBy((e.y - lastY) / dens)) invalidate() }
+                    lastY = e.y
+                }
+                MotionEvent.ACTION_UP -> {
+                    val h = downHit
+                    postDelayed(unlight, FLASH_MS)
+                    if (!dragging) act(h)
+                    invalidate()
+                }
+                MotionEvent.ACTION_CANCEL -> { litRow = -2; litClose = false; invalidate() }
+            }
+            return true
+        }
+
+        fun actForLab(h: TabTrayModel.Hit) = act(h)
+
+        private fun act(h: TabTrayModel.Hit) {
+            when (h) {
+                is TabTrayModel.Hit.Row -> trayTabs.getOrNull(h.index)?.let { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navSwitchTab(it.id); app.kestrel.browser.diag.Health.log("panel", "tray-switch", "row=${h.index}"); closeTray() }
+                is TabTrayModel.Hit.Close -> trayTabs.getOrNull(h.index)?.let { t ->
+                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    l.navCloseTab(t.id); app.kestrel.browser.diag.Health.log("panel", "tray-close", "row=${h.index}")
+                    trayTabs = trayTabs.filter { it.id != t.id }                      // the row goes at once; the host's next tabsChanged() brings the true list
+                    val before = trayModel.height
+                    trayModel.setCount(trayTabs.size); tabsBtn.badge = trayTabs.size.toString()
+                    if (trayModel.height != before) { tray.layoutParams.height = context.dp(trayModel.height.toInt()); applyGeometry() }
+                }
+                TabTrayModel.Hit.New -> { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navNewTab(); app.kestrel.browser.diag.Health.log("panel", "tray-new", ""); closeTray(); openKeyboard() }
+                TabTrayModel.Hit.None -> {}
+            }
+        }
+    }
+
+    /**
      * The panel (AV1, owner message 36: "resizeable by dragging corners ... able to detach and I can move it around the screen"; AY4, owner message 39: "make the navigation panel a floating panel which I can
      * move around easily by long pressing it and dragging it around"). Its OUTLINE is what the person sees; around it is a transparent band that belongs to the page, except for two things drawn and grabbed there:
      * the GRIP (a short bar in the middle of the top edge: drag it and the panel follows the finger, tap it and the panel closes) and, while the keyboard is open, the four CORNERS (drag one to change the keyboard's
@@ -989,7 +1276,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         }
 
         /** The point is on the keys (and the strip of guesses above them): those keep every touch, long ones too. */
-        private fun onKeys(x: Float, y: Float): Boolean = keys.visibility == View.VISIBLE && x >= keys.left && x < keys.right && y >= keys.top && y < keys.bottom
+        private fun onKeys(x: Float, y: Float): Boolean = (keys.visibility == View.VISIBLE && x >= keys.left && x < keys.right && y >= keys.top && y < keys.bottom) ||
+            (tray.visibility == View.VISIBLE && x >= tray.left && x < tray.right && y >= tray.top && y < tray.bottom)   // MT1: the tab list owns its touches (taps, the x, dragging the list), a long press there does not pick the panel up
 
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
             if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -1155,6 +1443,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
      */
     private inner class KeysView(ctx: Context) : View(ctx) {
         var onKey: ((Key) -> Unit)? = null
+        /** Backspace has been held long enough that every repeat takes a whole word (owner R23a). */
+        var onDeleteWord: (() -> Unit)? = null
         /** The space key was slid over (AY3, owner message 39): the text cursor moves this many characters (negative = left). */
         var onCursor: ((Int) -> Unit)? = null
         private var spaceDown = false       // the finger went down on the space key
@@ -1175,7 +1465,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var down: KeySpec? = null
         private var litKey: KeySpec? = null
         private val unlight = Runnable { litKey = null; invalidate() }
-        private val repeat = object : Runnable { override fun run() { down?.key?.let { onKey?.invoke(it) }; handler.postDelayed(this, REPEAT_MS) } }
+        /** When Backspace went down: how long it has been held decides how fast it repeats and when it starts to take whole words (BackspaceRepeat, owner R23a). */
+        private var repeatStartAt = 0L
+        private val repeat = object : Runnable {
+            override fun run() {
+                val held = SystemClock.uptimeMillis() - repeatStartAt
+                val k = down?.key
+                if (k != null) { if (k === Key.Backspace && BackspaceRepeat.wordMode(held)) onDeleteWord?.invoke() else onKey?.invoke(k) }
+                handler.postDelayed(this, BackspaceRepeat.delayAfter(held))
+            }
+        }
 
         // ---- glide
         private var armed = false                 // the finger went down on a letter: it may turn into a glide
@@ -1186,6 +1485,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var gx = FloatArray(256); private var gy = FloatArray(256); private var gn = 0
         private var fadeStart = 0L
         private var cands: List<String> = emptyList()
+        private var accentIdx = 0
         private var noWordUntil = 0L
         private var stripDown = -1
         private var bubbleKey: KeySpec? = null; private var bubbleText = ""   // the key under the finger, shown large above it (a thumb covers the key itself)
@@ -1293,7 +1593,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         // ------------------------------------------------------------------ the strip of guesses
 
-        fun showCandidates(list: List<String>) { cands = list; noWordUntil = 0L; invalidate() }
+        /** [accent] is the box with the accent outline (the first by default; the middle one after a glide, where it is the predicted next word). An empty string is a box that is not filled: nothing is drawn there and it takes no touch. */
+        fun showCandidates(list: List<String>, accent: Int = 0) { cands = list; accentIdx = accent; noWordUntil = 0L; invalidate() }
         fun clearCandidates() { if (cands.isNotEmpty() || noWordUntil != 0L) { cands = emptyList(); noWordUntil = 0L; invalidate() } }
         fun showNoWord() { cands = emptyList(); noWordUntil = SystemClock.uptimeMillis() + NO_WORD_MS; handler.removeCallbacks(noWordOff); handler.postDelayed(noWordOff, NO_WORD_MS); invalidate() }
         fun candidateTexts(): List<String> = cands
@@ -1310,7 +1611,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private fun chipAt(x: Float, y: Float): Int {
             if (y >= stripPx() || cands.isEmpty()) return -1
             val gap = context.dpf(3f)
-            for ((i, r) in chipBoxes().withIndex()) if (x >= r.left - gap / 2 && x < r.right + gap / 2) return i
+            for ((i, r) in chipBoxes().withIndex()) if (cands[i].isNotEmpty() && x >= r.left - gap / 2 && x < r.right + gap / 2) return i
             return -1
         }
 
@@ -1333,13 +1634,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val r = context.dpf(6f)
             val boxes = chipBoxes()
             for ((i, w) in list.withIndex()) {
+                if (w.isEmpty()) continue
                 val rect = boxes[i]; val cw = rect.width()
                 fill.color = if (i == stripDown) (pal.accent and 0x00FFFFFF) or 0xAA000000.toInt() else 0xFF0E171E.toInt()
                 c.drawRoundRect(rect, r, r, fill)
-                line.strokeWidth = context.dpf(if (i == 0) 1.2f else 1f); line.color = if (i == 0) pal.accent else pal.deep
+                line.strokeWidth = context.dpf(if (i == accentIdx) 1.2f else 1f); line.color = if (i == accentIdx) pal.accent else pal.deep
                 box.set(rect); box.inset(context.dpf(0.6f), context.dpf(0.6f))
                 c.drawRoundRect(box, r, r, line)
-                text.color = if (i == stripDown) pal.accentHi else if (i == 0) pal.accentHi else pal.fg
+                text.color = if (i == stripDown) pal.accentHi else if (i == accentIdx) pal.accentHi else pal.fg
                 c.drawText(TextUtils.ellipsize(w, text, cw - context.dpf(8f), TextUtils.TruncateAt.END).toString(), rect.centerX(), rect.centerY() - (fm.ascent + fm.descent) / 2f, text)
             }
         }
@@ -1485,7 +1787,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     spaceDown = (down?.key as? Key.Ch)?.text == " "; sliding = false; slideStartX = e.x; slideAnchorX = e.x
                     clearHold(); if (isBubbleKey(down)) { bubbleKey = down; bubbleText = down!!.label }
                     if (down != null) { haptic(); if (altOf(down) != null) handler.postDelayed(hold, HOLD_MS) }
-                    if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
+                    if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); repeatStartAt = SystemClock.uptimeMillis(); handler.postDelayed(repeat, BackspaceRepeat.FIRST_MS) }
                     if (glideUsable() && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -1582,9 +1884,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val SLIDE_STEP_DP = 11f
         /** How long a pressed button, key or bar stays lit. */
         const val FLASH_MS = 130L
-        private const val REPEAT_FIRST_MS = 380L
-        private const val REPEAT_MS = 70L
-        const val PANEL_W_DP = 176
+        const val PANEL_W_DP = 208
         const val PANEL_KEYS_W_DP = 304
         /** The frame inside the outline, and the transparent band around the outline that carries the grip and the corner marks. */
         const val PANEL_PAD_DP = 6
@@ -1610,8 +1910,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private const val ZONE_CORNER0 = 3
         internal const val ZONE_GRIP_FOR_TEST = 2
         internal const val ZONE_CORNER_FOR_TEST = 3
-        const val NAV_W_DP = 52
+        const val NAV_W_DP = 48
         const val NAV_H_DP = 42
+        /** MT1: one row of the tab tray (and its footer), how many rows show before the list scrolls, and the width of the x at a row's right edge. */
+        const val TRAY_ROW_DP = 40
+        const val TRAY_ROWS = 5
+        const val TRAY_CLOSE_DP = 40
         const val BAR_H_DP = 34
         const val KEYS_H_DP = 161
         /** The strip of guesses above the keys (glide typing on). */

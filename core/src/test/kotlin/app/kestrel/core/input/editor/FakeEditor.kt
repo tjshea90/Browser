@@ -78,8 +78,10 @@ class FakeEditor(text: String = "", sel: Int = text.length, val multiline: Boole
         emit(); return true
     }
     /** TextUtils.getCapsMode, simplified: characters = always; words = at the start or after whitespace; sentences = at the start, after a newline, or after . ? ! and a space. */
+    /** An app whose text field answers "no capitals needed" whatever the text is (some web views and custom editors do): the keyboard must not depend on the answer alone (owner R19a). */
+    var capsModeBroken = false
     override fun cursorCapsMode(reqModes: Int): Int {
-        if (!alive()) return 0
+        if (!alive() || capsModeBroken) return 0
         val b = beforeText(64)
         var mode = 0
         if (reqModes and CapFlags.CHARACTERS != 0) mode = mode or CapFlags.CHARACTERS

@@ -65,6 +65,34 @@ class GlideSessionTest {
         assertEquals(1, e.ui.noWord); assertEquals("", e.rig.text)
     }
 
+    @Test fun aGlideThatFitsNothingStillTypesTheClosestWord() {       // R19d: the keyboard never says "no word fits": a wrong word is better than none, and the strip offers the others
+        val e = Env(); val p = sim.path("zebra", SimNoise.CALM)!!
+        e.s.glideLifted(); e.s.beforeKey(Key.Ch("~glide"))
+        var res: GlideResult? = null; e.engine.decode(p.xs, p.ys, p.xs.size, null, null) { res = it }
+        assertTrue("an answer from the tiny list although none of its words is 'zebra'", res!!.candidates.isNotEmpty())
+        e.s.onDecoded(res!!, null, null)
+        assertEquals("no notice", 0, e.ui.noWord); assertTrue("a word went in: '${e.rig.text}'", e.rig.text.trim().isNotEmpty() && e.rig.text.endsWith(" "))
+        assertTrue("and the strip has it", e.ui.words.isNotEmpty())
+        e.key(Key.Backspace); assertEquals("Backspace takes it back whole, as for any glide", "", e.rig.text)
+    }
+
+    @Test fun anEngineThatIsNotReadyYetSaysSoInsteadOfNoWordFits() {
+        val e = Env(); val shown = ArrayList<String>()
+        e.s.ui = object : GlideSession.Ui { override fun showCandidates(words: List<String>) {}; override fun clearCandidates() {}; override fun showNoWord() { shown.add("noWord") }; override fun showNotReady() { shown.add("notReady") } }
+        e.s.onDecoded(GlideResult(emptyList(), 0, ready = false), null, null); e.s.onDecoded(GlideResult(emptyList(), 0), null, null)
+        assertEquals(listOf("notReady", "noWord"), shown); assertEquals("", e.rig.text)
+    }
+
+    @Test fun aGlideThatFitsNothingTeachesItsShapeToTheWordTypedRightAfter() {       // R18d: an empty answer (an engine that could not read the glide) arms the same learning as a deleted glide: a word typed by hand once, and then its glide is known
+        val e = Env(); val p = sim.path("zebra", SimNoise.CALM)!!
+        e.s.glideLifted(); e.s.beforeKey(Key.Ch("~glide"))
+        var res: GlideResult? = null; e.engine.decode(p.xs, p.ys, p.xs.size, null, null) { res = it }       // (the engine remembers the shape of this glide)
+        res = GlideResult(emptyList(), 1)
+        e.s.onDecoded(res!!, null, null); assertEquals(1, e.ui.noWord)
+        e.type("zebra"); e.key(Key.Ch(" "))
+        assertTrue("the shape of the failed glide is remembered for the typed word: ${e.learned()}", e.learned().lines().any { it.startsWith("s zebra ") })
+    }
+
     @Test fun aKeptGlideTeachesTheEngineTheWordAndMovesTheThumbHabit() {
         val e = Env(); e.glide("hello"); assertTrue("nothing is learned until the glide is kept", e.learned().isEmpty())
         e.key(Key.Ch(" "))                                       // typing on: the word stays
