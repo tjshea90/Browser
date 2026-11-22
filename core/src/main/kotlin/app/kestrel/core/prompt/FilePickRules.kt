@@ -64,5 +64,5 @@ class FilePickStats {
     var lastPage = ""; private set        // PERF10c: what the PAGE received (core FilePickFacts.pageVerdict)
     fun pageGot(verdict: String) { lastPage = verdict.take(260) }
 
-    fun line(): String = "File chooser (attach a file on a page): asked $asked, opened $opened, no picker app $noPicker, nothing chosen $cancelled, files given to the page $gave, whole-folder asks refused $folders, failed $failed; last: $last" + (if (lastPick.isEmpty()) "" else "; the last picked file: $lastPick")
+    fun line(): String = "File chooser (attach a file on a page): asked $asked, opened $opened, no picker app $noPicker, nothing chosen $cancelled, files given to the page $gave, whole-folder asks refused $folders, failed $failed; last: $last" + (if (lastPick.isEmpty()) "" else "; the last picked file: $lastPick") + (if (lastPage.isEmpty()) "" else "; what the page received: $lastPage")
 }

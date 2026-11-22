@@ -558,7 +558,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }, typingWait = { m -> onTypingWait(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }, typingWait = { m -> onTypingWait(m) }, fileCheck = { m -> onFileCheck(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -2199,6 +2199,28 @@ open class BrowserActivity : Activity(), DockListener {
             val tab = tabForPage(page) ?: return@post
             if (tab.isPrivateTab) return@post
             Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"} resp=${m.optInt("ra", -1)}ms respworst=${m.optInt("rm")}ms resp150=${m.optInt("ro")}")
+        }
+    }
+
+    /**
+     * PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE received when a file input changed (pagetime.js, checked by background.js): ONE `filepick page-got` line (type and size of the page's File, its first bytes,
+     * whether the picture decodes, whether a canvas can draw and re-encode it) and the Diagnostics sentence. Numbers and fixed words only. Never for a private tab, never while one exists (PV1).
+     */
+    private fun onFileCheck(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
+        val arr = m.optJSONArray("a") ?: return
+        val files = ArrayList<app.kestrel.core.prompt.FilePickFacts.PageGot>()
+        for (i in 0 until minOf(arr.length(), 3)) arr.optJSONObject(i)?.let { e ->
+            files.add(app.kestrel.core.prompt.FilePickFacts.PageGot(e.optString("t"), e.optLong("kb", -1L), e.optString("mg"), e.optInt("dec"), e.optInt("w"), e.optInt("h"), e.optInt("px"), e.optInt("enc"), e.optLong("ek"), e.optLong("ms")))
+        }
+        if (files.isEmpty()) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            val host = tab.topHost ?: return@post
+            if (tab.isPrivateTab || PrivateGuard.active()) return@post
+            Health.log("filepick", "page-got", app.kestrel.core.prompt.FilePickFacts.pageLine(host, m.optInt("n", files.size), files))
+            filePicks.pageGot(app.kestrel.core.prompt.FilePickFacts.pageVerdict(files[0]))
         }
     }
 
