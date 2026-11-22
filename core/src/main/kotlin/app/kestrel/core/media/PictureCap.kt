@@ -26,6 +26,12 @@ object PictureCap {
         else -> auto(screenLongSidePx)
     }
 
+    /**
+     * RVW3 PB5: the longer side of a 16:9 picture [capH] pixels high, ROUNDED UP: 480 gives 854 (the usual 854 x 480 rung), not 853. Kestrel's own player had `capH * 16 / 9`, whose integer division gave 853, so "at most
+     * 480p" left the 854 x 480 rung out and played 360p on every ladder that uses it (and a remembered 480p pick fell to 360p). The sizes that divide exactly (360, 540, 720, 1080, ...) are unchanged.
+     */
+    fun longSide(capH: Int): Int = (capH * 16 + 8) / 9
+
     fun auto(screenLongSidePx: Int): Int {
         if (screenLongSidePx <= 0) return 0
         val v = Math.round(screenLongSidePx * AUTO_FACTOR).toInt().coerceAtLeast(AUTO_MIN)

@@ -226,4 +226,16 @@ class UpdateLogicTest {
         // and the following build keeps sorting above it (the digits stay equally long until alpha99)
         assertTrue(("kestrel-g-v0.3.0-alpha15") > ("kestrel-g-v0.3.0-alpha14"))
     }
+
+    @Test fun anAssetNameThatIsNotAPlainFileNameIsNeverOffered() {
+        // RVW3 SC6: the name of the asset is used as a file name in the app's folder
+        for (bad in listOf("../x.apk", "a/b.apk", "..\\x.apk", "dir\\x.apk", ".hidden.apk", "kestrel g.apk", "x\u0000.apk", "x\u202egpj.apk", "a:b.apk", "", ".apk" + "x".repeat(130)))
+            assertEquals("not plain: $bad", false, UpdateLogic.plainFileName(bad))
+        for (good in listOf("kestrel-g-0.3.0-alpha73.apk", "kestrel-0.1.1.apk", "Kestrel_G+1.apk", "a.apk"))
+            assertEquals("plain: $good", true, UpdateLogic.plainFileName(good))
+        val poisoned = rel("kestrel-g-v0.3.0-alpha9", 109, listOf(ReleaseAsset("../../x.apk", "https://example.invalid/x.apk", 1, null)))
+        assertNull("a release whose only APK has a path in its name is not an update", UpdateLogic.choose(listOf(poisoned), "kestrel-g-v", 100))
+        val mixed = rel("kestrel-g-v0.3.0-alpha9", 109, listOf(ReleaseAsset("../../x.apk", "https://example.invalid/x.apk", 1, null), ReleaseAsset("kestrel-g-0.3.0-alpha9.apk", "https://example.invalid/ok.apk", 92_000_000, null)))
+        assertEquals("the plain one is taken", "kestrel-g-0.3.0-alpha9.apk", UpdateLogic.choose(listOf(mixed), "kestrel-g-v", 100)!!.apkName)
+    }
 }

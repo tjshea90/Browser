@@ -120,4 +120,39 @@ class UrlPartsTest {
         assertTrue("a page on the router itself may name its own files", NetHosts.probeAllowed("192.168.1.1", "192.168.1.1"))
         assertTrue("a NAS page may name NAS files", NetHosts.probeAllowed("nas.local", "media.local"))
     }
+
+    @Test fun everySpellingOfAnAddressOnTheOwnersNetworkIsRefusedFromAPublicPage() {
+        // RVW3 SC2: the string classifier read these as public
+        val local = listOf(
+            "::ffff:192.168.1.1", "::ffff:c0a8:101", "::ffff:7f00:1", "::ffff:10.0.0.5", "[::ffff:192.168.1.1]", "::FFFF:C0A8:0101",
+            "64:ff9b::c0a8:101", "64:ff9b::10.0.0.1", "64:ff9b:1::1",
+            "::127.0.0.1", "::7f00:1", "::192.168.0.1",
+            "2002:c0a8:101::1", "2002:7f00:1::",
+            "fec0::1", "fe90::1", "febf::1", "fe80::1%wlan0", "fc00::1", "fdff::1", "ff02::1", "::", "::1", "[::1]", "0:0:0:0:0:0:0:1",
+            "127.1", "0x7f.0.0.1", "0177.0.0.1", "2130706433", "0x7f000001", "192.168.1", "192.168.257", "10.1", "172.16.5", "0xa.0.0.5", "169.254.169.254",
+            "100.64.0.1", "224.0.0.1", "255.255.255.255", "0", "0.0.0.0", "localhost.", "printer.local", "nas",
+            "not:an:ipv6", "1:2:3", "::g", "1::2::3", ":1::2", "12345::1",           // an IPv6-looking literal that does not parse: closed
+        )
+        for (h in local) {
+            assertTrue("reaches the local network: $h", NetHosts.reachesLocalNetwork(h))
+            assertFalse("refused from a public page: $h", NetHosts.probeAllowed(h, "site.example"))
+        }
+        val publicHosts = listOf(
+            "8.8.8.8", "1.1.1.1", "1.1", "11.0.0.1", "172.32.0.1", "172.15.255.255", "100.128.0.1", "100.63.255.255", "193.168.1.1", "223.255.255.255",
+            "example.com", "cdn.example.com", "123.example.com", "1e3.com", "0x.com", "0xabc.com", "a.b.co.uk", "999.1.1.1", "1.2.3.4.5.example",
+            "2001:db8::1", "2606:4700:4700::1111", "::ffff:8.8.8.8", "::ffff:808:808", "64:ff9b::808:808", "2002:808:808::1", "2a00:1450:4001::1",
+        )
+        for (h in publicHosts) {
+            assertFalse("a public host: $h", NetHosts.reachesLocalNetwork(h))
+            assertTrue("allowed from a public page: $h", NetHosts.probeAllowed(h, "site.example"))
+        }
+        assertTrue("a page on the router itself may still name a mapped spelling of its own network", NetHosts.probeAllowed("::ffff:192.168.1.1", "192.168.1.1"))
+        assertFalse("and a public page may not", NetHosts.probeAllowed("::ffff:192.168.1.1", "site.example"))
+    }
+
+    @Test fun theAddressBarAndTheHttpsPolicyKeepTheirOwnStricterReading() {
+        // RVW3 SC2: isLocal did not change meaning ("10.5" is still not an address to it)
+        for (h in listOf("10.5", "127.1", "192.168.1", "::ffff:192.168.1.1", "0x7f.0.0.1")) assertFalse("isLocal is strict: $h", NetHosts.isLocal(h))
+        for (h in listOf("10.1.2.3", "::1", "fe80::1", "localhost", "nas")) assertTrue("isLocal: $h", NetHosts.isLocal(h))
+    }
 }

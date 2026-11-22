@@ -43,6 +43,10 @@ class ExtImageTest {
         // AW1d: `$domain=site.*` - any public suffix (the page hosts of this corpus include news.site.co.uk, img.site.co.uk, user.github.io, www.ck, foo.ck, x.y.kobe.jp ...)
         "/ent-a.js\$script,domain=site.*", "/ent-b.js\$domain=github.*|other.example", "/ent-c.js\$domain=site.*|~news.site.*", "/ent-d.js\$domain=~site.*", "/ent-e.js\$domain=user.*", "/ent-f.js\$domain=example.*|~www.example.*",
         "/ent-g.js\$domain=foo.*", "/ent-h.js\$domain=y.kobe.*", "/ent-i.js\$domain=a.*|b.*",
+        // RVW3 SP1: OPTIONS-ONLY rules (empty pattern, no token): the real lists hold hundreds (`$script,domain=streamtape.com|dood.to`); the JS engine files them under their include entries and tries them only on a page that
+        // can reach them. Include lists (one and several entries), an exception, an entity entry, an include with an exclusion, an exclusion-only rule and a rule that names a suffix of the page host.
+        "\$script,domain=a.com|b.com", "\$xhr,domain=example.com", "@@\$script,domain=a.com", "\$media,domain=site.*", "\$ping,domain=~b.com", "\$image,domain=news.site.co.uk|~img.site.co.uk",
+        "\$font,third-party,domain=user.github.io|www.example.com", "\$stylesheet,domain=example.com|other.co.uk", "\$subdocument,domain=co.uk",
     )
 
     private val hosts = listOf(
