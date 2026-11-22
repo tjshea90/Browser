@@ -64,6 +64,8 @@ class ShieldsBridge(
     private val backShown: (String, Boolean, String, Long, Int) -> Unit = { _, _, _, _, _ -> },
     /** RX3-BK1: the main response of this page said Cache-Control: no-store, so no cache may keep it. Worker thread. */
     private val noStore: (String) -> Unit = {},
+    /** BK10: the extension made this page's response cacheable (`no-store` became `no-cache`), so the engine can keep it for Back (the page's address). Worker thread. */
+    private val noStoreRelaxed: (String) -> Unit = {},
     /** RX3-BK1: the page that was just left still had this many requests open (the page's address, the count). Worker thread. */
     private val leftPending: (String, Int) -> Unit = { _, _ -> },
     /** RX4-M0a: how a playing video did since the page's last look: frames shown (t), dropped (d), corrupt (c), seconds (s), picture width and height (w, h) and the page of its tab (p). Numbers only. Worker thread. */
@@ -147,7 +149,7 @@ class ShieldsBridge(
                     "vst", "vtap" -> player(m)
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
-                    "ns" -> { noStore(m.optString("p")); "" }
+                    "ns" -> { if (m.optInt("rx") == 1) noStoreRelaxed(m.optString("p")) else noStore(m.optString("p")); "" }
                     "nm" -> { nameClues(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
@@ -253,7 +255,7 @@ class ShieldsBridge(
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
         val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0) or (if (prefs().videoPressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
-        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap()
+        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap() + ":" + (if (prefs().instantBack) 1 else 0)
     }
 
     /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */

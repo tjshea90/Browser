@@ -189,4 +189,28 @@ class BackLabTest {
         lab.reset()
         assertEquals(0, lab.stats.presses); assertFalse(lab.notKept("https://a.test/")); assertNull(lab.openKey())
     }
+    // ---- BK10 (owner 2026-11-21: Back is slow and sits on a picture; caching for instant reloading): a page whose no-store was relaxed is no longer "certainly loads again"
+
+    @Test fun aPageThatForbadeCachingButWasMadeCacheableIsNotAPageThatWillCertainlyLoadAgain() {
+        val lab = BackLab {}
+        lab.noStore(B)
+        lab.left(B, loading = false)
+        assertTrue("before: the picture goes up at once", lab.notKept(B))
+        lab.noStoreRelaxed(B)                                                   // the extension changed the page's cache rule
+        lab.left(B, loading = false)
+        assertFalse("after: it can be kept, so the picture waits the usual 150 ms", lab.notKept(B))
+        assertEquals(1, lab.stats.relaxed)
+        lab.noStoreRelaxed("")                                                  // nothing named: nothing counted
+        assertEquals(1, lab.stats.relaxed)
+    }
+
+    @Test fun theBackLineSaysHowManyPagesWereMadeCacheable() {
+        val lab = BackLab {}
+        assertEquals("Back: no presses yet", lab.stats.line())
+        lab.noStoreRelaxed(B); lab.noStoreRelaxed("https://c.test/x")
+        assertEquals("Back: no presses yet (instant Back: 2 pages that forbid caching were made cacheable)", lab.stats.line())
+        press(lab); lab.pageshow(1_030L, B, persisted = true, navType = "back_forward", transferSize = 0, y = 1800); lab.finish(4_000L)
+        assertTrue(lab.stats.line(), lab.stats.line().endsWith("(instant Back: 2 pages that forbid caching were made cacheable)"))
+        lab.stats.reset(); assertEquals("Back: no presses yet", lab.stats.line())
+    }
 }

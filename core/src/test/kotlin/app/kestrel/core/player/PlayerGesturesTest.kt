@@ -308,4 +308,15 @@ class PlayerGesturesTest {
         g2.down(150f, 400f, 0L); g2.move(152f, 380f, 120L)             // a quick drag is still the page's
         assertEquals(1, h2.passed); assertEquals(0, h2.ticks)
     }
+    @Test fun aBrightnessDragWritesTheWindowOnlyWhenTheStepOfTheScreenChanges() {
+        // RVW5 PB11: 256 steps; 0.500 and 0.501 are the same step (127.5 and 127.755 round to 128), 0.5 and 0.51 are not
+        assertTrue(GestureMath.sameBrightnessStep(0.500f, 0.501f))
+        assertFalse(GestureMath.sameBrightnessStep(0.5f, 0.51f))
+        assertTrue(GestureMath.sameBrightnessStep(0.01f, 0.012f))
+        assertFalse("the ends of the range are different steps", GestureMath.sameBrightnessStep(0.01f, 1f))
+        var writes = 0; var last = -1f
+        var v = 0.40f
+        while (v < 0.60f) { if (last < 0f || !GestureMath.sameBrightnessStep(v, last)) { writes++; last = v }; v += 0.0007f }   // a slow drag: about 285 touch events
+        assertTrue("a slow drag across a fifth of the range writes about 51 steps, not 285 times (was $writes)", writes in 45..60)
+    }
 }

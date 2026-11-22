@@ -94,4 +94,23 @@ class EpisodeNamesTest {
         assertEquals("Inbox clip", EpisodeNames.cleanTitle("[12] Inbox clip", "site.example"))
         assertEquals("a year in brackets later in the title stays", "Free Guy (2021)", EpisodeNames.cleanTitle("(2) Free Guy (2021) - Watch Online | Doraby", "doraby.com"))
     }
+    // ---- RVW5: titles measured on REAL pages with tools/sitelab/realnames.js (2026-11-20); the site's own name went into the file name when its host label is short or the tail is two words
+
+    @Test fun theSiteNameIsDroppedWhenItsHostLabelIsShortOrTheTailIsTwoWords() {
+        assertEquals("Sir Ken Robinson - Do schools kill creativity", EpisodeNames.cleanTitle("Sir Ken Robinson: Do schools kill creativity? | TED Talk", "www.ted.com"))
+        assertEquals("Latest Videos", EpisodeNames.cleanTitle("Latest Videos | CNN", "www.cnn.com"))
+        assertEquals("Tiny Desk", EpisodeNames.cleanTitle("Tiny Desk : NPR", "www.npr.org"))
+        assertEquals("Vimeo Staff Picks", EpisodeNames.cleanTitle("Vimeo Staff Picks on Vimeo", "vimeo.com"))
+        assertEquals("Big Buck Bunny", EpisodeNames.cleanTitle("Big Buck Bunny - Video Dailymotion", "www.dailymotion.com"))
+        assertEquals("Big Buck Bunny 4K", EpisodeNames.cleanTitle("File:Big Buck Bunny 4K.webm - Wikimedia Commons", "commons.wikimedia.org"))
+        assertEquals("Popeye for President - Paramount Pictures", EpisodeNames.cleanTitle("Popeye for President : Paramount Pictures : Free Download, Borrow, and Streaming : Internet Archive", "archive.org"))
+    }
+
+    @Test fun aTitleThatMerelyContainsAShortSiteLabelIsLeftAlone() {
+        assertEquals("Ted Lasso - Trent Crimm", EpisodeNames.cleanTitle("Ted Lasso - Trent Crimm | Apple", "www.ted.com"))   // "Ted Lasso" is the FIRST piece (the title), never a site tail
+        assertEquals("Rick Astley - Never Gonna Give You Up", EpisodeNames.cleanTitle("Rick Astley - Never Gonna Give You Up - YouTube", "www.youtube.com"))
+        assertEquals("Artist - Cnn Parody", EpisodeNames.cleanTitle("Artist - Cnn Parody", "www.cnn.com"))                 // a short label stands only with filler words ("CNN Video"), so a real second piece stays
+        assertEquals("Live on Vimeo Street", EpisodeNames.cleanTitle("Live on Vimeo Street", "vimeo.com"))                  // " on <label>" only at the very end
+        assertEquals("Dune - Part Two (2024)", EpisodeNames.cleanTitle("Dune: Part Two (2024) | CNN", "www.cnn.com"))
+    }
 }

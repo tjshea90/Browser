@@ -35,6 +35,13 @@ class SiteFixesRulesTest {
         assertTrue(gradle.contains("function listenForRemoteSettingsUpdates() {}"))
     }
 
+    @Test fun mozillasThreeYouTubeFixesAreSwitchedOffBecauseKestrelHasNoPictureInPictureNorBackgroundPlayback() {
+        // YTC2 (owner: the player controls on YouTube pop up then disappear at once, first reported after alpha75): the fixes rewrite document.hidden / visibilitychange / outerWidth / exitFullscreen of YouTube's own page
+        assertTrue("the build points the YouTube match patterns at a host that does not exist", gradle.contains("youtube.invalid") && gradle.contains("\"www.youtube.com\", \"m.youtube.com\""))
+        assertTrue("and fails the build when the interventions move, so the exclusion cannot silently stop working", gradle.contains("swapped >= 3"))
+        assertFalse("nothing re-enables them", fixes.contains("youtube"))
+    }
+
     @Test fun theInstallStartsLateAfterTheFirstRealPageNeverOnTheColdStartPath() {
         assertTrue("the delay is at least five seconds", (Regex("""DELAY_MS = (\d[\d_]*)L""").find(fixes)!!.groupValues[1].replace("_", "").toLong()) >= 5_000L)
         assertTrue(fixes.contains("Io.main.postDelayed({ apply(app) }, DELAY_MS)"))
