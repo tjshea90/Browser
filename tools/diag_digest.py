@@ -448,6 +448,41 @@ def filepick_analysis(batches):
         print('      -> the files look fine to Android: if a site still says it cannot process them, the page, the engine\'s canvas protection (FPP) or the site is the cause (research/IMG1_UPLOAD.md)')
 
 
+def typing_analysis(batches):
+    """PERF3c: how long typed characters waited, in the address bar and Home field (`win typing-address keys avg worst over100`: text change to the next frame of the app's UI thread) and in page fields (`win typing-page keys avg worst over150`: the wait before the page saw the key)."""
+    addr, page = [], []
+    for b in batches:
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            m = re.search(r' win typing-(address|page) (.*)$', e)
+            if not m:
+                continue
+            kv = dict(re.findall(r'(\w+)=(\d+)', m.group(2)))
+            row = {k: int(v) for k, v in kv.items()}
+            (addr if m.group(1) == 'address' else page).append(row)
+    print('\n== TYPING LATENCY (how long a typed character waited; %d address-bar run(s), %d page run(s)) ==' % (len(addr), len(page)))
+    if not addr and not page:
+        print('  (no `win typing-address|typing-page` lines yet: needs alpha90 or newer and some typing)')
+        return
+    def line(name, rows, over):
+        keys = sum(r.get('keys', 0) for r in rows)
+        if not keys:
+            return None
+        avg = sum(r.get('avg', 0) * r.get('keys', 0) for r in rows) // keys
+        worst = max(r.get('worst', 0) for r in rows)
+        slow = sum(r.get(over, 0) for r in rows)
+        return name, keys, avg, worst, slow
+    for name, rows, over, limit in (('address bar / Home field (the app)', addr, 'over100', 100), ('page fields (the page and the engine)', page, 'over150', 150)):
+        r = line(name, rows, over)
+        if not r:
+            continue
+        name, keys, avg, worst, slow = r
+        verdict = 'fine' if (avg < limit // 2 and slow * 5 < keys) else ('SLOW: %d %% of the keys waited %d ms or more' % (slow * 100 // keys, limit))
+        print('  %-40s %4d keys, mean %d ms, worst %d ms -> %s' % (name, keys, avg, worst, verdict))
+    print('  Reading it: slow in the ADDRESS BAR = the app\'s own UI thread is busy (see ui slow / cpu busy); slow in PAGE fields only = the page (its scripts) or the engine\'s parent process is busy (see LOAD ANALYSIS lateness and cpu busy Gecko).')
+
+
 def brief(r, batches):
     if not batches:
         return ''
@@ -568,6 +603,7 @@ def main(argv):
     load_analysis(batches, r)
     video_analysis(batches)
     filepick_analysis(batches)
+    typing_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
         rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]

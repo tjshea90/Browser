@@ -2047,3 +2047,20 @@ test('GL1: the element-hiding rules that matched are kept as short words, checke
   h.mainFrame('https://other.example/'); await h.flushTimers();
   assert.deepEqual(h.of('rep')[h.of('rep').length - 1].h, [], 'a new page starts clean');
 });
+
+test('PERF3c: how long typed characters waited is passed on as clamped numbers, rationed per tab and page, and never from a tab-less sender', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  h.message({ k: 'typ', n: 12, a: 35, m: 410, o: 2, f: 1 }, 1);
+  h.message({ k: 'typ', n: -4, a: 'x', m: 9e9, o: 1e9, f: 7 }, 1);
+  await tick(10);
+  const t = h.of('typ');
+  assert.equal(t.length, 2);
+  assert.equal(t[0].p, PAGE); assert.equal(t[0].n, 12); assert.equal(t[0].a, 35); assert.equal(t[0].m, 410); assert.equal(t[0].o, 2); assert.equal(t[0].f, 1);
+  assert.equal(t[1].n, 0); assert.equal(t[1].a, 0); assert.equal(t[1].m, 0); assert.equal(t[1].o, 0); assert.equal(t[1].f, 0, 'a wild number is zero, a frame flag is 0 or 1');
+  for (let i = 0; i < 20; i++) h.message({ k: 'typ', n: 1, a: 1, m: 1, o: 0, f: 1 }, 1);
+  await tick(10);
+  assert.ok(h.of('typ').length <= 6, 'rationed: ' + h.of('typ').length);
+  assert.equal(h.message({ k: 'typ', n: 1, a: 1, m: 1, o: 0 }, -1), undefined);
+});
