@@ -1813,6 +1813,32 @@ test('RVW1 F8: a body over 256 KB is still passed through whole but never scanne
   assert.equal(h.filters.length, n1 + 1, 'a new page: a fresh budget');
 });
 
+test('RVW3 SC4: a hostile 256 KB answer of http:// repeated cannot hold the parent process (the finder regex is bounded and the text is cut), real addresses are still found', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.listeners.jsonHeaders(jsonReq('evil'));
+  const fl = h.filters[h.filters.length - 1];
+  const hostile = 'http://'.repeat(Math.floor(250000 / 7)) + '.mp4x';
+  const t0 = Date.now();
+  feed(fl, hostile, 65536);
+  const spent = Date.now() - t0;
+  assert.equal(fl.body().length, hostile.length, 'the page still gets every byte');
+  await tick(10);
+  assert.equal(h.of('media').length, 0, 'nothing is a media address in it');
+  // measured on a desktop: unbounded about 4 s for 256 KB (quadratic); bounded and cut: a few tens of ms. 1.5 s leaves room for a loaded CI machine and still fails the old code by a wide margin.
+  assert.ok(spent < 1500, 'the scan of a hostile body took ' + spent + ' ms');
+  // a normal player configuration is found as before, also with long query strings and when it follows a lot of text
+  const h2 = harness(standardApp());
+  h2.mainFrame(PAGE, { requestId: '1' });
+  h2.listeners.jsonHeaders(jsonReq('ok'));
+  const f2 = h2.filters[h2.filters.length - 1];
+  const url = 'https://cdn.example.com/hls/' + 'seg'.repeat(40) + '/master.m3u8?token=' + 'a'.repeat(900);
+  feed(f2, '{"pad":"' + 'x'.repeat(100000) + '","hls":"' + url + '","mp4":"http://x.example/z.mp4"}', 65536);
+  await tick(10);
+  const m = h2.of('media').map((x) => x.u).sort();
+  assert.deepEqual(m, [url, 'http://x.example/z.mp4'].sort());
+});
+
 test('RVW1 F8: a stream filter that is not available, or that fails half way, never breaks the answer', async () => {
   const none = harness(standardApp(), { noFilter: true });
   none.mainFrame(PAGE, { requestId: '1' });

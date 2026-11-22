@@ -214,3 +214,23 @@ test('F13: a FRAME that offered a video says bye when it is unloaded; a frame th
   assert.deepEqual(counts, [[0, 0], [1, 1]], 'only the frame with the video says bye');
   assert.equal(await bye(page.mainFrame()), 0, 'the top page never does');
 });
+
+// ---------------------------------------------------------------- RVW3 SC4: the finder regexes cannot go quadratic on a hostile script text
+const literal = (name) => { const m = CONTENT.match(new RegExp('var ' + name + ' = (/.*/[gimsuy]*);')); assert.ok(m, name + ' is in content.js'); return new Function('return ' + m[1])(); };
+const timeAll = (re, text) => { re.lastIndex = 0; const t0 = Date.now(); let m, n = 0; while ((m = re.exec(text)) !== null && n < 40) n++; return { ms: Date.now() - t0, n }; };
+
+test('SC4: FIND and FINDENC stay linear on 200 KB of http:// (or https%3A%2F%2F) repeated before a late .mp4x, and still find real addresses', () => {
+  const FIND = literal('FIND'), ENC = literal('FINDENC');
+  const hostile = 'http://'.repeat(Math.floor(200000 / 7)) + '.mp4x';
+  const hostileEnc = 'https%3A%2F%2F'.repeat(Math.floor(200000 / 14)) + '.mp4x';
+  const a = timeAll(FIND, hostile), b = timeAll(ENC, hostileEnc);
+  // measured on a desktop: unbounded about 3 s each (quadratic); bounded a few tens of ms. 1.2 s total tolerates a loaded machine and fails the old regex by a wide margin.
+  assert.ok(a.ms + b.ms < 1200, 'FIND took ' + a.ms + ' ms, FINDENC ' + b.ms + ' ms');
+  assert.equal(a.n + b.n, 0, 'nothing in them is an address');
+  const real = 'x = "https://cdn.example/v/vid.mp4.m3u8?t=1"; y = \'https://cdn.example/plain/film.mp4?sig=abc\'; z = "https://cfvod.kaltura.com/hls/p/1/name/a.mp4/index.m3u8"; ' + 'https://h.example/' + 'p/'.repeat(250) + 'long.mp4';
+  FIND.lastIndex = 0;
+  const found = []; let m; while ((m = FIND.exec(real)) !== null) found.push(m[0]);
+  assert.deepEqual(found, ['https://cdn.example/v/vid.mp4.m3u8?t=1', 'https://cdn.example/plain/film.mp4?sig=abc', 'https://cfvod.kaltura.com/hls/p/1/name/a.mp4/index.m3u8', 'https://h.example/' + 'p/'.repeat(250) + 'long.mp4'], 'a 500-character path is still whole');
+  ENC.lastIndex = 0;
+  assert.equal((ENC.exec('player.php?url=https%3A%2F%2Fcdn.example%2Fa.m3u8%3Ft%3D1&x=1') || [])[0], 'https%3A%2F%2Fcdn.example%2Fa.m3u8%3Ft%3D1');
+});
