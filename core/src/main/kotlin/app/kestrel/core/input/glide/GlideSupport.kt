@@ -4,7 +4,8 @@ import java.util.concurrent.Executor
 
 /** What glide typing did, counted on the tablet itself (no words are kept) so a Diagnostics paste says how accurate it was in real use (AT1g). */
 class GlideStats {
-    private var glides = 0; private var noMatch = 0; private var kept = 0; private var picked = 0; private var undone = 0
+    private var glides = 0; private var noMatch = 0; private var kept = 0; private var picked = 0; private var undone = 0; private var revised = 0
+    private var shadowDiffer = 0; private var shadowLearnedKept = 0; private var shadowPlainPicked = 0; private var planeDp = -1f
     private var ms = 0L; private var msMax = 0L
     private var pending = false
     private var loadMs = -1L; private var loadWords = 0; private var warmMs = -1L
@@ -21,6 +22,16 @@ class GlideStats {
     @Synchronized fun onKept() { if (pending) { kept++; pending = false } }
     @Synchronized fun onPicked() { if (pending) { picked++; pending = false } }
     @Synchronized fun onUndone() { if (pending) { undone++; pending = false } }
+    /** R27a: a second decode WITHOUT any personal learning (no thumb habit, no touch plane, no own words, pairs or shapes) gave another first word than the real one. */
+    @Synchronized fun onShadow(differ: Boolean) { if (differ) shadowDiffer++ }
+    /** ... and the person then kept the word learning chose (a glide they did not change). */
+    @Synchronized fun onShadowLearnedKept() { shadowLearnedKept++ }
+    /** ... and the person picked, in the strip, the word the plain decoder had given first. */
+    @Synchronized fun onShadowPlainPicked() { shadowPlainPicked++ }
+    /** How far the learned touch plane moves a touch somewhere on the keys, in dp (the largest of the four corners). */
+    @Synchronized fun onPlane(maxDp: Float) { planeDp = maxDp }
+    /** R26a: the word before was changed because the next glide showed it was probably another look-alike word. */
+    @Synchronized fun onRevised() { revised++ }
     @Synchronized fun onLoaded(millis: Long, words: Int) { loadMs = millis; loadWords = words }
     @Synchronized fun onWarm(millis: Long) { warmMs = millis }
     @Synchronized fun onHabit(xDp: Float, yDp: Float) { habitX = xDp; habitY = yDp }
@@ -56,6 +67,8 @@ class GlideStats {
             val judged = kept + picked + undone
             sb.append("$glides glides")
             if (judged > 0) sb.append(": best word kept $kept (${100 * kept / judged} %), another candidate picked $picked, deleted right away $undone")
+            if (revised > 0) sb.append(", word before fixed by the next word $revised times")
+            if (shadowDiffer > 0) sb.append("; learning changed the first guess $shadowDiffer times (you kept the learned word $shadowLearnedKept times, you picked the plain decoder's word $shadowPlainPicked times)")
             if (noMatch > 0) sb.append(", no word fitted $noMatch")
             sb.append("; decode avg ${ms / glides} ms, worst $msMax ms")
         }
@@ -64,6 +77,7 @@ class GlideStats {
         if (loadMs >= 0) sb.append("; word list $loadWords words ready after $loadMs ms")
         if (warmMs >= 0) sb.append(", first decode (warm-up) $warmMs ms")
         sb.append("; thumb habit x %.1f y %.1f dp".format(habitX, habitY))
+        if (planeDp >= 0f) sb.append(", touch plane up to %.1f dp".format(planeDp))
         if (own > 0) sb.append("; own words $own")
         if (learnedWords > 0 || learnedTop > 0) sb.append("; learned $learnedWords words and $learnedPairs word pairs from your typing, a learned word was the first guess $learnedTop times")
         if (learnedCorrections > 0 || learnedTriples > 0) sb.append("; $learnedCorrections corrections and $learnedTriples three-word phrases remembered")
@@ -144,7 +158,13 @@ class UserWords(private val cap: Int = 800) {
 
 /** The result of one glide as the keyboard gets it. */
 /** [ready] is false when the engine had no word list / key positions yet (the glide could not be decoded at all: "still starting", not "no word fits"). */
-class GlideResult(val candidates: List<GlideCandidate>, val millis: Long, val ready: Boolean = true)
+class GlideResult(
+    val candidates: List<GlideCandidate>, val millis: Long, val ready: Boolean = true,
+    /** The language weight this decode used ([GlideDecoder.lastLm]) and the 4th and 5th candidates: what the next word needs to re-judge this one (R26a). */
+    val lm: Float = 0f, val more: List<GlideCandidate> = emptyList(),
+    /** Which decode this was (for the shadow comparison, R27a). */
+    val serial: Int = 0
+)
 
 /**
  * The glide engine the keyboard talks to (AT1): it loads the word list, owns the decoder and the person's own words, and does every bit of that on [executor] (ONE thread, so nothing needs a lock
@@ -248,6 +268,14 @@ class GlideTyping(
     /** True once a glide can be decoded. */
     @Volatile var ready = false; private set
 
+    /** R27a: the same decoder with nothing learned (no habit, plane, own words, pairs or shapes): its first word is compared with the real one, after the real answer was handed out. */
+    private var plainDecoder: GlideDecoder? = null
+    private var serial = 0
+    class Shadow(val serial: Int, val plain: String?, val learned: String?)
+    @Volatile private var shadow: Shadow? = null
+    /** The comparison for decode [serial], once it has run (null while it is still running, or when learning could not matter). */
+    fun shadowFor(serial: Int): Shadow? = shadow?.takeIf { it.serial == serial }
+
     /** Load the list (once) and set the decoder up for [k] (again when the keyboard's size changed). [habit] is the saved thumb habit in pitches. */
     fun prepare(k: GlideKeys, habit: FloatArray?, own: UserWords?) {
         executor.execute {
@@ -262,8 +290,9 @@ class GlideTyping(
                 }
                 ensurePersonal()
                 keys = k
-                decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
-                previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
+                decoder = GlideDecoder(k, GlideParams.forPitchDp(k.pitchDp)).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
+                plainDecoder = GlideDecoder(k, GlideParams.forPitchDp(k.pitchDp, touchField = false))
+                previewDecoder = GlideDecoder(k, GlideParams.forPitchDp(k.pitchDp)).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
                 ensureDictionary()
                 if (own != null) { ownRef = own; setOwn(own) } else rebuildUserLexicon()
                 ready = main != null
@@ -316,14 +345,36 @@ class GlideTyping(
             if (d == null || m == null) { done(GlideResult(emptyList(), 0, ready = false)); return@execute }
             val t0 = System.nanoTime()
             val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
-            val r = try { cleaned(d.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
+            val my = ++serial
+            val five = try { cleaned(d.decode(px, py, count, lexicons, prev, 5 + EXTRA_FOR_BLOCKED, prev2), 5) } catch (e: Exception) { emptyList() }
+            val r = five.take(3)
+            val lm = d.lastLm
             val ms = (System.nanoTime() - t0) / 1_000_000
             stats.onDecoded(ms, r.isNotEmpty())
             if (r.isNotEmpty() && personal.weightOf(r[0].text) > 0f) stats.onLearnedTop()
             lastPrint = d.lastPrint
             if (d.lastPatternLifted) stats.onShape(d.lastPatternFlipped)
-            done(GlideResult(r, ms))
+            done(GlideResult(r, ms, true, lm, five.drop(3), my))
+            // R27a: AFTER the answer is out (no added delay), the same glide through a decoder that has learned nothing: how often does learning change the first word?
+            val pd = plainDecoder
+            if (pd != null && r.isNotEmpty() && (!personal.isEmpty || d.biasX != 0f || d.biasY != 0f || !d.field.isEmpty)) {
+                val plain = try { cleaned(pd.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
+                val p0 = plain.firstOrNull()?.text
+                shadow = Shadow(my, p0, r[0].text)
+                stats.onShadow(p0 != null && p0 != r[0].text)
+            }
         }
+    }
+
+    /**
+     * R26a: ln P([next] | each of [cands] as the word before it); null when the engine is not ready or [next] is unknown. Synchronous, cheap (a few table look-ups), called on the UI thread between decodes.
+     */
+    fun nextWordLnProbs(cands: List<String>, next: String, candPrev: String?): FloatArray? {
+        val d = decoder; val m = main ?: return null
+        if (d == null) return null
+        val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
+        val out = FloatArray(cands.size) { d.nextLnProb(lexicons, cands[it], next, candPrev) }
+        return if (out.any { it.isNaN() }) null else out
     }
 
     /**
@@ -573,6 +624,30 @@ class GlideTyping(
         }
     }
 
+    /** The largest move the learned touch plane makes at any corner of the letter keys, in dp (Diagnostics). */
+    private fun reportPlane(d: GlideDecoder) {
+        val k = keys ?: return
+        val o = FloatArray(2); var m = 0f
+        for (u in floatArrayOf(0f, 1f)) for (v in floatArrayOf(0f, 1f)) { d.field.at(u, v, o); m = Math.max(m, Math.hypot(o[0].toDouble(), o[1].toDouble()).toFloat()) }
+        stats.onPlane(m * k.pitchDp)
+    }
+
+    /**
+     * R27a: forget only WHERE THE THUMB LANDS (the single shift and the touch plane), keep every word, pair and correction. For a keyboard that misreads a clear glide in a systematic way: if that was learned
+     * from words it got wrong, this takes it away. [habit] stores the cleared habit; [done] is called on the engine's thread.
+     */
+    fun forgetThumb(habit: (FloatArray) -> Unit, done: () -> Unit = {}) {
+        executor.execute {
+            bx = 0f; by = 0f; habitX = 0f; habitY = 0f
+            decoder?.let { it.biasX = 0f; it.biasY = 0f; it.field.clear(); reportPlane(it) }
+            previewDecoder?.let { it.biasX = 0f; it.biasY = 0f; it.field.clear() }
+            touchSaved = null
+            stats.onHabit(0f, 0f)
+            habit(floatArrayOf(0f, 0f))
+            done()
+        }
+    }
+
     /** The person kept [word] (the best candidate: the decoder learns where their finger lands. [habit] gets the new habit in pitches. */
     fun accepted(word: String, habit: (FloatArray) -> Unit) {
         executor.execute {
@@ -587,6 +662,7 @@ class GlideTyping(
             val k = keys
             if (k != null) stats.onHabit(bx * k.pitch, by * k.pitch)
             val t = d.field.toArray(); touchSaved = t
+            reportPlane(d)
             habit(floatArrayOf(bx, by) + t)
         }
     }
