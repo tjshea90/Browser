@@ -1,5 +1,6 @@
 package app.kestrel.browser.ui
 
+import app.kestrel.browser.readAllSized
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.drawable.InsetDrawable
@@ -439,7 +440,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private fun startGlideEngine() {
         if (!glideOn) return
         if (glide == null) {
-            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec, loadPersonal = { l.navGlideLearned() }, savePersonal = { l.navGlideLearnedSave(it) }, previewExecutor = previewExec)
+            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readAllSized() } } catch (e: Exception) { null } }, glideExec, loadPersonal = { l.navGlideLearned() }, savePersonal = { l.navGlideLearnedSave(it) }, previewExecutor = previewExec)
             ownWords = UserWords.parse(l.navGlideWords())
         }
         prepareGlide()

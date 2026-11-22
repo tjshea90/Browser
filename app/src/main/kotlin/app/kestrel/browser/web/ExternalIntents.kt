@@ -42,11 +42,16 @@ object ExternalIntents {
             intent.sourceBounds = null
             val dataScheme = intent.data?.scheme?.lowercase()
             if (dataScheme != null && dataScheme in BLOCKED) return null
+            // RVW1 S8: an `intent:` link is for OTHER apps. Aimed at Kestrel itself it could drive its own screens through extras (the extra names of the Updates sheet and its install button are public constants in this open
+            // repository): refused when it names this app as its package, or carries any extra in this app's own namespace.
+            if (intent.`package` == ctx.packageName) return null
+            val keys = intent.extras?.keySet()
+            if (keys != null && keys.any { it.startsWith("app.kestrel.") }) return null
         } else {
             intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         }
         intent.addCategory(Intent.CATEGORY_BROWSABLE)
-        intent.flags = (intent.flags and GRANT_FLAGS.inv()) or Intent.FLAG_ACTIVITY_NEW_TASK
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK   // RVW1 S8: the page's own launch flags (CLEAR_TASK, CLEAR_TOP, NO_HISTORY ...) are not honoured, only a new task; grant flags were already removed here
         val label = try {
             ctx.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.loadLabel(ctx.packageManager)?.toString()
         } catch (e: Exception) { null }

@@ -2,6 +2,7 @@ package app.kestrel.browser
 
 import android.content.Context
 import app.kestrel.browser.web.ExternalIntents
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -65,6 +66,17 @@ class HardeningTest {
     }
 
     // ------------------------------------------------------------------ an intent: link may only ask for a few harmless actions
+
+    @Test
+    fun anIntentLinkCannotDriveKestrelsOwnScreensOrChooseItsLaunchFlags() {
+        // RVW1 S8
+        assertNull(ExternalIntents.plan(ctx, "intent://x#Intent;scheme=https;package=${ctx.packageName};end"))
+        assertNull(ExternalIntents.plan(ctx, "intent://x#Intent;scheme=https;B.app.kestrel.browser.OPEN_UPDATES=true;B.app.kestrel.browser.INSTALL_UPDATE=true;end"))
+        val p = ExternalIntents.plan(ctx, "intent://x.example/p#Intent;scheme=https;launchFlags=0x10008000;end")   // NEW_TASK | CLEAR_TASK
+        assertTrue(p != null)
+        assertEquals(android.content.Intent.FLAG_ACTIVITY_NEW_TASK, p!!.intent.flags)
+        assertTrue("another app's own extras still pass", ExternalIntents.plan(ctx, "intent://x.example/p#Intent;scheme=https;S.title=hello;end") != null)
+    }
 
     @Test
     fun intentLinksCanOnlyUseAFewActions() {

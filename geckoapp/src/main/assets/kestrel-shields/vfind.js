@@ -98,10 +98,10 @@ window.KestrelVF = window.KestrelVF || (function () {
   // every element with this tag name in the document, also inside shadow roots (a whole-document scan: only for rare questions, never per touch). The answer is kept for 2 s (RW8): a frame that is tapped
   // twice, or a probe next to a tap, does not scan again; every user of the list checks each element again (rect, isConnected).
   var kept = {};
-  function all(tag) {
+  function all(tag, fresh) {
     tag = tag || 'video';
     var now = Date.now(), k = kept[tag];
-    if (k && now - k.t < 2000) return k.list;
+    if (!fresh && k && now - k.t < 2000) return k.list;   // RVW1 F5: [fresh] looks again whatever was kept (content.js asks for it right after a tap: a player built by the tap is not in a list made a second ago)
     var out = [];
     collect(document, out, { n: 20000 }, 0, tag);
     out = unique(out);
