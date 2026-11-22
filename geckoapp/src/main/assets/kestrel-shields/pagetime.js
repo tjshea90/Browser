@@ -25,7 +25,7 @@
     // what the page gets from the engine: the File's type and size, its first bytes, whether the picture decodes, whether a canvas can draw it and re-encode it (what sites do before an upload). Up to 3 files, at most
     // 4 times a page, only for a change of an <input type=file> that has files, in this top page. Numbers and a few fixed words only: never a file name, a path or a pixel. One message { k: 'fc', n, a: [ { t, kb, mg, dec, w, h, px, enc, ek, ms } ] }
     // dec: 0 not tried, 1 decoded, 2 failed, 3 timed out; px: 0 not tried, 1 drawn (non-blank), 2 all transparent, 3 one flat colour, 4 canvas refused; enc: 0 not tried, 1 re-encoded, 2 empty result, 4 refused.
-    var FCN = 0, fcLast = 0;
+    var FCN = 0, fcLast = -1e9;
     function magic(u8) {
       var n = u8 ? u8.length : 0;
       if (n >= 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) return 'png';
