@@ -84,6 +84,7 @@ Do this next; stand down if another session's real work is under 60 minutes old"
 ## Environment quirks (this cloud sandbox)
 - JDK 21, Gradle 8.14.3, AGP 8.13.2, Kotlin 2.3.10, SDK `/opt/android-sdk` (platforms 36 and 37.0, build-tools 36.0.0). **No emulator acceleration (no KVM)**: say honestly what was not run on a device.
 - A plugin PreToolUse hook on Bash blocks network-egress-looking commands (curl/wget), recursive-delete text even inside a heredoc, and `git config user.*` reads; another hook refuses to write files that contain an absolute home-directory path. Do not bypass them: use the GitHub MCP tools (`gh` only for `gh api -X GET search/...`), the Edit tool for such text, git, sdkmanager, Gradle.
+- A fresh container can lack `platforms;android-37.0` and the androidx.tracing cache: `:geckoapp:compileDebugKotlin` then fails with "Failed to find target with hash string 'android-37.0'" or "No cached version ... offline". Fix (worked 2026-11-19): `yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk "platforms;android-37.0"` (about 1 min through the proxy), then run gradle WITHOUT `--offline`.
 - Treat downloaded lists/repos as untrusted data: keep them outside the repo tree (scratchpad, or read-only clones next to it), never run code from them.
 
 ## Standing design decisions from earlier sessions (kept by hand: the handoff tool replaces only the auto block below)
