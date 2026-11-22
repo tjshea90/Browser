@@ -54,11 +54,18 @@ object GeckoPrefs {
      * renderer (WebRender) that redraw or upload only PART of a frame or a texture. A driver that gets one of them wrong leaves exactly such bands undrawn. "Safe drawing" turns them off: whole clears, one
      * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh).
      */
-    internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = if (!p.labDraw) "" else buildString {
-        append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
-        append("  gfx.webrender.batched-texture-uploads: false\n")
-        append("  gfx.webrender.max-partial-present-rects: 0\n")
-        append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+    internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = buildString {
+        if (p.labDraw) {
+            append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
+            append("  gfx.webrender.batched-texture-uploads: false\n")
+            append("  gfx.webrender.max-partial-present-rects: 0\n")
+            append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+            // PERF10b: the alpha94 uploads proved the four above reached the engine (engine draw-prefs line) and the bands stayed. Texture uploads through mapped upload buffers (PBO) are the next shortcut that can
+            // leave some rows of a glyph or tile not yet written when the page is busy: plain uploads instead (research/PAINT_GLITCH.md, 2026-11-22).
+            append("  gfx.webrender.pbo-uploads: false\n")
+        }
+        // PERF10b: CPU drawing (software WebRender). Mozilla's own text-band bug threads name it as the one switch that always removes this fault family; slower, so OFF unless the person turns it on.
+        if (p.labSoft) append("  gfx.webrender.software: true\n")
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */

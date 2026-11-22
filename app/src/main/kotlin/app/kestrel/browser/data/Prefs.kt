@@ -93,6 +93,8 @@ class Prefs private constructor(ctx: Context) {
     var labFontDelay: Boolean get() = bool("lab_font", true); set(v) = put("lab_font", v)
     /** PERF7c: "Safe drawing" (default ON): engine start-up preferences that turn off the graphics shortcuts that can leave bands of a page undrawn (GeckoPrefs.drawLines); read when the engine starts. */
     var labDraw: Boolean get() = bool("lab_draw", true); set(v) = put("lab_draw", v)
+    /** PERF10b (owner 2026-11-22: still bands of text undrawn with Safe drawing on): "Software drawing" (default OFF): the engine draws the page with the processor instead of the graphics chip (gfx.webrender.software); no graphics driver can corrupt it, it costs speed on four slow cores. Read when the engine starts. */
+    var labSoft: Boolean get() = bool("lab_soft", false); set(v) = put("lab_soft", v)
     /** EX-12: speculation rules (a site's own "fetch the next page early" hints): 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on. A pre-release engine feature. */
     var labSpec: Int get() = sp.getInt("lab_spec", 0); set(v) = put("lab_spec", v.coerceIn(0, 2))
     /** EX-14: while LinkMeter's Fast Wi-Fi is on, ask websites for WebP / JPEG / PNG instead of AVIF (cheaper to decode on this CPU when bytes are cheap; image.http.accept on the USER branch, cleared when the profile ends). OFF: the owner's Decode lab numbers (AVIF 108 ms vs WebP 50 ms vs JPEG 27 ms per picture, research/EX_RESULTS.md) say AVIF still wins on the 5 Mbit/s hotspot; the lab page was removed afterwards (research/DIAG_TOOLS.md). */
