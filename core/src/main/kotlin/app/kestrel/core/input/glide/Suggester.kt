@@ -17,11 +17,14 @@ class Suggestions(val words: List<String>, val typedKnown: Boolean, val autoCorr
  */
 object Suggester {
     /** How much of the probability comes from the word before (the decoder uses 0.4; a suggestion has no finger to lean on, so the context counts for more). */
-    const val CONTEXT_MIX = 0.6
+    const val CONTEXT_MIX = 0.75
     const val SWAP = 1.8f
     const val NEIGHBOUR = 2.2f
     const val MISSING = 2.8f
     const val EXTRA = 2.8f
+    /** A letter left out or put in that the word has next to it already (adress, realy, tomorow, occurrred): the slip people make most, so it costs less than other missing or extra letters. */
+    const val MISSING_DOUBLE = 2.1f
+    const val EXTRA_DOUBLE = 2.1f
     const val FAR = 4.2f
     /** A fix is applied by a space only when it beats the next best word by this many nats (about 2.7 times as likely). */
     const val AUTO_MARGIN = 1.0f
@@ -170,8 +173,8 @@ object Suggester {
         val out = ArrayList<Variant>(t.length * 40)
         val n = t.length
         for (i in 0 until n - 1) if (t[i] != t[i + 1]) out.add(Variant(t.substring(0, i) + t[i + 1] + t[i] + t.substring(i + 2), SWAP))
-        for (i in 0 until n) out.add(Variant(t.substring(0, i) + t.substring(i + 1), EXTRA))                       // one letter too many
-        for (i in 0..n) for (c in 'a'..'z') out.add(Variant(t.substring(0, i) + c + t.substring(i), MISSING))        // a letter left out
+        for (i in 0 until n) out.add(Variant(t.substring(0, i) + t.substring(i + 1), if ((i > 0 && t[i - 1] == t[i]) || (i + 1 < n && t[i + 1] == t[i])) EXTRA_DOUBLE else EXTRA))      // one letter too many
+        for (i in 0..n) for (c in 'a'..'z') out.add(Variant(t.substring(0, i) + c + t.substring(i), if ((i > 0 && t[i - 1] == c) || (i < n && t[i] == c)) MISSING_DOUBLE else MISSING))  // a letter left out
         for (i in 0 until n) {
             val a = t[i]
             for (c in 'a'..'z') if (c != a) out.add(Variant(t.substring(0, i) + c + t.substring(i + 1), if (near(keys, a, c)) NEIGHBOUR else if (n >= 4 && i > 0) FAR else Float.MAX_VALUE))
