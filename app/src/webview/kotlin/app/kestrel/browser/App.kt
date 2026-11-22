@@ -10,6 +10,7 @@ class App : Application() {
         super.onCreate()
         Proc.isPrivate = (getProcessName() ?: "").endsWith(":private")
         if (Proc.isPrivate) {
+            app.kestrel.browser.diag.PrivateGuard.setOpen(true) // PV1: the whole private process is a private window: no site name goes into its event list
             // Must run before ANY WebView/CookieManager use in this process: gives the private window its own, separate
             // cookie jar / cache / storage directory, which is then wiped so nothing from a previous private session survives.
             WebView.setDataDirectorySuffix("private")

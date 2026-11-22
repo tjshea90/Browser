@@ -1967,3 +1967,101 @@ test('BK10: the plain "this page forbids caching" report is not sent for a page 
   await tick(20);
   eq(h.of('ns').map((m) => [m.p, m.rx || 0]), [[PAGE, 1], ['https://mail.google.com/mail/', 0]]);
 });
+
+test('LD4: a page-timing report is checked in the background page, carries the page of its tab, and only the top frame of a real tab may send one', async () => {
+  const h = await onPage();
+  const good = { k: 'pt', h: 'claude.ai', nt: 0, dns: 40, con: 300, tls: 200, fb: 800, ttfb: 700, dcl: 9000, load: 28000, fcp: 14000, lcp: 15000, rn: 1044, rc: 900, kb: 4100, r1: 12, r3: 3, rsum: 95000, h2: 150, h1: 12, h3: 0,
+    js: 40, css: 3, img: 80, xhr: 60, oth: 5, lm: [2400, 11000, 60], nodes: 3400, scr: 45, fr: 3, hid: 0, pt: 0, at: 31000, rd: 1,
+    sl: [['cdn.example.com', 'js', 9800], ['bad host/path', 'js', 5], ['a.example', 'evil', 3], ['x'.repeat(70) + '.com', 'js', 1]] };
+  h.message(good, 1, undefined, 0);
+  await tick(10);
+  const pt = h.of('pt');
+  assert.equal(pt.length, 1);
+  assert.equal(pt[0].p, PAGE, 'the page of the tab, from the background page, not from the page script');
+  assert.equal(pt[0].rn, 1044); assert.equal(pt[0].load, 28000); assert.equal(pt[0].fcp, 14000); assert.equal(pt[0].hid, 0);
+  eq(pt[0].lm, [2400, 11000, 60]);
+  eq(pt[0].sl, [['cdn.example.com', 'js', 9800]]);                        // an odd host, an unknown kind and a long name are dropped
+  h.message({ k: 'pt', load: 1e12, rn: -5, lm: [1, 2], sl: 'x', fcp: 'abc', hid: 5, nt: 9 }, 1, undefined, 0);
+  await tick(10);
+  const bad = h.of('pt')[1];
+  assert.equal(bad.load, -1); assert.equal(bad.rn, 0); assert.equal(bad.fcp, -1); assert.equal(bad.hid, 0); eq(bad.lm, [0, 0, 0]); eq(bad.sl, []);
+  assert.ok(bad.nt >= 0 && bad.nt <= 3);
+  h.message(good, 1, undefined, 5);                                         // a sub-frame
+  h.message(good, -1);                                                      // no tab at all
+  await tick(10);
+  assert.equal(h.of('pt').length, 2, 'only the top frame of a tab may report');
+});
+
+test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {
+  const h = await onPage();
+  h.message({ k: 'vgt', n: [0, 0, 0, 0, 0, 0, 0] }, 1, undefined, 0);                 // nothing held or refused: nothing to tell about a page
+  h.message({ k: 'vgt', n: [2, 1, 0, 1, 0, 3, 5] }, 1, undefined, 0);
+  await tick(10);
+  const g = h.of('vgh');
+  assert.equal(g.length, 1);
+  assert.equal(g[0].p, PAGE); assert.deepEqual(Array.from(g[0].n), [2, 1, 0, 1, 0, 3, 5]); assert.equal(g[0].f, 1);
+  for (let i = 0; i < 10; i++) h.message({ k: 'vgt', n: [1, 0, 0, 0, 0, 0, 1] }, 1, undefined, 0);
+  await tick(10);
+  assert.equal(h.of('vgh').length, 6, 'at most six per tab and page');
+  h.message({ k: 'vcx', a: 9, s: 0, m: 0, f: 0, w: '' }, 1, undefined, 0);
+  h.message({ k: 'vcx', a: 9, s: 1, m: 0, f: 2, w: 'avc 60fps <b>' }, 1, undefined, 0);
+  await tick(10);
+  const c = h.of('vch');
+  assert.equal(c.length, 1);
+  assert.equal(c[0].p, PAGE); assert.equal(c[0].s, 1); assert.equal(c[0].f, 2); assert.equal(c[0].w, 'avc 60fps b');
+  h.message({ k: 'verr', c: 4, ns: 3, rs: 0, s: 'blob', f: 1, e: 'v' }, 1, undefined, 0);
+  h.message({ k: 'verr', c: 98, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q', pa: 5, b: 99 }, 1, undefined, 2);
+  await tick(10);
+  const e = h.of('verr');
+  assert.equal(e.length, 2);
+  assert.equal(e[0].p, PAGE); assert.equal(e[0].c, 4); assert.equal(e[0].s, 'blob'); assert.equal(e[0].f, 1);
+  assert.equal(e[1].pa, 0, 'paused is 0 or 1'); assert.equal(e[1].b, 0, 'buffered pieces are 0..9');
+  assert.equal(e[1].c, 0); assert.equal(e[1].ns, 0); assert.equal(e[1].rs, 0); assert.equal(e[1].s, 'none'); assert.equal(e[1].f, 0); assert.equal(e[1].e, 'v', 'an address, a wild number or a letter is never passed on');
+  h.message({ k: 'verr', c: 99, ns: 2, rs: 0, s: 'http', f: 1, e: 'v', pa: 1, b: 3 }, 1, undefined, 3);
+  await tick(10);
+  const st = h.of('verr').filter((x) => x.c === 99);
+  assert.equal(st.length, 1, 'code 99 = stuck loading is passed on'); assert.equal(st[0].pa, 1); assert.equal(st[0].b, 3); assert.equal(st[0].ns, 2);
+  for (let i = 0; i < 20; i++) h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, 1, undefined, 0);
+  await tick(10);
+  assert.ok(h.of('verr').length <= 8, 'rationed: ' + h.of('verr').length);
+  h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, -1);
+  await tick(10);
+  assert.ok(h.of('verr').length <= 8, 'no tab: nothing');
+});
+
+test('GL1: the element-hiding rules that matched are kept as short words, checked, capped and sent with the page report; a bad message is ignored', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  h.message({ k: 'jhid', n: 40, m: [['.mgp_overlayContainer', 1, 1], ['div.container', 3, 0], ['x'.repeat(200) + '\u0001bad', 2, 1], [5, 1, 1], ['.zero', 0, 1], ['.huge', 100000, 1], ['.ok', 7, 1]] }, 1);
+  h.message({ k: 'jhid', n: 1, m: 'not a list' }, 1);
+  h.message({ k: 'jhid', n: 1, m: [['.x', 1, 1]] }, -1);
+  h.message({ k: 'jhid', n: 1, m: [['.x', 1, 1]] }, 99);
+  await h.flushTimers();
+  const r = h.of('rep');
+  assert.equal(r.length, 1);
+  assert.ok(Array.isArray(r[0].h), 'the report carries h');
+  assert.deepEqual(r[0].h.filter((x) => x.indexOf('.mgp_overlayContainer') === 0 || x.indexOf('div.container') === 0 || x.indexOf('.ok') === 0), ['.mgp_overlayContainer x1', 'div.container x3 (style)', '.ok x7']);
+  assert.ok(r[0].h.every((x) => x.length <= 100 && !/[\u0000-\u001f]/.test(x)), 'short and clean: ' + JSON.stringify(r[0].h));
+  assert.ok(!r[0].h.some((x) => x.indexOf('.zero') >= 0 || x.indexOf('.huge') >= 0), 'a count outside 1..99999 is dropped');
+  h.mainFrame('https://other.example/'); await h.flushTimers();
+  assert.deepEqual(h.of('rep')[h.of('rep').length - 1].h, [], 'a new page starts clean');
+});
+
+test('PERF3c: how long typed characters waited is passed on as clamped numbers, rationed per tab and page, and never from a tab-less sender', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  h.message({ k: 'typ', n: 12, a: 35, m: 410, o: 2, f: 1, ra: 80, rm: 900, ro: 3 }, 1);
+  h.message({ k: 'typ', n: -4, a: 'x', m: 9e9, o: 1e9, f: 7 }, 1);
+  await tick(10);
+  const t = h.of('typ');
+  assert.equal(t.length, 2);
+  assert.equal(t[0].p, PAGE); assert.equal(t[0].n, 12); assert.equal(t[0].a, 35); assert.equal(t[0].m, 410); assert.equal(t[0].o, 2); assert.equal(t[0].f, 1);
+  assert.equal(t[0].ra, 80); assert.equal(t[0].rm, 900); assert.equal(t[0].ro, 3);
+  assert.equal(t[1].n, 0); assert.equal(t[1].a, 0); assert.equal(t[1].m, 0); assert.equal(t[1].o, 0); assert.equal(t[1].f, 0, 'a wild number is zero, a frame flag is 0 or 1');
+  for (let i = 0; i < 20; i++) h.message({ k: 'typ', n: 1, a: 1, m: 1, o: 0, f: 1 }, 1);
+  await tick(10);
+  assert.ok(h.of('typ').length <= 6, 'rationed: ' + h.of('typ').length);
+  assert.equal(h.message({ k: 'typ', n: 1, a: 1, m: 1, o: 0 }, -1), undefined);
+});

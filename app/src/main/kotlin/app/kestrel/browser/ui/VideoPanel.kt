@@ -136,7 +136,7 @@ class VideoPanel(ctx: Context, private val pal: Pal, private val listener: Liste
     private fun renameDialog() {
         val ctx = context
         val input = EditText(ctx).apply {
-            setText(currentStem()); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; imeOptions = EditorInfo.IME_ACTION_DONE; selectAll()
+            setText(currentStem()); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING; selectAll()
             setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12))
         }
         val ext = chosen?.ext.orEmpty()

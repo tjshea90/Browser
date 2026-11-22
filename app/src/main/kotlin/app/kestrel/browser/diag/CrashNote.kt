@@ -53,12 +53,12 @@ object CrashNote {
         var cur: Throwable? = e
         var depth = 0
         while (cur != null && depth < 5 && lines < STACK_LINES) {
-            sb.append(if (depth == 0) "" else "Caused by: ").append(cur.javaClass.name).append(": ").append(cur.message?.take(300) ?: "").append('\n'); lines++
+            sb.append(if (depth == 0) "" else "Caused by: ").append(cur.javaClass.name).append(": ").append(PrivateGuard.text(cur.message?.take(300) ?: "")).append('\n'); lines++   // PV1: a message may carry an address
             for (el in cur.stackTrace) { if (lines >= STACK_LINES) break; sb.append("  at ").append(el.toString()).append('\n'); lines++ }
             cur = cur.cause; depth++
         }
         sb.append("last events:\n")
-        for (l in Health.ring.last(30)) sb.append("  ").append(l.take(200)).append('\n')
+        for (l in Health.ring.last(30)) sb.append("  ").append(PrivateGuard.text(l.take(200))).append('\n')   // (the ring is masked already while a private tab exists; this covers a line written just before it)
         File(ctx.filesDir, FILE).writeText(sb.toString().take(MAX_CHARS))
     }
 
@@ -110,6 +110,51 @@ object CrashNote {
         out.add("Engine crash reports on disk: ${extras.size} (newest first)")
         for (f in extras.take(3)) out.add("  " + stamp(f.lastModified()) + " " + summary(f))
         return out
+    }
+
+    /**
+     * PV1: the engine's crash reports hold more than this screen reads. A report is two files: the dump (a copy of the crashed process's memory: page text, addresses, whatever a private tab showed) and the
+     * `.extra` (its key=value details, among them the address of the page that crashed). Nothing in this app uses the dump, and of the details only the [KEEP_KEYS] are read, so after the summary has been taken
+     * (at start, and a few seconds after every engine crash or kill) every dump is deleted and every `.extra` is rewritten with those keys only. Returns how many files it changed. A report that is being written
+     * right now is left alone for 10 s (the engine writes it in two steps).
+     */
+    fun scrubEngineReports(ctx: Context, now: Long = System.currentTimeMillis()): Int {
+        var changed = 0
+        try {
+            val moz = File(ctx.filesDir, "mozilla")
+            for (p in moz.listFiles() ?: emptyArray()) {
+                if (!p.isDirectory) continue
+                val dirs = if (p.name == "Crash Reports") (p.listFiles() ?: emptyArray()).filter { it.isDirectory } + p else listOf(File(p, "minidumps"))
+                for (d in dirs) for (f in d.listFiles() ?: emptyArray()) {
+                    if (!f.isFile || now - f.lastModified() < 10_000L) continue
+                    if (f.name.endsWith(".dmp") || f.name.endsWith(".memory.json.gz")) { if (f.delete()) changed++ }
+                    else if (f.name.endsWith(".extra")) if (cleanExtra(f)) changed++
+                }
+            }
+        } catch (e: Exception) { /* best effort: the next start tries again */ }
+        return changed
+    }
+
+    private val KEEP_KEYS = listOf("ProcessType", "MozCrashReason", "CrashTime", "OOMAllocationSize", "AvailablePhysicalMemory", "AvailableVirtualMemory", "Notes", "BuildID", "Version", "ReleaseChannel", "StartupTime", "UptimeTS", "SecondsSinceLastCrash", "CrashReason")
+
+    /** Rewrites one `.extra` (JSON, or the older key=value lines) so that only [KEEP_KEYS] remain; true when something was removed. */
+    internal fun cleanExtra(f: File): Boolean {
+        val text = f.readText().take(200_000)
+        var out = ""
+        var removed = false
+        val json = try { org.json.JSONObject(text) } catch (e: Exception) { null }
+        if (json != null) {
+            val k = org.json.JSONObject()
+            val names = json.keys()
+            while (names.hasNext()) { val key = names.next(); if (key in KEEP_KEYS) k.put(key, json.get(key)) else removed = true }
+            out = k.toString()
+        } else {
+            val keep = ArrayList<String>()
+            for (l in text.lines()) { val i = l.indexOf('='); if (i > 0 && l.substring(0, i) in KEEP_KEYS) keep.add(l) else if (l.isNotBlank()) removed = true }
+            out = keep.joinToString("\n")
+        }
+        if (removed) { val t = f.lastModified(); f.writeText(out); f.setLastModified(t) }   // the time stays: LastRun judges which run a report belongs to by it
+        return removed
     }
 
     private fun summary(f: File): String {

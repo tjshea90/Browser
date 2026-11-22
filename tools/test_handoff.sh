@@ -280,5 +280,75 @@ check "digest --brief mentions the suggestions" 'python3 -B -I "$D/tools/diag_di
 check "digest ignores a damaged file" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "2 file(s)"'
 check "digest --brief is one line, and silent with no data" '[ "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/diag" | wc -l)" = 1 ] && [ -z "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/nothing")" ]'
 
+# ---------------------------------------------------------------- LD3d: the digest reads the private repo's MAIN branch from git (a session clone sits on its own branch and goes stale), proves the history is add-only, and the clone is found in any letter case
+LP="$T/ld3"; mkdir -p "$LP/par"; DAY="$(date -u +%F)"
+git init -q --bare "$LP/origin.git" && git -C "$LP/origin.git" symbolic-ref HEAD refs/heads/main
+git clone -q "$LP/origin.git" "$LP/writer" >/dev/null 2>&1
+ldput(){ ( cd "$LP/writer" && git checkout -q -B main >/dev/null 2>&1; mkdir -p "diag/$DAY"; printf '{"v":2,"install":"abc","app":"0.3.0-alpha83","code":184,"at":"%sT%s:%s:%sZ","dropped":0,"snapshot":[],"events":["+1.000s page loaded host=%s paint=900ms done=%s ok=true blocked=0 visit=1"]}' "$DAY" "$1" "$2" "$3" "$4" "$5" | sed 's/paint=900ms done=\([0-9]*\) ok=true blocked=0 visit=1/paint=900ms done=\1ms blocked=0 visit=1 ok=true/' > "diag/$DAY/$1$2$3-abc.json"; git add -A; git -c user.name=t -c user.email=t@t commit -q -m diag; git push -q origin main ) >/dev/null 2>&1; }
+ldput 10 00 00 first.example.com 9000
+git clone -q "$LP/origin.git" "$LP/par/Kestrel-Private" >/dev/null 2>&1; git -C "$LP/par/Kestrel-Private" checkout -q -b claude/session >/dev/null 2>&1
+ldput 11 00 00 second.example.com 4000
+check "digest reads origin/main from git, so a file the tablet wrote after the session branch was made is seen" '[ ! -e "$LP/par/Kestrel-Private/diag/$DAY/110000-abc.json" ] && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "2 file(s)" && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "second.example.com"'
+check "digest INTEGRITY says every file was added once and none was changed" 'python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "INTEGRITY.*OK: every file was added once"'
+check "the digest left the session clone's working tree and branch alone" '[ "$(git -C "$LP/par/Kestrel-Private" branch --show-current)" = "claude/session" ] && [ -z "$(git -C "$LP/par/Kestrel-Private" status --porcelain)" ]'
+( cd "$LP/writer" && printf ' ' >> "diag/$DAY/100000-abc.json" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m overwrite && git push -q origin main ) >/dev/null 2>&1
+check "digest INTEGRITY raises PROBLEM when an uploaded file was ever changed" 'python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "INTEGRITY.*PROBLEM" && python3 -B -I "$D/tools/diag_digest.py" --repo "$LP/par/Kestrel-Private" | grep -q "CHANGED: M"'
+mkdir -p "$LP/rp/Browser/tools" "$LP/rp/Kestrel-Private/.git"; cp "$D/tools/private.sh" "$LP/rp/Browser/tools/"; : > "$LP/rp/Browser/tools/PRIVATE_ON"
+check "private.sh finds the clone whatever its letter case (the cloud harness makes ../Kestrel-Private)" '[ "$(bash "$LP/rp/Browser/tools/private.sh" path)" = "$LP/rp/Kestrel-Private" ]'
+check "private.sh: KESTREL_PRIVATE still wins" '[ "$(KESTREL_PRIVATE=/x/y bash "$LP/rp/Browser/tools/private.sh" path)" = "/x/y" ]'
+
+# ---------------------------------------------------------------- LD4: the digest's LOAD ANALYSIS from the pages' own timing lines (synthetic)
+T4="$T/ld4/diag/$(date -u +%F)"; mkdir -p "$T4"
+python3 -I - "$T4" <<'PY'
+import json, sys, datetime
+d = sys.argv[1]
+def line(host, load, fb, lag, rn, r3, shields='up', hid=0, slow='cdn.example.com:js:9000'):
+    return ('+90.0s page timing host=%s nt=0 dns=40 con=300 tls=200 fb=%d ttfb=%d fcp=%d lcp=%d dcl=%d load=%d rn=%d rc=%d kb=4100 r1=12 r3=%d rsum=95000 h2=150 h1=12 h3=0 js=40 css=3 img=80 xhr=60 oth=5 lag=2400/%d/60 nodes=3400 scr=45 fr=3 rd=0 hid=%d pt=0 at=%d slow=%s | shields=%s ads=1 net=fast-wifi avail=420 cpuP=88 cpuT=95 tabs=1 live=1'
+            % (host, fb, fb - 100, load // 2, load // 2 + 500, load // 2, load, rn, rn * 9 // 10, r3, lag, hid, load + 3000, slow, shields))
+ev = []
+for i in range(3): ev.append(line('busy.example.com', 28000, 900, 16800, 1000, 0))
+for i in range(3): ev.append(line('far.example.net', 20000, 9000, 800, 120, 4, slow='slowcdn.example.org:xhr:8000'))
+for i in range(3): ev.append(line('huge.example.org', 24000, 800, 1000, 2500, 0, shields='up'))
+for i in range(2): ev.append(line('huge.example.org', 12000, 800, 900, 2500, 0, shields='down'))
+ev.append(line('busy.example.com', 5000, 100, 4000, 10, 0, hid=1))
+now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha85', 'code': 186, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
+     'device': {'extReqCalls': 2425, 'extReqUs': 3948000, 'judgeAvgUs': 1242, 'judgeMaxUs': 53000, 'judgeOver2ms': 279, 'judged': 2423, 'memAvailMb': 420, 'cpuParentAvg': 24, 'cpuTabAvg': 70, 'coldPaint': 6456, 'manualSend': 0},
+     'snapshot': ['Kestrel diagnostics'], 'events': ev}
+json.dump(b, open(d + '/120000-abc123.json', 'w'))
+PY
+check "digest LOAD ANALYSIS calls the busy page CPU-bound, the far site NETWORK-bound and the 2500-request page SHIELDS-heavy" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/ld4/diag" > "$T/ld4/out.txt"; grep -E "busy.example.com.*CPU-bound" "$T/ld4/out.txt" && grep -E "far.example.net.*NETWORK-bound" "$T/ld4/out.txt" && grep -E "huge.example.org.*SHIELDS-heavy" "$T/ld4/out.txt"'
+check "digest LOAD ANALYSIS leaves out a load the person looked away from and prints the Shields A/B and the cost per request" 'grep -q "busy.example.com  *3 loads" "$T/ld4/out.txt" && grep -q "Shields A/B: up 24.0 s (3 loads) vs down 12.0 s (2 loads)" "$T/ld4/out.txt" && grep -q "Shields cost per request.*1.63 ms" "$T/ld4/out.txt" && grep -q "Sends: 1 automatic" "$T/ld4/out.txt" && grep -q "slowcdn.example.org (xhr) x3" "$T/ld4/out.txt"'
+check "digest LOAD ANALYSIS says plainly when there are no timing lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .page timing. lines yet"'
+
+# ---------------------------------------------------------------- VD1: the digest's VIDEO PROBLEMS by site from the `video gate|codec-no|error` lines (synthetic)
+TV="$T/vd1/diag/$(date -u +%F)"; mkdir -p "$TV"
+python3 -I - "$TV" <<'PY'
+import json, sys, datetime
+d = sys.argv[1]
+ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 frame=top rule=on',
+      '+51.0s video gate reels.example.com held=2 kept=0 refused=3 opened=0 frame=top rule=on',
+      '+60.0s video codec-no sixty.example.org size=0 mode=0 fps=4 last=avc_60fps',
+      '+61.0s video error sixty.example.org code=4 net=3 ready=0 src=blob frame=top el=v',
+      '+70.0s video gate exempt.example.net held=0 kept=0 refused=2 opened=0 frame=top rule=off-for-site',
+      '+71.0s video error exempt.example.net code=2 net=3 ready=0 src=http frame=top el=v',
+      '+75.0s video error stuck.example.net code=99 net=2 ready=0 src=blob frame=top el=v paused=1 buf=0',
+      '+78.0s win typing-address keys=20 avg=180ms worst=900ms over100=12',
+      '+79.0s win typing-page keys=30 avg=20ms worst=60ms over150=0 frame=top resp=250ms respworst=900ms resp150=12',
+      '+80.0s filepick picked type=image/png kb=811 size=600x973 decodes=1 ext=1 freeMb=300',
+      '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40']
+now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha87', 'code': 188, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
+     'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics'], 'events': ev}
+json.dump(b, open(d + '/120000-abc123.json', 'w'))
+PY
+check "digest VIDEO PROBLEMS names the site the press-to-play rule held back and points at the per-site switch" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/vd1/diag" > "$T/vd1/out.txt"; grep -E "reels.example.com .*held 2, kept 6, refused 17" "$T/vd1/out.txt" && grep -q "cause 1: the press-to-play rule held/refused videos here" "$T/vd1/out.txt"'
+check "digest VIDEO PROBLEMS ties a refused frame rate plus a failed element to the format policy, and says the rule is not the cause where the site was exempt" 'grep -q "cause 3: the format policy said no (size 0, H.264-only 0, 30 fps 4, last avc_60fps)" "$T/vd1/out.txt" && grep -q "the rule was OFF for this site and elements still failed" "$T/vd1/out.txt" && grep -q "code 2 http: network error" "$T/vd1/out.txt"'
+check "digest VIDEO PROBLEMS says what an element stuck loading with no error means" 'grep -q "stuck.example.net" "$T/vd1/out.txt" && grep -q "never got data, with no error" "$T/vd1/out.txt"'
+check "digest TYPING LATENCY calls the slow address bar slow and the quick page fine and says how to read it" 'grep -q "address bar / Home field (the app) .*20 keys, mean 180 ms, worst 900 ms -> SLOW" "$T/vd1/out.txt" && grep -q "page fields (the page and the engine) .*30 keys, mean 20 ms, worst 60 ms -> fine" "$T/vd1/out.txt" && grep -q "Reading it: slow in the ADDRESS BAR" "$T/vd1/out.txt" && grep -q "page RESPONSE (key to the next frame) .*30 keys, mean 250 ms, worst 900 ms, 12 waited 150 ms or more -> SLOW" "$T/vd1/out.txt"'
+check "digest FILE PICKS counts the empty file and the unreadable picture and blames the file, not the page" 'grep -q "FILE PICKS.*2 file" "$T/vd1/out.txt" && grep -q "empty files 1, pictures Android cannot read 1" "$T/vd1/out.txt" && grep -q "the FILE or the tablet is a cause" "$T/vd1/out.txt"'
+check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
+check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
