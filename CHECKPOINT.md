@@ -1,15 +1,13 @@
-# CHECKPOINT 2886 — read me first, then TASKS.md
+# CHECKPOINT 2887 — read me first, then TASKS.md
 
-**Written:** 2026-11-22T01:18:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `9b7f6817` (this checkpoint is the commit after it)
+**Written:** 2026-11-22T01:18:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `eb28b328` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha90 (gecko code 191) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha90 (code 191) gated and shipped: ONE dispatch made right after ship.sh (do not dispatch again unless it fails); send_later reminder +24 min finishes record-release. Contents: typing-latency probes (address bar win typing-address; page fields content.js input timestamps -> win typing-page), hidden-rules count includes generic batches, digest TYPING LATENCY, pagetime test stabilised (grace 4000; it failed under load once). Web 672/674 under Gradle load (handover timed out at 60 s, pagetime counted 450): both pass alone 3x
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/peaceful-darwin-4sbmdz, inputs {"app":"gecko","full_build":"true","note":"alpha90: finding out where the typing delay and the stuck video really are. Your last two uploads say Battery Saver is off now and typing was still slow, that the first start after an install takes 30 to 43 seconds to paint (the tablet is busy compiling and loading the restored claude.ai tab, which alone took 124 seconds to finish), and that on claude.ai the page itself was too busy to answer for up to 11 seconds at a time, so typing in a busy page is slow whatever Kestrel does. I will not guess further, so alpha90 measures it: how long each typed character waits, in the address bar and Home field (the app) and separately in page fields (the page and the engine), numbers only, never the text, nothing from a private tab; the digest prints it as TYPING LATENCY and says which side is slow. The page report for the pornhub LISTING page named only ad links and a cookie banner as hidden, which cannot clip a loading circle, so the rule is on the VIDEO page: the hidden-rules count now also covers the generic rules the page asks for. To get the answer please do this once on alpha90: open a pornhub video page, wait 20 seconds with the circle showing, type a few letters in the address bar, then press Send now. Not run on the tablet: everything above."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha90), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha90 "alpha90: finding out where the typing delay and the stuck video really are. Your last two uploads say Battery Saver is off now and typing was still slow, that the first start after an install takes 30 to 43 seconds to paint (the tablet is busy compiling and loading the restored claude.ai tab, which alone took 124 seconds to finish), and that on claude.ai the page itself was too busy to answer for up to 11 seconds at a time, so typing in a busy page is slow whatever Kestrel does. I will not guess further, so alpha90 measures it: how long each typed character waits, in the address bar and Home field (the app) and separately in page fields (the page and the engine), numbers only, never the text, nothing from a private tab; the digest prints it as TYPING LATENCY and says which side is slow. The page report for the pornhub LISTING page named only ad links and a cookie banner as hidden, which cannot clip a loading circle, so the rule is on the VIDEO page: the hidden-rules count now also covers the generic rules the page asks for. To get the answer please do this once on alpha90: open a pornhub video page, wait 20 seconds with the circle showing, type a few letters in the address bar, then press Send now. Not run on the tablet: everything above."
-NEVER ship kestrel-g-v0.3.0-alpha90 twice (check BUILDLOG.md and the Releases first).
+Next: wait for the reminder; after it: record-release, then read the owner's next upload (TYPING LATENCY, VIDEO PROBLEMS code 99, page report hidden rules on the pornhub VIDEO page) and act on it; open: PERF3a/b/c, IMG1 cause, VD1 Reels switch test, PV1f/g, LD4f/g, YTC1/2, ATT1, FLK1, PB8
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha90 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  eb28b328 ckpt 2886: gated kestrel-g-v0.3.0-alpha90 (gecko code 191) and pushed it: handoff self-
   9b7f6817 ckpt 2885: pre-ship: alpha90: finding out where the typing delay and the stuck video re
   a4f81831 ckpt 2883: PERF3 findings from the owner's alpha88/89 uploads: Battery Saver is OFF now
   67c4ba53 ckpt 2875: Owner after alpha89: video still stuck, typing very laggy, loading animation
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha90 twice (check BUILDLOG.md and the Releases fi
   c66293fb ckpt 2870: pre-ship: alpha89: the lag, and the cut-off loading circle. Your last upload
   ccdb2da4 ckpt 2869: alpha88 RELEASED and recorded (run 44962198254 green, Release has the APK). 
   4bec7a6a ckpt 2864: PERF2c lag evidence from the owner's NEW upload (234658, alpha87, Send now):
-  306d0ccc ckpt 2861: Owner follow-up written to TASKS.md as PERF2a-c: hiding off = whole circle (
 ```
