@@ -97,3 +97,15 @@ test('PERF8b: nothing runs without the extension API', async () => {
   assert.equal(got.length, 0);
   await context.close();
 });
+
+test('PERF9: the mark is labelled as a play button (so the press-to-play gate asks Kestrel first), and the page\'s own label comes back with the circle', async () => {
+  const { page, context } = await open('<div class="box"><video id="v" muted></video><div class="sp" id="s" aria-label="Loading"></div></div>');
+  await page.goto('https://site.example/');
+  await until(() => calmed(page, '#s'), 'the mark');
+  const on = await page.evaluate(() => { const e = document.getElementById('s'); return [e.getAttribute('aria-label'), e.getAttribute('role')]; });
+  assert.deepEqual(on, ['Play video', 'button']);
+  await page.evaluate(() => document.getElementById('v').dispatchEvent(new Event('play')));
+  const off = await page.evaluate(() => { const e = document.getElementById('s'); return [e.getAttribute('aria-label'), e.getAttribute('role')]; });
+  assert.deepEqual(off, ['Loading', null]);
+  await context.close();
+});

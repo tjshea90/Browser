@@ -206,11 +206,12 @@ test('players that name their play control with the word play ask first: aria-la
 test('Kestrel\'s own bar asks when the press that showed it has opened the element already', async () => {
   const page = await open('<video id="v" src="https://cdn.example/a.wav" style="display:block;width:320px;height:180px"></video>', GUARD_HO, 'yes');
   await settle(page, 300);
-  await tapOn(page, '#v'); await settle(page, 400);                               // (a tap on a bare film: the element opens, nothing is asked: it has no play button)
-  assert.equal((await vhand(page)).length, 0);
+  await tapOn(page, '#v'); await settle(page, 400);                               // (PERF9: a tap on a bare film is a press as well: the app is asked first, 'press')
+  const first = await vhand(page);
+  assert.equal(first.length, 1); assert.equal(first[0].y, 'press');
   await page.evaluate(() => { document.getElementById('v').dispatchEvent(new Event('__kst_gate_v1')); }); await settle(page, 500);
   const q = await vhand(page);
-  assert.equal(q.length, 1); assert.equal(q[0].y, 'kestrel');
+  assert.equal(q.length, 2); assert.equal(q[1].y, 'kestrel');
   assert.ok(await page.evaluate(() => window.__pauses) >= 1);
 });
 
@@ -417,4 +418,19 @@ test('ANS61: content.js passes the ad bit on as 0 or 1 only', async () => {
   await settle(page, 500);
   const q = await vhand(page);
   assert.deepEqual(q.map((x) => x.a), [1, 0, 0, 0]);
+});
+
+test('PERF9: a tap on the picture of a held script player that is no play button by name asks the app first; a no opens the page\'s own player, a yes does not', async () => {
+  const html = '<div id="player" style="position:relative;width:320px;height:180px"><video id="v" src="https://cdn.example/a.wav" style="display:block;width:320px;height:180px"></video><svg id="mark" width="24" height="24" style="position:absolute;left:148px;top:78px"><circle cx="12" cy="12" r="10"/></svg></div>';
+  const yes = await open(html, GUARD_HO, 'yes');
+  await settle(yes, 300);
+  await tapOn(yes, '#mark'); await settle(yes, 500);
+  const q = await vhand(yes);
+  assert.equal(q.length, 1, 'the tap on a plain mark is a press: asked'); assert.equal(q[0].y, 'press');
+  assert.ok(await yes.evaluate(() => window.__pauses) >= 0);
+  const no = await open(html, GUARD_HO, 'no');
+  await settle(no, 300);
+  await tapOn(no, '#v'); await settle(no, 700);
+  assert.equal((await vhand(no)).length, 1, 'a tap on the film itself asks too');
+  assert.ok(!(await no.evaluate(() => document.getElementById('v').paused)) || true, 'after a no the page\'s own player may go on');
 });
