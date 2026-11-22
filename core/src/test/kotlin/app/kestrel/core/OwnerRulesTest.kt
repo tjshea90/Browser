@@ -690,6 +690,22 @@ class OwnerRulesTest {
         assertTrue("the lines of the qualities are written only for a person's own tab (PlayerQuality.say is silent for a private tab)", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("private fun say(event: String, text: String) { if (!priv) Health.log"))
     }
 
+    /** PERF8 (owner 2026-11-22, after alpha92): the quality list reaches a player that started before the film's other lists were known, a declined press reads the playlists at once, a stuck circle of a paused video is calmed and reported, and the graphics prefs are logged. */
+    @Test fun perf8LateQualityListCalmedCircleAndGraphicsPrefLine() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("the finder offers the film's lists to the player that is up, after every look, for this tab only", flow.contains("private fun offerSiblings(tab: Tab)") && flow.contains("offerSiblings(t)") && flow.contains("if (tab !== a.current) return") && flow.contains("full.offerAlts(l)") && flow.contains("a.inline.view.offerAlts(l)"))
+        assertTrue("a declined press that waits for its film reads the playlists now, and a pass reads up to six", flow.contains("lookAsap(tab)") && flow.contains("streamsToLook(LOOKS_PER_PAGE)"))
+        val pq = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt")
+        assertTrue("lists found late are taken in only when the one that plays is among them (the same film)", pq.contains("fun updateAlts(list: List<SiblingQualities.Alt>): Boolean") && pq.contains("list.none { it.url == currentUrl }"))
+        assertTrue("both players have offerAlts and the full-screen screen keeps a weak reference to itself", source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("fun offerAlts(list: List<SiblingQualities.Alt>)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("live = java.lang.ref.WeakReference(this)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("fun offerAlts("))
+        val manifest = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        assertTrue("calm.js runs in every frame at document_idle with the same exclusions as the other page scripts", manifest.contains("\"calm.js\"") && manifest.substringAfter("\"calm.js\"").substringBefore("}").contains("\"document_idle\""))
+        val calm = source("geckoapp/src/main/assets/kestrel-shields/calm.js")
+        assertTrue("it only touches a PAUSED, never played video of 240x135 or more without controls, and only an infinite animation, and it is taken off when the video plays", calm.contains("!v.paused || v.ended || v.controls || v.currentTime > 1") && calm.contains("r.width < 240 || r.height < 135") && calm.contains("ct.iterations !== Infinity") && calm.contains("document.addEventListener('playing', function () { uncalm(); }, true)"))
+        assertTrue("its report is ASCII, cut to 160, only with code 98, logged by the app for a person's own tab only", source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("+m.c === 98 ? String(m.x || '').replace(") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("if (code == 98) { Health.log(\"video\", \"calm\"") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("if (tab.isPrivateTab || app.kestrel.core.livediag.SensitiveSites.isSensitive(host)) return@post"))
+        assertTrue("the engine's graphics prefs are logged once after the start", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("fun logDrawPrefs()") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("GeckoEngine.logDrawPrefs()"))
+    }
+
     /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
     @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
         assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
