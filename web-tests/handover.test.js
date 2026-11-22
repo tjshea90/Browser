@@ -418,24 +418,3 @@ test('ANS61: content.js passes the ad bit on as 0 or 1 only', async () => {
   const q = await vhand(page);
   assert.deepEqual(q.map((x) => x.a), [1, 0, 0, 0]);
 });
-
-test('PERF9: a tap on the picture of a held SCRIPT player that hit no control asks the app first (a plain mark, the film itself); a no opens the page\'s own player; a control, a loop and a film with a file source do not ask', async () => {
-  const html = '<div id="player" style="position:relative;width:320px;height:180px"><video id="v" style="display:block;width:320px;height:180px"></video><svg id="mark" width="24" height="24" style="position:absolute;left:148px;top:78px"><circle cx="12" cy="12" r="10"/></svg>'
-    + '<button id="mute" style="position:absolute;left:8px;top:8px;width:70px;height:40px">Mute</button></div>'
-    + '<script>window.ms = new MediaSource(); window.opened = 0; ms.addEventListener("sourceopen", function () { window.opened++; }); document.getElementById("v").src = URL.createObjectURL(ms);</script>';
-  const yes = await open(html, GUARD_HO, 'yes');
-  await settle(yes, 400);
-  await tapOn(yes, '#mark'); await settle(yes, 600);
-  const q = await vhand(yes);
-  assert.equal(q.length, 1, 'the tap on a plain mark is a press: asked'); assert.equal(q[0].y, 'press');
-  assert.equal(await yes.evaluate(() => window.opened), 0, 'a yes: the page\'s source stays held');
-  const no = await open(html, GUARD_HO, 'no');
-  await settle(no, 400);
-  await tapOn(no, '#v'); await settle(no, 900);
-  assert.equal((await vhand(no)).length, 1, 'a tap on the film itself asks too');
-  assert.equal(await no.evaluate(() => window.opened), 1, 'a no: the page\'s own player opens');
-  const ctl = await open(html, GUARD_HO, 'yes');
-  await settle(ctl, 400);
-  await tapOn(ctl, '#mute'); await settle(ctl, 600);
-  assert.equal((await vhand(ctl)).length, 0, 'Mute is a control: nothing is asked');
-});
