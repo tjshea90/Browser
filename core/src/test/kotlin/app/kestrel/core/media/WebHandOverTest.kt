@@ -200,4 +200,16 @@ class WebHandOverTest {
         assertEquals("a NAS page may play NAS files", false, WebHandOver.hostRefused("http://nas.local/app", "http://nas.local/v/film.mp4"))
         assertEquals("no page known counts as public", true, WebHandOver.hostRefused("", "http://192.168.1.1/x.mp4"))
     }
+
+    @Test fun aPressOnAPlayerThatHasNoSourceYetWaitsForTheLateHandOverAndTheWindowIsTwentySeconds() {
+        val none = WebHandOver.Element("", false, "", false, 560, 315, 0.0, 0.0, false)
+        val blob = WebHandOver.Element("blob:https://x.example/1", true, "", false, 560, 315, 0.0, 0.0, false)
+        val file = WebHandOver.Element("https://x.example/a.mp4", false, "video/mp4", false, 560, 315, 0.0, 0.0, false)
+        assertTrue(WebHandOver.keepForLate(none, WebHandOver.Why.PRESS, WebHandOver.ALWAYS))
+        assertTrue(WebHandOver.keepForLate(blob, WebHandOver.Why.PLAY, WebHandOver.ALWAYS))
+        assertFalse("a direct file is decided at once", WebHandOver.keepForLate(file, WebHandOver.Why.PLAY, WebHandOver.ALWAYS))
+        assertFalse("full screen has its own path", WebHandOver.keepForLate(none, WebHandOver.Why.FULLSCREEN, WebHandOver.ALWAYS))
+        assertFalse("the setting is not whenever it can", WebHandOver.keepForLate(none, WebHandOver.Why.PRESS, WebHandOver.FULLSCREEN))
+        assertEquals(20_000L, WebHandOver.LATE_WINDOW_MS)
+    }
 }
