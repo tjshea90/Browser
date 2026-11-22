@@ -68,6 +68,19 @@ class PlayerQuality(
     }
 
     /**
+     * PERF8a (owner 2026-11-22: "there are no quality controls in full screen"): the film's other lists became known AFTER the player started (a film handed over a moment after a press, before the finder had read the
+     * other lists). Takes them in when they are lists of THIS film (the one that plays is among them). true = there is a choice now (the quality button shows).
+     */
+    fun updateAlts(list: List<SiblingQualities.Alt>): Boolean {
+        if (list.size < 2) return alts.size >= 2
+        if (alts.size >= list.size) return true                                               // (nothing new: the lists it has are as many)
+        if (currentUrl.isNotEmpty() && list.none { it.url == currentUrl }) return alts.size >= 2   // another film
+        alts = list
+        say("siblings", "${alts.size} qualities of this film (found after the start): ${alts.joinToString(" | ") { "${QualityLabel.pClass(it.w, it.h)}p" }}; playing ${alts.firstOrNull { it.url == currentUrl }?.let { "${QualityLabel.pClass(it.w, it.h)}p" } ?: "the page's own"}")
+        return true
+    }
+
+    /**
      * The stream said what it offers: the pictures, biggest first. true = there is more than one to choose from (a plain file offers one: nothing to choose, no button). A picture the page's list asked for is
      * applied here, the moment the stream offers it.
      */

@@ -349,6 +349,12 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         host?.openQuality(rows)
         say("quality-open", "${rows.size} row(s)")
     }
+    /** PERF8a: the film's other lists became known after the start: the quality button shows now. UI thread. */
+    fun offerAlts(list: List<app.kestrel.core.media.SiblingQualities.Alt>) {
+        val q = quality ?: return
+        if (q.updateAlts(list)) { altsPlaying = q.alts; controls.showQuality = true }
+    }
+
     /** PERF5b: another list of the same film (another quality): same second, same play state. */
     private fun switchSource(a: app.kestrel.core.media.SiblingQualities.Alt) {
         val p = player ?: return; val b = built ?: return

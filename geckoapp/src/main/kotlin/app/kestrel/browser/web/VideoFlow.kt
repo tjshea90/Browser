@@ -136,7 +136,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (t.loading && tries < 6) { Io.main.postDelayed({ lookNow(t, tries + 1) }, 2_000); return }
         lookPending.remove(t.id)
         if (t.isNewTab || t.loading) return
-        for (c in t.media.streamsToLook(3)) {
+        for (c in t.media.streamsToLook(LOOKS_PER_PAGE)) {       // PERF8a: a film that comes as one list per quality (pornhub: four) has all its lists read at once, so the quality choices are known
             val n = looks[t.id] ?: 0
             if (n >= LOOKS_PER_PAGE) break
             if ((c.kind != MediaKind.HLS && c.kind != MediaKind.DASH) || !lookedKeys.add(c.key)) continue
@@ -174,6 +174,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
         if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
         if (!drm && durationMs >= WebHandOver.FILM_MS) lateHandOver(t, c)       // ANS54e: a film-length stream the sniffer saw right after a press that was refused for want of one
+        offerSiblings(t)                                                       // PERF8a: the other qualities of the film Kestrel's player plays, if it only now knows them
         Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size} playing=${t.media.primary()?.let { (it.durationMs / 1000).toString() + "s" } ?: "none"}")
     }
 
@@ -397,6 +398,21 @@ class VideoFlow(private val a: BrowserActivity) {
         return app.kestrel.core.media.SiblingQualities.alternates(chosen, all)
     }
 
+    /**
+     * PERF8a (owner 2026-11-22: "there are no quality controls in full screen"): a film that was handed over a moment after a press starts before the finder has read the other lists of the film, so the player came up with
+     * no quality choice. When a list has been read, the player that is up (full screen or inside the page, of THIS tab) is given the film's lists, and its quality button shows. UI thread.
+     */
+    private fun offerSiblings(tab: Tab) {
+        if (tab !== a.current) return
+        val full = NativePlayerActivity.live?.get()
+        val u1 = full?.currentFilmUrl().orEmpty()
+        if (full != null && u1.isNotEmpty()) { val l = siblingsOf(tab, u1); if (l.size >= 2) full.offerAlts(l) }
+        if (a.inline.active && a.inline.tabOrNull === tab && a.inline.url.isNotEmpty()) { val l = siblingsOf(tab, a.inline.url); if (l.size >= 2) a.inline.view.offerAlts(l) }
+    }
+
+    /** PERF8a: the person pressed play and the film was not known yet: read the playlists the finder has found NOW (it waits 3 s after a find to see the page settle), so the film moves to Kestrel's player about two seconds sooner. */
+    private fun lookAsap(tab: Tab) { if (!tab.isPrivateTab || true) Io.main.post { if (a.current === tab && !tab.loading) { lookPending.remove(tab.id); lookNow(tab, 6) } } }
+
     /** PERF5b: the address the last film played under, for [u]: any quality of the film that played counts as it (so "press play again" continues where the person stopped whichever quality the page asks for now). */
     private fun lastFor(u: String): String = if (u in NativePlayerActivity.lastAlts) u else NativePlayerActivity.lastUrl
 
@@ -452,6 +468,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (d == null) {
             // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
             if (why != WebHandOver.Why.LATE) lastRefused = if (WebHandOver.keepForLate(el, why, mode) && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
+            if (why != WebHandOver.Why.LATE && WebHandOver.keepForLate(el, why, mode)) lookAsap(tab)                       // PERF8a
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.ad) "an advertisement plays in the page's player" else if (WebHandOver.looksLikeAdAddress(el.src)) "the address names an advertisement" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null

@@ -113,6 +113,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        live = java.lang.ref.WeakReference(this)
         installBackCallback()
         val i = intent
         val url = i.getStringExtra(EXTRA_URL).orEmpty()
@@ -410,7 +411,17 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         super.onPause()
     }
 
+    /** PERF8a: the address of the list that plays now ("" before the player is up). */
+    fun currentFilmUrl(): String = if (::quality.isInitialized) quality.currentUrl else ""
+
+    /** PERF8a: the film's other lists became known after the start (the finder read them a moment later): the quality button shows now. UI thread. */
+    fun offerAlts(list: List<SiblingQualities.Alt>) {
+        if (!::quality.isInitialized || !::controls.isInitialized) return
+        if (quality.updateAlts(list)) controls.showQuality = true
+    }
+
     override fun onDestroy() {
+        if (live?.get() === this) live = null
         if (android.os.Build.VERSION.SDK_INT >= 33) backCb?.let { try { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) } catch (e: Throwable) { /* already gone */ } }
         app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); recovery.stop(); app.kestrel.browser.download.DownloadController.filmStopped()
@@ -457,6 +468,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         @Volatile var lastUrl = ""
         /** PERF5b: every list (quality) of the film that played last: pressing play again on ANY of them continues where the person stopped (VideoFlow.lastFor). RAM only, never a private tab's. */
         @Volatile var lastAlts: List<String> = emptyList()
+        /** PERF8a: the screen that is up (VideoFlow offers it the film's other lists when the finder has read them). */
+        @Volatile var live: java.lang.ref.WeakReference<NativePlayerActivity>? = null
         @Volatile var lastDurationMs = 0L
         @Volatile var lastStoppedAt = 0L
 
