@@ -31,6 +31,7 @@ test('PERF3c: typed characters are counted with their wait and told once after t
   await page.evaluate(() => window.KestrelTyp.tell());
   const m = (await typ(page))[0];
   assert.equal(m.k, 'typ'); assert.ok(m.n >= 15, 'keys ' + m.n); assert.ok(m.a >= 0 && m.m >= m.a && m.o >= 0 && m.f === 1, JSON.stringify(m));
+  assert.ok(m.ra >= 0 && m.rm >= m.ra && m.ro >= 0, 'the page response (key to the next frame) is told too: ' + JSON.stringify(m));
   assert.ok(JSON.stringify(m).indexOf('secret') < 0 && JSON.stringify(m).indexOf('hello') < 0, 'no typed text');
   await page.evaluate(() => window.KestrelTyp.tell());
   assert.equal((await typ(page)).length, 1, 'nothing counted since: nothing told');

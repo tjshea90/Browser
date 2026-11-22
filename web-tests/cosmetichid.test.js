@@ -64,3 +64,15 @@ test('GL1: at most eight rules are sent and a page with many rules is looked at 
   assert.equal(all.length, 1, 'told once'); assert.equal(all[0].m.length, 8);
   await context.close();
 });
+
+test('GL1: a player that builds its elements late is looked at again at 12 s, and only what is new is told', async () => {
+  const css = '.early{display:none!important} .late{display:none!important}';
+  const { page, context } = await open(css, '<div class="early"></div>');
+  await until(async () => (await hid(page)).length >= 1, 'the first count', 8000);
+  assert.deepEqual((await hid(page))[0].m, [['.early', 1, 1]]);
+  await page.evaluate(() => { var d = document.createElement('div'); d.className = 'late'; document.body.appendChild(d); });
+  await until(async () => (await hid(page)).length >= 2, 'the second count', 14000);
+  const all = await hid(page);
+  assert.equal(all.length, 2); assert.deepEqual(all[1].m, [['.late', 1, 1]], 'only the new rule is told the second time');
+  await context.close();
+});
