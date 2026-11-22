@@ -558,7 +558,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, noStoreRelaxed = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStoreRelaxed(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }, pageTiming = { m -> onPageTiming(m) }, videoGate = { m -> onVideoSite(m, 'g') }, videoCodec = { m -> onVideoSite(m, 'c') }, videoError = { m -> onVideoSite(m, 'e') }, typingWait = { m -> onTypingWait(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -2170,8 +2170,34 @@ open class BrowserActivity : Activity(), DockListener {
         if ((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) != want) {
             window.setSoftInputMode((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or want)
             Health.log("win", "typing-mode", on.toString())
+            if (!on) flushAddressTyping()
         }
         if (urlTyping != on) { urlTyping = on; if (Build.VERSION.SDK_INT >= 30) root.requestApplyInsets() }
+    }
+
+    /**
+     * PERF3c (owner 2026-11-22: "typing is very laggy"): the app's side of the typing probe. Address bar and Home field: from every text change to the next frame the UI thread starts; the account is logged once when the typing is over
+     * (`win typing-address`). Page fields: how long typed characters waited before the page saw them (the extension's `typ`, numbers only, `win typing-page`). No text, no address, nothing from a private tab.
+     */
+    private val addressTyping = app.kestrel.core.diag.TypingLatency()
+    private val typingWatcher = object : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+        override fun afterTextChanged(s: android.text.Editable?) {}
+        override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {
+            if (current?.isPrivateTab == true) return
+            val t0 = SystemClock.uptimeMillis()
+            android.view.Choreographer.getInstance().postFrameCallback { addressTyping.add(SystemClock.uptimeMillis() - t0) }
+        }
+    }
+    private fun flushAddressTyping() { addressTyping.take()?.let { Health.log("win", "typing-address", it) } }
+    private fun onTypingWait(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            if (tab.isPrivateTab) return@post
+            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"}")
+        }
     }
 
     private var typingModeSince = 0L
