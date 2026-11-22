@@ -391,6 +391,21 @@ onMsg(function (m, sender) {
       lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl }).catch(function () {});
     return undefined;
   }
+  if (m.k === 'fc') { // PERF10c: pagetime.js (top frame) says what the page received when a file input changed: a few numbers and fixed words, all checked here, never a name
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var fcN = function (x, hi) { x = +x; return (x >= 0 && x <= hi) ? Math.round(x) : -1; };
+    var fcMg = { png: 1, jpeg: 1, gif: 1, webp: 1, avif: 1, heic: 1, bmp: 1, pdf: 1, other: 1, none: 1 };
+    var fcA = [], fcI;
+    if (m.a && m.a.length) for (fcI = 0; fcI < m.a.length && fcA.length < 3; fcI++) {
+      var fcE = m.a[fcI];
+      if (!fcE || typeof fcE !== 'object') continue;
+      var fcT = String(fcE.t === undefined || fcE.t === null ? '' : fcE.t).toLowerCase();
+      fcA.push({ t: /^[a-z0-9]+\/[a-z0-9.+-]{1,40}$/.test(fcT) ? fcT : (fcT === '' ? 'none' : 'odd'), kb: fcN(fcE.kb, 1e7), mg: fcMg[fcE.mg] === 1 ? fcE.mg : 'other',
+        dec: fcN(fcE.dec, 3), w: fcN(fcE.w, 1e5), h: fcN(fcE.h, 1e5), px: fcN(fcE.px, 4), enc: fcN(fcE.enc, 4), ek: fcN(fcE.ek, 1e7), ms: fcN(fcE.ms, 6e5) });
+    }
+    if (fcA.length) send({ k: 'fc', p: tabTop.get(tabId) || '', n: fcN(m.n, 9999), a: fcA }).catch(function () {});
+    return undefined;
+  }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
     if (tabId >= 0 && sender && sender.frameId === 0) { personTap.set(tabId, Date.now()); if (personTap.size > 60) personTap.delete(personTap.keys().next().value); }
     return undefined;

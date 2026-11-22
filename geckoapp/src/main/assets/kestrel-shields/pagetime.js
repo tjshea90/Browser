@@ -21,6 +21,76 @@
     var TICK = C.tick || 100, GRACE = C.grace || 3000, CAP = C.cap || 45000, MAXSLOW = 3;
     var sent = false, hid = (document.hidden === true) ? 1 : 0;
 
+    // ---- PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE receives when a file input changes. The app already knows what Android handed over (`filepick picked`); the step it cannot see is
+    // what the page gets from the engine: the File's type and size, its first bytes, whether the picture decodes, whether a canvas can draw it and re-encode it (what sites do before an upload). Up to 3 files, at most
+    // 4 times a page, only for a trusted change of an <input type=file> in this top page. Numbers and a few fixed words only: never a file name, a path or a pixel. One message { k: 'fc', n, a: [ { t, kb, mg, dec, w, h, px, enc, ek, ms } ] }
+    // dec: 0 not tried, 1 decoded, 2 failed, 3 timed out; px: 0 not tried, 1 drawn (non-blank), 2 all transparent, 3 one flat colour, 4 canvas refused; enc: 0 not tried, 1 re-encoded, 2 empty result, 4 refused.
+    var FCN = 0, fcLast = 0;
+    function magic(u8) {
+      var n = u8 ? u8.length : 0;
+      if (n >= 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) return 'png';
+      if (n >= 3 && u8[0] === 0xFF && u8[1] === 0xD8 && u8[2] === 0xFF) return 'jpeg';
+      if (n >= 6 && u8[0] === 0x47 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x38) return 'gif';
+      if (n >= 12 && u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46 && u8[8] === 0x57 && u8[9] === 0x45 && u8[10] === 0x42 && u8[11] === 0x50) return 'webp';
+      if (n >= 12 && u8[4] === 0x66 && u8[5] === 0x74 && u8[6] === 0x79 && u8[7] === 0x70) return (u8[8] === 0x61 && u8[9] === 0x76 && u8[10] === 0x69) ? 'avif' : 'heic';
+      if (n >= 2 && u8[0] === 0x42 && u8[1] === 0x4D) return 'bmp';
+      if (n >= 4 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46) return 'pdf';
+      return n > 0 ? 'other' : 'none';
+    }
+    function probeFile(f, done) {
+      var r = { t: String(f.type || '').toLowerCase().slice(0, 30), kb: Math.round((+f.size || 0) / 1024), mg: 'none', dec: 0, w: 0, h: 0, px: 0, enc: 0, ek: 0, ms: 0 };
+      var t0 = perf.now(), fin = false, url = null, guard = 0;
+      function end() { if (fin) return; fin = true; try { clearTimeout(guard); } catch (e) { /* gone */ } try { if (url) URL.revokeObjectURL(url); } catch (e) { /* gone */ } r.ms = Math.round(perf.now() - t0); done(r); }
+      guard = setTimeout(function () { if (!r.dec) r.dec = 3; end(); }, 6000);
+      function draw(im) {
+        try {
+          var w = im.naturalWidth || 0, h = im.naturalHeight || 0;
+          r.w = w; r.h = h;
+          if (!(w > 0 && h > 0)) { r.px = 2; end(); return; }
+          var s = Math.min(1, 256 / Math.max(w, h)), c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+          var g = c.getContext('2d');
+          g.drawImage(im, 0, 0, c.width, c.height);
+          var d = g.getImageData(0, 0, c.width, c.height).data, i, solid = 0, first = d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3], flat = true;
+          for (i = 0; i < d.length; i += 28) { if (d[i + 3] > 0) solid++; if (flat && (d[i] + ',' + d[i + 1] + ',' + d[i + 2] + ',' + d[i + 3]) !== first) flat = false; }
+          r.px = solid === 0 ? 2 : (flat ? 3 : 1);
+          try {
+            c.toBlob(function (b) { r.enc = (b && b.size > 0) ? 1 : 2; r.ek = b ? Math.round(b.size / 1024) : 0; end(); }, 'image/jpeg', 0.8);
+          } catch (e3) { r.enc = 4; end(); }
+        } catch (e2) { r.px = 4; end(); }
+      }
+      function decode() {
+        try {
+          var im = new Image();
+          im.onload = function () { r.dec = 1; draw(im); };
+          im.onerror = function () { r.dec = 2; end(); };
+          url = URL.createObjectURL(f);
+          im.src = url;
+        } catch (e) { r.dec = 2; end(); }
+      }
+      function after() { if (r.t.indexOf('image/') === 0 || r.mg === 'png' || r.mg === 'jpeg' || r.mg === 'webp' || r.mg === 'gif' || r.mg === 'avif' || r.mg === 'heic' || r.mg === 'bmp') decode(); else end(); }
+      try {
+        var fr = new FileReader();
+        fr.onload = function () { try { r.mg = magic(new Uint8Array(fr.result)); } catch (e) { r.mg = 'other'; } after(); };
+        fr.onerror = function () { r.mg = 'other'; r.dec = 2; end(); };
+        fr.readAsArrayBuffer(f.slice(0, 16));
+      } catch (e) { r.mg = 'other'; after(); }
+    }
+    function fileChanged(ev) {
+      try {
+        if (FCN >= 4 || !ev || ev.isTrusted !== true) return;
+        var t = ev.target;
+        if (!t || String(t.tagName).toUpperCase() !== 'INPUT' || String(t.type).toLowerCase() !== 'file') return;
+        var fl = t.files, now = perf.now();
+        if (!fl || !fl.length || now - fcLast < 1500) return;                  // (a change and an input event of the same pick count once)
+        fcLast = now; FCN++;
+        var total = Math.min(fl.length, 3), out = [], i;
+        function one(r) { out.push(r); if (out.length === total) { try { browser.runtime.sendMessage({ k: 'fc', n: fl.length, a: out }).catch(function () { /* no background page */ }); } catch (e) { /* same */ } } }
+        for (i = 0; i < total; i++) probeFile(fl[i], one);
+      } catch (e) { /* a page must never feel this script */ }
+    }
+    try { document.addEventListener('change', fileChanged, true); document.addEventListener('input', fileChanged, true); } catch (e0) { /* optional */ }
+
     // ---- the page's lateness
     var lagMax = 0, lagTot = 0, lagTicks = 0, expected = perf.now() + TICK, timer = 0, sampling = true;
     function tick() {
