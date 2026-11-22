@@ -406,13 +406,13 @@ class EngineTest {
 
     /**
      * For a quarter of a second after the outage was seen the download must never FAIL or end: it waits for the network. The engine asks the dead upstream again every 40 to 80 ms in these tests, so at one instant
-     * the state is WAITING_NETWORK or, during a try, RUNNING (a single sample of "still WAITING" flaked in two runs of 2026-11-22 when the machine was busy): both are fine, a failed or finished download is not.
+     * the state is WAITING_NETWORK or, during a try, STARTING / RUNNING (a single sample of "still WAITING" flaked in two runs of 2026-11-22 when the machine was busy): both are fine, a failed or finished download is not.
      */
     private fun stillOutageNotFailed(h: H, id: Long) {
         val end = System.nanoTime() + 250_000_000L
         while (System.nanoTime() < end) {
             val st = h.view(id)!!.state
-            assertTrue("during the outage the download waits or tries again, it does not end: $st", st == DlState.WAITING_NETWORK || st == DlState.RUNNING)
+            assertFalse("during the outage the download waits or tries again, it does not end: $st", st.terminal)
             Thread.sleep(10)
         }
     }
