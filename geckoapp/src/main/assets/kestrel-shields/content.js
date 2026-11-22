@@ -1005,6 +1005,13 @@
       }
       tell({ k: 'jserr', t: 'js', m: String(e.message || '').slice(0, 140), s: String(e.filename || '').slice(0, 200), l: e.lineno | 0 });
     }, true);
+    // PERF4 (owner 2026-11-22: photos cannot be attached on claude.ai in Kestrel; the file was picked and handed over fine): a promise that was rejected and nobody handled shows no `error` event; the word it carries is the only
+    // trace of why a page's own image handling gave up. Cut to 140 characters like the others; nothing from a private tab is kept (the background page and the app drop those).
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason, msg = '';
+      try { msg = (r && (r.name ? r.name + ': ' : '') + (r.message || '')) || String(r || ''); } catch (x) { msg = 'rejected'; }
+      tell({ k: 'jserr', t: 'js', m: ('rejected: ' + msg).slice(0, 140), s: String(location.href || '').slice(0, 200), l: 0 });
+    }, true);
   } catch (e) { /* never break the page */ }
 })();
 
