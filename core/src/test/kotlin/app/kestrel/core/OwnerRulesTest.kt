@@ -801,4 +801,26 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("a Back picture that waits shows a loading line after 1 s and the site's name after 4 s, and both go with the picture", act.contains("postDelayed(backWaitLine, 1_000L)") && act.contains("postDelayed(backWaitNote, 4_000L)") && act.contains("removeCallbacks(backWaitLine)"))
     }
+
+    /** PERF10 (owner 2026-11-22, after alpha94: "still chopping off paint ... I can't attach photos to claude.ai ... all files permission ... does not show as an option"). */
+    @Test fun perf10PaintSwitchPermissionRowAndThePageSideAttachProbe() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("Software drawing is a switch that defaults to OFF", prefs.contains("var labSoft: Boolean get() = bool(\"lab_soft\", false)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("it writes the engine's CPU-drawing pref only when switched on", gp.contains("if (p.labSoft) append(\"  gfx.webrender.software: true\\n\")"))
+        assertTrue("it is in Settings and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Software drawing (slower)\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("the Storage / Photos permission is DECLARED (so Android's Permissions page offers it) but never the all-files one", man.contains("android.permission.READ_EXTERNAL_STORAGE\" android:maxSdkVersion=\"32\"") && man.contains("android.permission.READ_MEDIA_IMAGES") && !man.contains("MANAGE_EXTERNAL_STORAGE\" />"))
+        assertTrue("and never requested at run time by the app", !source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Manifest.permission.READ_EXTERNAL_STORAGE") && !source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("READ_MEDIA_IMAGES"))
+        val st = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("Settings has a row that opens Android's page for this app, only where the permission is declared", st.contains("Flavor.hasFilePermission) button(\"Photos and files permission\"") && st.contains("ACTION_APPLICATION_DETAILS_SETTINGS"))
+        val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
+        assertTrue("the attach probe runs from the top page script, trusted changes of a file input only, at most 4 per page and 3 files", pt.contains("ev.isTrusted !== true") && pt.contains("FCN >= 4") && pt.contains("Math.min(fl.length, 3)") && pt.contains("k: 'fc'"))
+        assertTrue("it never sends a name or a path", !pt.contains("f.name") && !pt.contains("webkitRelativePath") && !pt.contains("getAsFile"))
+        val bg = source("geckoapp/src/main/assets/kestrel-shields/background.js")
+        assertTrue("the background page checks it and only the top frame of a tab may send it", bg.contains("if (m.k === 'fc')") && bg.contains("sender.frameId !== 0") && bg.contains("fcMg[fcE.mg] === 1"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the app logs it for a normal tab only and never while a private tab exists", act.contains("private fun onFileCheck(") && act.contains("if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return\n        val arr = m.optJSONArray(\"a\")") && act.contains("Health.log(\"filepick\", \"page-got\""))
+        assertTrue("the bridge routes it", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"fc\" -> { fileCheck(m); \"\" }"))
+    }
 }
