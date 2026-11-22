@@ -719,9 +719,9 @@ class OwnerRulesTest {
     @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
         assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
-        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false"))
+        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false", "gfx.webrender.pbo-uploads: false"))
             assertTrue("drawLines writes $name", gp.contains(name))
-        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (!p.labDraw) \"\""))
+        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (p.labDraw) {"))
         assertTrue("the person can switch it off in Settings", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
         assertTrue("it is part of a backup", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
         assertTrue("the pref check reads the names GeckoPrefs.kt writes", source("tools/check-gecko-prefs.sh").contains("GeckoPrefs.kt"))
