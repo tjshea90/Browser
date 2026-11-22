@@ -41,6 +41,14 @@ class GlideSession(
     private var retypeAt = 0L
     private var liftAt = 0L
 
+    /** R26a: the glided word before may be fixed when the next glide shows it was a look-alike (Settings: "Fix the word before"). */
+    var reviseBefore = true
+    private var prevAll: List<GlideCandidate> = emptyList()      // the 3 + 2 candidates of the glide that is on screen, best first
+    private var prevLm = 0f
+    private var prevCtx: String? = null                          // the word before that glided word
+    private var pendingSerial = 0                                // which decode gave the pending word (R27a shadow comparison)
+    private var pendingRevised = false
+
     private var shown: List<String> = emptyList()
     private fun show(words: List<String>) { shown = words; ui?.showCandidates(words) }
 
@@ -77,6 +85,7 @@ class GlideSession(
         }
         val best = cands[0]
         retypeWatch = false                       // a new glide: its own confirmation handles the deleted one
+        revisePrevious(best.text)                 // R26a: the word this glide gives may show that the glided word before it was a look-alike
         confirmPrevious()                         // the glide before this one stays: learn from it first (one thread, in order)
         val startsHere = controller.nextWordStartsSentence()
         val inSentence = !startsHere
@@ -87,7 +96,32 @@ class GlideSession(
         pendingWord = best.text; pendingWeight = 1f; pendingGuessed = null
         topGuess = best.text
         pendingPrev = prev; pendingPrev2 = prev2
+        prevAll = cands + res.more; prevLm = res.lm; prevCtx = prev; pendingSerial = res.serial; pendingRevised = false
         show(cands.map { it.text })
+    }
+
+    /**
+     * R26a (2026-11-19, measured on real swipes, research/R24-glide-next.md): the glided word before is re-judged by the word that now follows it. Its five candidates are re-scored with how likely
+     * the NEW word is after each of them (the decoder's own language weight and pair model); when another candidate beats the first choice by more than [REVISE_MARGIN] it replaces the word
+     * (the same swap as picking it in the strip). On 6 000+ real swipes: of every 100 words, about one was fixed for each 0.1 that was spoiled. Only when the glided word is still the last thing typed, the
+     * person did not choose or retype it, and the engine knows the new word. What is learned for the word before is then the fixed word, not the first guess.
+     */
+    private fun revisePrevious(nextWord: String) {
+        if (!reviseBefore) return
+        val old = pendingWord ?: return
+        if (pendingWeight != 1f || afterUndo || old != topGuess || controller.lastGlide == null) return
+        val g = engine() ?: return
+        val all = prevAll
+        if (all.size < 2 || all[0].text != old) return
+        val lnP = g.nextWordLnProbs(all.map { it.text }, nextWord, prevCtx) ?: return
+        var best = 0; var bestTotal = all[0].score + prevLm * lnP[0]; val first = bestTotal
+        for (i in 1 until all.size) { val t = all[i].score + prevLm * lnP[i]; if (t > bestTotal) { bestTotal = t; best = i } }
+        if (best == 0 || bestTotal - first <= REVISE_MARGIN) return
+        val w = all[best].text
+        if (!controller.swapGlide(w)) return
+        pendingWord = w; pendingGuessed = null; topGuess = w; pendingRevised = true
+        pendingShown = if (pendingShown != null) controller.lastGlide?.word else null
+        g.stats.onRevised()
     }
 
     /** True while the strip shows the guesses of a glide (a tap on one replaces the glided word). */
@@ -104,6 +138,7 @@ class GlideSession(
         afterUndo = false
         val g = engine()
         g?.stats?.onPicked()
+        g?.shadowFor(pendingSerial)?.let { if (!pendingRevised && it.plain == word && it.learned != word) g.stats.onShadowPlainPicked() }
         g?.accepted(word) { h -> habitChanged(h) }
         show(listOf(word) + shown.filter { it != word }.take(2))
         return true
@@ -138,6 +173,7 @@ class GlideSession(
         pendingWord = null
         val g = engine() ?: return
         g.stats.onKept()
+        if (!pendingRevised && pendingWeight == 1f && !afterUndo) g.shadowFor(pendingSerial)?.let { if (it.plain != it.learned && it.learned == w) g.stats.onShadowLearnedKept() }
         g.accepted(w) { h -> habitChanged(h) }
         if (learnAllowed()) {
             pendingShown?.let { g.learnCase(it) }
@@ -167,5 +203,7 @@ class GlideSession(
         /** A word typed letter by letter this soon after a glided word was deleted is taken as what the deleted glide meant. */
         const val RETYPE_MS = 30_000L
         const val RETRY_GAP = 1.5f
+        /** A candidate must beat the first choice by this many cost units (nats of the language score) with the next word counted. Measured: 1.0 = +0.8 points first choice, 8 words fixed for each one spoiled. */
+        const val REVISE_MARGIN = 1.0f
     }
 }
