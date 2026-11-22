@@ -11,7 +11,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 
 const DIR = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
-const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js'), PLAYER = read('player.js');
+const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js'), PLAYER = read('player.js'), QUALITY = read('quality.js'), QMAIN = read('quality-main.js');
 
 let browser;
 async function launch() { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] }); }
@@ -56,7 +56,7 @@ async function open(body, o) {
           try { window.top.__all.push(m); } catch (e) { /* another origin */ }
           if (m && m.k === 'guard') {
             if ((window.top.__guardFails || 0) > 0) { window.top.__guardFails--; return Promise.reject(new Error('no answer')); }
-            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba, kp: (window.top.__kpOverride !== undefined ? window.top.__kpOverride === true : cfg.kp === true) });   // (a test can change what the app answers: window.top.__kpOverride)
+            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba, kp: (window.top.__kpOverride !== undefined ? window.top.__kpOverride === true : cfg.kp === true), gt: cfg.gt !== false, ho: cfg.ho === true, pp: cfg.pp === true });   // (a test can change what the app answers: window.top.__kpOverride)
           }
           if (m && m.k === 'ft') {                      // the background page: ask the top frame, answer {video, src} (http addresses only, like background.js)
             try {
@@ -80,6 +80,8 @@ async function open(body, o) {
   if (o.content) await page.addInitScript({ content: CONTENT });
   await page.addInitScript({ content: VBAR });
   if (o.turn) await page.addInitScript({ content: TURN });
+  if (o.qmain) await page.addInitScript({ content: QMAIN });                    // QL1: the page-world hook that notes hls.js / dash.js / Shaka players
+  if (o.quality) await page.addInitScript({ content: QUALITY });                // QL1: the quality list of the film (quality.js), loaded before player.js like the manifest does
   if (o.player) await page.addInitScript({ content: PLAYER });
   await page.goto('https://movie.example/');
   if (o.wait !== false) await page.waitForFunction(() => { const v = document.getElementById('v') || (window.__deepV && window.__deepV()); return v && v.readyState >= 3 && v.duration > 50; }, null, { timeout: 15000 });

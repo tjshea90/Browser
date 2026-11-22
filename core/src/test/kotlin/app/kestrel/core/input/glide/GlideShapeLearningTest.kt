@@ -26,7 +26,7 @@ class GlideShapeLearningTest {
         }
         val off = offSum / hands; val on = onSum / hands
         assertTrue("without shapes the glides still miss (first guess right $off % of glides 7-30)", off < 90.0)
-        assertTrue("with shapes, after a few corrections the word is right ($on % of glides 7-30)", on >= 96.0)
+        assertTrue("with shapes, after a few corrections the word is right ($on % of glides 7-30)", on >= 95.0)   // (95.5 with the gesture-length term of R23c, 96+ before: it costs this habitual-word case half a point and gains 1-2 points on the common-word yardstick)
         assertTrue("the first three glides (nothing learned yet) are as good as the old keyboard's: ${onEarly / 1.0} %", onEarly >= 60.0)
     }
 
@@ -82,9 +82,9 @@ class GlideShapeLearningTest {
         // the quick pass keeps only the best word of two ("fur" is far more common and lies one key from the path); the person's memory has the shape of "for"
         val small = ArrayLexicon(listOf("fur" to 9000L, "for" to 10L))
         val g = GestureSim(keys, Random(1)).path("for", SimNoise.CALM)!!
-        val plain = GlideDecoder(keys, GlideParams(keep = 1, patGain = 0f))
+        val plain = GlideDecoder(keys, GlideParams(keep = 1, patGain = 0f, lengthW = 0f))   // (the length term off: this test is about the memory of shapes, and the length alone now separates "for" from "fur")
         assertEquals("fur", plain.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3).first().text)
-        val dec = GlideDecoder(keys, GlideParams(keep = 1)); val model = PersonalModel(); dec.personal = model
+        val dec = GlideDecoder(keys, GlideParams(keep = 1, lengthW = 0f)); val model = PersonalModel(); dec.personal = model
         assertEquals("nothing remembered: the same as before", "fur", dec.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3).first().text)
         model.patterns.add("for", dec.lastPrint!!, 3f)
         val c = dec.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3)
@@ -92,7 +92,7 @@ class GlideShapeLearningTest {
         assertTrue(dec.lastPatternFlipped)
         // a remembered word that does not fit the ends of this glide is not brought in
         val other = PersonalModel(); other.patterns.add("fur", dec.lastPrint!!, 3f); other.patterns.add("our", dec.lastPrint!!, 3f)
-        val d2 = GlideDecoder(keys, GlideParams(keep = 1)); d2.personal = other
+        val d2 = GlideDecoder(keys, GlideParams(keep = 1, lengthW = 0f)); d2.personal = other
         assertFalse(d2.decode(g.xs, g.ys, g.xs.size, listOf(ArrayLexicon(listOf("fur" to 9000L, "our" to 10L))), null, 3).any { it.text == "our" })
     }
 

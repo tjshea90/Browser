@@ -439,8 +439,8 @@
     // can dispatch the same event, so what comes in is checked, the word is cut to a few characters and a document gets only a handful of reports through.
     // ANS53a / ANS53b: the page-side gate (gate-main.js: no video loads or starts before the person presses it) is told whether the rule is on (`gt` of the guard answer; closed until then) and says what it held and
     // opened: seven numbers, checked here (any page script can dispatch the same event), a handful per document.
-    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0, ho = false;
-    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? (ho ? '1+' : '1') : '0' })); } catch (e) { /* ignore */ } } }
+    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0, ho = false, pp = false;   // pp (VP2): this frame was started by the person's tap on the page around it
+    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? ((ho ? '1+' : '1') + (pp ? 'p' : '')) : '0' })); } catch (e) { /* ignore */ } } }
     document.addEventListener(GREADY, pushGate, true);
     document.addEventListener(GREP, function (e) {
       try {
@@ -601,7 +601,25 @@
       } catch (e) { /* ignore */ }
       return undefined;
     });
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); ho = !!(r && r.ho === true); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); ho = !!(r && r.ho === true); pp = !!(r && r.pp === true); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
+  } catch (e) { /* never break the page */ }
+})();
+
+// VP2: a trusted click in the TOP page is told to the background page (nothing but the fact that it happened): a player frame the page starts within a few seconds of it is the person's press of that player.
+(function () {
+  try {
+    if (window !== window.top) return;
+    var last = 0;
+    function clicked(e) {
+      try {
+        if (!e || !e.isTrusted) return;
+        if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+        var now = Date.now(); if (now - last < 250) return; last = now;
+        browser.runtime.sendMessage({ k: 'ptap' }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }
+    window.addEventListener('click', clicked, { capture: true, passive: true });
+    window.addEventListener('keydown', clicked, { capture: true, passive: true });
   } catch (e) { /* never break the page */ }
 })();
 

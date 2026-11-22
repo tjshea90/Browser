@@ -30,6 +30,8 @@
   var proto = HTMLMediaElement.prototype, eproto = Element.prototype;
   var dnow = Date.now, later = window.setTimeout;
   var on = true;                                         // closed until the person's setting says the rule is off
+  var INHERIT_MS = (typeof window.__kstGateInheritMs === 'number' && window.__kstGateInheritMs > 0 && window.__kstGateInheritMs < 90000) ? window.__kstGateInheritMs : 90000;   // (the tests shorten it; a page can only make it shorter)
+  var inheritUntil = 0;                                 // VP2: this frame was started by the person's tap on the PAGE around it (a server or play button): its first big player may start (see the cfg handler)
   var recs = new WeakMap();                              // element -> what is held for it
   var gated = [];                                        // the elements that hold something back (a tap on their picture opens them)
   var N = { held: 0, opened: 0, play: 0, press: 0, kestrel: 0, off: 0, deferred: 0, refused: 0 };
@@ -125,6 +127,19 @@
     if (gated.length < 400) gated.push(el);
     try { el.addEventListener(OPEN_EVENT, function () { var r2 = rec(el); openEl(el, 'kestrel'); if (hand && el.paused && dnow.call(Date) >= r2.noUntil) ask(el, 'kestrel', function (h) { if (h) pauseEl(el); }); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree (the tap that showed the bar has opened the element already: the bar's play asks whenever the film is not playing and the app has not said no a moment ago)
     try { el.addEventListener('play', function (ev) { nativePlay(el, ev); }, true); } catch (e) { /* ignore */ }                    // the engine's own controls (nativePlay below)
+    if (inheritUntil > dnow.call(Date) && big(el)) openEl(el, 'inherit');                                                          // VP2
+  }
+
+  // VP2 (owner message 2026-11-18: "I selected three different video servers on doraby.Com but none of them would play. It showed no error, it just couldn't load the video"): a player that is a FRAME of the page
+  // the person just tapped (the page's Play or server button sets the frame's address) is the person's press. The frame's own document sees no activation (it belongs to another site), so the content script is told
+  // (the guard answer, `p` after the 1 / 1+ of the config) and every media element of this document that is player-sized is opened like a press on its picture: its MediaSource attach goes ahead, its autoplay is
+  // given back. A banner, a hidden pixel or a thumbnail (under 240 x 135) is not a player and stays closed. It lasts 90 s from the config, then the rule is the same as everywhere.
+  function big(el) {
+    try {
+      var r = el.getBoundingClientRect();
+      if (r.width >= 240 && r.height >= 135) return true;
+      return (window.innerWidth >= 240 && window.innerHeight >= 135 && r.width * r.height === 0);                    // (not laid out yet: the frame itself is a player-sized box)
+    } catch (e) { return false; }
   }
 
   // ---------------------------------------------------------------- opening
@@ -141,7 +156,7 @@
       // the person's rule is OFF (Settings): the page's own autoplay comes back, as in any other browser (lab run 43812820865: a muted hero loop loaded but never started with the rule off); so does the autoplay of a video
       // that is given a STREAM (a camera, a call: it must show). A press on the picture, the page's own play() and Kestrel's own controls start nothing by this: the person pressed a play button, or the page plays at the
       // person's request; a tap on a hero loop that has no play button is not a request to play it.
-      if (why === 'off' || why === 'stream') giveAutoplay(el, r);
+      if (why === 'off' || why === 'stream' || why === 'inherit') giveAutoplay(el, r);
     } catch (e) { /* the page decides */ }
     touch();
   }
@@ -336,7 +351,7 @@
         try {
           if (on && isMediaEl(this)) {
             var r = rec(this);
-            if (!r.open) { r.preload = String(v); r.hasPreload = true; track(this); return s.call(this, 'none'); }
+            if (!r.open) { r.preload = String(v); r.hasPreload = true; track(this); if (r.open) { r.hasPreload = false; return s.call(this, v); } return s.call(this, 'none'); }   // (VP2: track() may open it)
           }
         } catch (e) { /* the engine decides */ }
         return s.call(this, v);
@@ -349,7 +364,7 @@
         try {
           if (on && isMediaEl(this)) {
             var r = rec(this);
-            if (!r.open) { r.autoplay = !!v; r.hasAutoplay = true; track(this); return s.call(this, false); }
+            if (!r.open) { r.autoplay = !!v; r.hasAutoplay = true; track(this); if (r.open) { r.hasAutoplay = false; return s.call(this, v); } return s.call(this, false); }
           }
         } catch (e) { /* the engine decides */ }
         return s.call(this, v);
@@ -367,9 +382,10 @@
           if (!r.open) {
             var n = String(name).toLowerCase();
             if (!r.adopted && (n === 'src' || n === 'autoplay')) adopt(this);
+            if (r.open) return orig.apply(this, arguments);                                          // VP2: adopt() -> track() may have opened it (a frame the person's tap started)
             if (n === 'src' && isBlob(value)) { r.src = String(value); r.hasSrc = true; N.deferred++; track(this); touch(); return; }
-            if (n === 'preload') { r.preload = String(value); r.hasPreload = true; track(this); return orig.call(this, 'preload', 'none'); }
-            if (n === 'autoplay') { r.autoplay = true; r.hasAutoplay = true; track(this); return; }
+            if (n === 'preload') { r.preload = String(value); r.hasPreload = true; track(this); if (r.open) { r.hasPreload = false; return orig.apply(this, arguments); } return orig.call(this, 'preload', 'none'); }
+            if (n === 'autoplay') { r.autoplay = true; r.hasAutoplay = true; track(this); if (r.open) { r.hasAutoplay = false; return orig.apply(this, arguments); } return; }
           }
         }
       } catch (e) { /* the engine decides */ }
@@ -423,6 +439,7 @@
     r.adopted = true;
     if (r.open || !on) return;
     track(el);
+    if (r.open) return;                                                                              // VP2: a frame the person's tap started opened it in track(): leave its markup as the page wrote it
     var changed = false;
     try {
       var p = oGetAttr.call(el, 'preload');
@@ -496,7 +513,14 @@
       try {
         var d = e && e.detail;
         if (d === '0') { hand = false; if (on) { on = false; openAll('off'); } told = true; settle(); }
-        else if (d === '1' || d === '1+') { hand = (d === '1+'); on = true; settle(); }
+        else if (d === '1' || d === '1+' || d === '1p' || d === '1+p') {
+          hand = (d.charAt(1) === '+'); on = true;
+          if (d.charAt(d.length - 1) === 'p' && inheritUntil === 0) {                    // VP2: the person's tap on the page around this frame started it
+            inheritUntil = dnow.call(Date) + INHERIT_MS;
+            for (var gi = 0; gi < gated.length; gi++) { try { var ge = gated[gi]; if (!rec(ge).open && big(ge)) openEl(ge, 'inherit'); } catch (e5) { /* ignore */ } }
+          }
+          settle();
+        }
       } catch (x) { /* keep what was told before */ }
     }, true);
     document.dispatchEvent(new CustomEvent(READY_EVENT));

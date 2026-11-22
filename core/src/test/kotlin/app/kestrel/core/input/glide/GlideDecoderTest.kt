@@ -1,6 +1,7 @@
 package app.kestrel.core.input.glide
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
@@ -38,25 +39,76 @@ class GlideDecoderTest {
         assertTrue(dec.decode(floatArrayOf(cx, cx + 2f, cx + 1f, cx - 1f), floatArrayOf(cy, cy + 1f, cy - 2f, cy + 1f), 4, listOf(small), null).isEmpty())
     }
 
-    @Test fun theFirstAndLastLetterMustBeWhereTheFingerWentDownAndLifted() {
+    @Test fun theStrictRulesStillSayNothingFitsWhenTheyAreAskedTo() {
+        // a path that starts on 'p' and ends on 'm' can be none of the words that start with h / g / s / w / t, by the strict rules (alwaysAnswer off, or relax = false)
+        val px = floatArrayOf(keys.cx['p' - 'a'], keys.cx['m' - 'a']); val py = floatArrayOf(keys.cy['p' - 'a'], keys.cy['m' - 'a'])
+        assertTrue(GlideDecoder(keys, GlideParams(alwaysAnswer = false)).decode(px, py, 2, listOf(small), null).isEmpty())
+        assertTrue(GlideDecoder(keys).decode(px, py, 2, listOf(small), null, relax = false).isEmpty())
+    }
+
+    /** Owner R19d (2026-11-18): "it should always input a word, the closest word to the pattern i glided, even if it picks an incorrect word". */
+    @Test fun aGlideThatFitsNothingStillGetsTheClosestWord() {
         val dec = GlideDecoder(keys)
-        // a path that starts on 'p' and ends on 'm' can be none of the words that start with h / g / s / w / t
-        val r = dec.decode(floatArrayOf(keys.cx['p' - 'a'], keys.cx['m' - 'a']), floatArrayOf(keys.cy['p' - 'a'], keys.cy['m' - 'a']), 2, listOf(small), null)
-        assertTrue(r.isEmpty())
+        val px = floatArrayOf(keys.cx['p' - 'a'], keys.cx['m' - 'a']); val py = floatArrayOf(keys.cy['p' - 'a'], keys.cy['m' - 'a'])
+        val r = dec.decode(px, py, 2, listOf(small), null)
+        assertTrue("an answer even though no word starts on p and ends on m", r.isNotEmpty()); assertTrue(dec.lastRelaxed)
+        assertTrue("it is a word of the list", r.all { c -> small.idOf(c.text) >= 0 })
+    }
+
+    @Test fun theClosestWordIsTheOneWhoseLettersThePathComesNearest() {
+        // the finger draws "world" but lifts far from the d: the strict pass drops it for the last letter, the relaxed one still finds it as the nearest
+        val dec = GlideDecoder(keys)
+        val w = glide("world"); val xs = w.xs.copyOf(); val ys = w.ys.copyOf()
+        val i = xs.size - 1
+        xs[i] = keys.cx['l' - 'a']; ys[i] = keys.cy['l' - 'a']                       // the last touch point jumps to the l: the finger did not end on the d
+        val r = dec.decode(xs, ys, xs.size, listOf(small), null, 3)
+        assertTrue(r.isNotEmpty()); assertEquals("world", r.first().text)
+    }
+
+    @Test fun aGlideAlwaysGetsAnAnswerEvenWhenItIsGarbage() {
+        val dec = GlideDecoder(keys); val rnd = Random(5); var relaxed = 0
+        repeat(300) { n ->
+            val g = GlideEval.garbage(keys, rnd)
+            val r = dec.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3)
+            assertTrue("garbage path $n got no word at all", r.isNotEmpty())
+            if (dec.lastRelaxed) relaxed++
+        }
+        assertTrue("some of them really needed the relaxed pass ($relaxed of 300)", relaxed > 0)
+    }
+
+    @Test fun aGlideThatFitsStrictlyIsNotTouchedByTheFallback() {
+        val dec = GlideDecoder(keys); val strict = GlideDecoder(keys, GlideParams(alwaysAnswer = false))
+        for (w in listOf("hello", "world", "word", "the", "good", "she")) {
+            val p = glide(w)
+            val a = decode(dec, small, p).map { it.text }; val b = decode(strict, small, p).map { it.text }
+            assertEquals("glide of $w: the answer is the same with and without the fallback", b, a); assertFalse(dec.lastRelaxed)
+        }
+    }
+
+    @Test fun theRealWordListAlwaysAnswersTooAndTheFallbackIsFastEnough() {
+        val dec = GlideDecoder(keys); val rnd = Random(9); var worst = 0L; var relaxed = 0
+        repeat(120) {
+            val g = GlideEval.garbage(keys, rnd)
+            val t0 = System.nanoTime(); val r = dec.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3); val ms = (System.nanoTime() - t0) / 1_000_000
+            assertTrue("no answer for garbage path $it", r.isNotEmpty()); if (dec.lastRelaxed) relaxed++; if (ms > worst) worst = ms
+        }
+        assertTrue("relaxed passes happened ($relaxed)", relaxed > 0)
+        assertTrue("the slowest decode (with the fallback) took $worst ms: only a guard against an accidental 10x", worst < 1500)
     }
 
     @Test fun theWordBeforeSwingsAClosecall() {
-        // "world" and "word" differ by one letter that a sloppy finger skips: with the pair "hello world" known, the context decides
+        // "lot" and "lit" are one key apart (o / i) and the same length, so the path alone cannot tell them apart (R23c: a longer word like "world" is no longer a close call for "word", the gesture length now tells them apart):
+        // with the pair "hello lit" known, the context decides
         val withPair = LexiconFile.read(LexiconFile.build(
-            listOf("hello", "world", "word").zip(listOf(500L, 900L, 1200L)).map { LexiconFile.Entry(it.first, it.second) },
-            listOf(LexiconFile.Pair("hello", "world", 400L), LexiconFile.Pair("hello", "word", 1L)),
+            listOf("hello", "lit", "lot").zip(listOf(500L, 900L, 1200L)).map { LexiconFile.Entry(it.first, it.second) },
+            listOf(LexiconFile.Pair("hello", "lit", 400L), LexiconFile.Pair("hello", "lot", 1L)),
         ))
         val dec = GlideDecoder(keys, GlideParams(lmA = 0f, lmW = 6f)) // a heavy language weight so the effect is plain
-        val p = glide("word", SimNoise.NORMAL, 3)
+        val p = glide("lot", SimNoise.NORMAL, 3)
         val plain = decode(dec, withPair, p, null).first().text
         val ctx = decode(dec, withPair, p, "hello").first().text
-        assertEquals("word", plain)
-        assertEquals("world", ctx)
+        assertEquals("lot", plain)
+        assertEquals("lit", ctx)
     }
 
     @Test fun theThumbHabitIsLearnedFromAcceptedWords() {

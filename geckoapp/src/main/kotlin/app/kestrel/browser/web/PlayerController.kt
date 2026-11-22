@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.view.View
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
+import app.kestrel.core.player.PageLevels
 import app.kestrel.core.player.PlayerModel
 import app.kestrel.core.player.FilmHealth
 import app.kestrel.core.player.PlayerRules
@@ -34,6 +35,14 @@ class PlayerController(
     /** The full screen belongs to a private tab: nothing of it is logged or counted (the person's film is nobody's business, not even Diagnostics'). Set by the activity before [fullscreen]. */
     @Volatile var quiet = false
     private fun say(event: String, text: String) { if (!quiet) Health.log("player", event, text) }
+
+    // QL1 (owner message 2026-11-18: "When i put YouTube video in full screen, it doesn't let me choose the video quality ..."): the quality list of the PAGE's own player for the film that is full screen
+    // (assets/kestrel-shields/quality.js: YouTube, JW Player, Video.js, hls.js, dash.js, Shaka, <source> lists). Cleaned by core PageLevels; a pick goes back to the page as the command `ql`.
+    @Volatile private var pageLevels: List<PageLevels.Level> = emptyList()
+    @Volatile private var pageCur = ""
+    @Volatile private var pageFam = ""
+    @Volatile private var pagePicked: String? = null
+    private var pageListsSeen = 0; private var pagePicks = 0; private var pageLast = "none yet"
 
     private val model = PlayerModel(this)
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
@@ -93,6 +102,7 @@ class PlayerController(
         activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; away = 0; awayMax = 0; lastReportAt = started
         java.util.Arrays.fill(appTapEpoch, 0L); lastAppTapUptime = 0L; lastToggled = false
         health.newSession()
+        pageLevels = emptyList(); pageCur = ""; pageFam = ""; pagePicked = null
         view.showQuality = qualityAvailable()
         if (view.showQuality) say("quality-button", "shown at the start: the film offers pictures to pick from")
         view.visibility = View.VISIBLE
@@ -107,6 +117,7 @@ class PlayerController(
         activeFlag = false; shownFlag = false
         Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(ticker); Io.main.removeCallbacks(watchdog); tickerOn = false; watchOn = false
         model.stop(); commands.clear()
+        pageLevels = emptyList(); pageCur = ""; pageFam = ""; pagePicked = null
         view.show(false, false); view.visibility = View.GONE
         rotateButton(false)
         last = if (quiet) "a private tab's full screen ended (nothing of it is kept)" else "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands, the page's own controls put away: most $awayMax element(s)"
@@ -157,6 +168,7 @@ class PlayerController(
                     if (lt >= FilmHealth.STALL_MS) say("stall", "the page's script was busy for about $lt ms (its timer ran that late)")
                 }
                 if (reports == 1) { say("first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}"); if (!quiet) onFirstReport(m.optDouble("t", 0.0), m.optDouble("d", 0.0)) }
+                pageQualityReport(m)
                 val aw = m.optInt("aw", 0)
                 if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; say("away", "the page's own player controls put away: $aw element(s)") }
             }
@@ -192,6 +204,38 @@ class PlayerController(
 
     /** Is [wx], [wy] (window coordinates) on one of the shown controls? Such a touch is the controls' own: the activity does not count it as a tap on the picture. */
     fun controlAt(wx: Float, wy: Float): Boolean = sheetOpen() || view.controlAtWindow(wx, wy)
+
+    /** QL1: the report may carry the page player's quality list (`q`: [[id, label], ...], sent on the first reports, when it changes and now and then), its current pick (`qc`) and the family (`qf`). */
+    private fun pageQualityReport(m: JSONObject) {
+        if (m.has("qc")) pageCur = m.optString("qc").take(PageLevels.MAX_ID)
+        if (m.has("qf")) pageFam = m.optString("qf").take(8)
+        val qa = m.optJSONArray("q") ?: return
+        val raw = ArrayList<Pair<String, String>>()
+        for (i in 0 until minOf(qa.length(), 24)) { val e = qa.optJSONArray(i) ?: continue; raw.add(e.optString(0) to e.optString(1)) }
+        val lv = PageLevels.clean(raw)
+        if (lv == pageLevels) return
+        pageLevels = lv
+        if (lv.isNotEmpty()) { pageListsSeen++; pageLast = "$pageFam: " + lv.joinToString(", ") { it.label }; Health.count("quality.page.lists"); say("quality-levels", "the page's own player ($pageFam) offers ${lv.size} row(s): ${lv.joinToString(", ") { it.label }}") }
+        refreshQuality()
+    }
+
+    /** QL1: does the page's own player offer a quality list for this film? Then the Quality button opens THAT list (the film goes on in the page, no hand-over). */
+    fun hasPageLevels(): Boolean = pageLevels.size >= 2
+    fun pageLevelList(): List<PageLevels.Level> = pageLevels
+    fun pageSelectedId(): String? = PageLevels.selectedId(pagePicked, pageCur, pageLevels)
+    fun pageFamily(): String = pageFam
+
+    /** QL1: a row of the page's list was picked: only an id of the held list goes to the page, as one command in the next answer. */
+    fun setPageQuality(id: String): Boolean {
+        val lv = PageLevels.valid(id, pageLevels) ?: return false
+        commands.add("{\"a\":\"ql\",\"q\":\"${lv.id}\"}")
+        pagePicked = lv.id; pagePicks++; pageLast = "picked ${lv.label} ($pageFam)"; Health.count("quality.page.picks")
+        say("quality-page", "picked ${lv.label} in the page's own player ($pageFam)")
+        return true
+    }
+
+    /** QL1: Diagnostics. */
+    fun pageQualityLine(): String = "Quality list from the page's own player (full-screen controls): lists seen $pageListsSeen, picks $pagePicks; last: $pageLast"
 
     /** ANS53d.2: the media list changed: the Quality button follows it (a film's playlist read a moment after the full screen began). */
     fun refreshQuality() {

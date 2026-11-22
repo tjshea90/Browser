@@ -60,4 +60,16 @@ class MediaHeadersTest {
         assertEquals("https://player.test/", l.find("https://cdn.test/a.m3u8")!!.referer)
         assertFalse(l.add(again)) // nothing new the second time
     }
+
+    @Test fun aServerThatAnswers404ToTheWrongHeadersGetsTwoMoreSetsAndADeadAddressDoesNotCostMore() {
+        assertTrue(MediaHeaders.tryNextSet(403, 0)); assertTrue(MediaHeaders.tryNextSet(401, 0)); assertTrue(MediaHeaders.tryNextSet(-1, 5))
+        assertTrue(MediaHeaders.tryNextSet(404, 0)); assertTrue(MediaHeaders.tryNextSet(404, 1)); assertFalse(MediaHeaders.tryNextSet(404, 2))
+        assertTrue(MediaHeaders.tryNextSet(406, 1)); assertFalse(MediaHeaders.tryNextSet(406, 2))
+        for (done in intArrayOf(200, 206, 301, 400, 410, 416, 429, 500, 503)) assertFalse("final: $done", MediaHeaders.tryNextSet(done, 0))
+    }
+
+    @Test fun onlyAGetCanBeAskedAgainAsAGet() {
+        assertTrue(MediaHeaders.replayable("")); assertTrue(MediaHeaders.replayable("GET")); assertTrue(MediaHeaders.replayable("get"))
+        assertFalse(MediaHeaders.replayable("POST")); assertFalse(MediaHeaders.replayable("OPTIONS")); assertFalse(MediaHeaders.replayable("PUT"))
+    }
 }
