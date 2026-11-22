@@ -1,13 +1,13 @@
-# CHECKPOINT 2891 — read me first, then TASKS.md
+# CHECKPOINT 2892 — read me first, then TASKS.md
 
-**Written:** 2026-11-22T03:46:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `ed86677d` (this checkpoint is the commit after it)
+**Written:** 2026-11-22T03:51:04Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `4e9d13f6` (this checkpoint is the commit after it)
 
 ## Just done
-Owner clarified: 'typing here' and 'photos to this Claude chat' = claude.ai IN Kestrel G (PERF4e): typing lag, slow load and the failing photo upload are all claude.ai in Kestrel
+alpha90 upload read (PERF4f in TASKS): typing keys reach the page fast (13 ms address, 7 ms page); photo files are fine (2 PNG readable) so the upload failure is inside claude.ai; pornhub 720p is 60 fps with 40% dropped frames (rule off = no hand-over to Kestrel's player); pornhub watch page hides .watchpageAd x3 (the geometry suspect). alpha91 plan in PERF4g
 
 ## Do this next
-Next: read the alpha90 uploads (033935, 034203): TYPING LATENCY page vs address, claude.ai page timing + Shields A/B, filepick picked lines, pornhub video page rules/stall; then fix
+Next: implement alpha91: CosmeticFixes drops (.watchpageAd, #mobileContainer ... has(> .watchpageAd), .mgp_overlayContainer, the .clear.hd:has(.adsbytrafficjunky) strip, .middleAdContainer, .noBottom, .ad-tabSplit) for pornhub + test; hidden-rules second pass at 12 s sending only new selectors; page typing response probe (rAF wait) in content.js/background/bridge/BrowserActivity/digest; gate; alpha91; answer owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: read the alpha90 uploads (033935, 034203): TYPING LATENCY page vs address,
 
 ## Last ten checkpoints
 ```
+  4e9d13f6 ckpt 2891: Owner clarified: 'typing here' and 'photos to this Claude chat' = claude.ai 
   ed86677d ckpt 2890: Owner after alpha90 (PERF4 in TASKS.md): photos still cannot be uploaded to 
   b02ae3d2 ckpt 2889: alpha90 RELEASED and recorded (run 44970827834 green, Release has the APK). 
   16cc4189 ckpt 2887: alpha90 (code 191) gated and shipped: ONE dispatch made right after ship.sh 
@@ -25,5 +26,4 @@ Next: read the alpha90 uploads (033935, 034203): TYPING LATENCY page vs address,
   67c4ba53 ckpt 2875: Owner after alpha89: video still stuck, typing very laggy, loading animation
   df05f162 ckpt 2874: alpha89 RELEASED and recorded (run 44964790281 green, Release has the APK). 
   69bc7341 ckpt 2872: alpha89 (code 190) gated and shipped: ONE dispatch made right after ship.sh 
-  d89d6370 ckpt 2871: gated kestrel-g-v0.3.0-alpha89 (gecko code 190) and pushed it: handoff self-
 ```
