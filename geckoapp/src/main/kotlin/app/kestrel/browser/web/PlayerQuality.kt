@@ -130,6 +130,7 @@ class PlayerQuality(
         if (alt != null) {                                                       // PERF5b: another list of the film
             val cls = QualityLabel.pClass(alt.w, alt.h)
             chosen = QualityLabel.Rung(alt.w, alt.h, 0f, 0L); remember(cls); capH = cls
+            PlayerFactory.applyCap(p, capH)
             if (!priv) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = "${cls}p" }
             say("quality", "${cls}p (another list of the same film)")
             switchAlt(alt)
