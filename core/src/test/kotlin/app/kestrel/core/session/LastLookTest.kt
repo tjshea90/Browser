@@ -2,6 +2,7 @@ package app.kestrel.core.session
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,6 +42,36 @@ class LastLookTest {
         assertFalse("another skin", LastLookRules.usable(m, "https://news.test/story", "160.0", "plain", false, false))
         assertFalse("dark pages switched on", LastLookRules.usable(m, "https://news.test/story", "160.0", "neon", true, false))
         assertFalse("desktop site switched on", LastLookRules.usable(m, "https://news.test/story", "160.0", "neon", false, true))
+    }
+
+    @Test fun theReasonWhyAPictureCannotBeUsedIsOneWord() {
+        val m = meta()
+        assertNull(LastLookRules.whyNot(m, "https://news.test/story#x", "160.0", "neon", false, false))
+        assertEquals("page", LastLookRules.whyNot(m, "https://news.test/other", "160.0", "neon", false, false))
+        assertEquals("engine", LastLookRules.whyNot(m, "https://news.test/story", "161.0", "neon", false, false))
+        assertEquals("skin", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "plain", false, false))
+        assertEquals("dark", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "neon", true, false))
+        assertEquals("desktop", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "neon", false, true))
+        assertEquals("the address is named first when several differ", "page", LastLookRules.whyNot(m, "https://news.test/other", "161.0", "plain", true, true))
+    }
+
+    @Test fun theSystemNightModeCountsOnlyWhileDarkPagesFollowTheSystem() {
+        assertNotEquals("follow the system: day and night look different", LastLookRules.appearanceKey("reaper1", 0, 16), LastLookRules.appearanceKey("reaper1", 0, 32))
+        for (wd in listOf(1, 2)) assertEquals("dark forced / never: the page looks the same by day and night", LastLookRules.appearanceKey("reaper1", wd, 16), LastLookRules.appearanceKey("reaper1", wd, 32))
+        assertNotEquals(LastLookRules.appearanceKey("reaper1", 1, 16), LastLookRules.appearanceKey("reaper1", 2, 16))
+        val day = meta().let { LastLookMeta(it.url, it.scrollY, it.w, it.h, it.at, it.engine, LastLookRules.appearanceKey("reaper1", 0, 16), false, false) }
+        assertEquals("night", LastLookRules.whyNot(day, day.url, day.engine, LastLookRules.appearanceKey("reaper1", 0, 32), false, false))
+        assertEquals("skin", LastLookRules.whyNot(day, day.url, day.engine, LastLookRules.appearanceKey("reaper2", 0, 16), false, false))
+        assertEquals("skin", LastLookRules.whyNot(day, day.url, day.engine, "plain", false, false))
+    }
+
+    @Test fun aLoadingPageIsPhotographedOnlyWhenLeavingAndOnlyAfterItPaintedThisAddress() {
+        val u = "https://news.test/story"
+        assertTrue("leaving a page that painted and never finishes loading", LastLookRules.mayTakeWhileLoading("pause", u, u))
+        assertTrue("the #fragment is the same page", LastLookRules.mayTakeWhileLoading("pause", u, "$u#comments"))
+        assertFalse("a new navigation under way: the screen still shows the old page", LastLookRules.mayTakeWhileLoading("pause", "https://news.test/old", u))
+        assertFalse("nothing painted yet", LastLookRules.mayTakeWhileLoading("pause", "", u))
+        for (why in listOf("settled", "page-stop", "grid")) assertFalse("$why keeps the old rule", LastLookRules.mayTakeWhileLoading(why, u, u))
     }
 
     @Test fun thePictureFitsTheWidthExactlyOrScaledOrNotAtAll() {
