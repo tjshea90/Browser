@@ -1,13 +1,13 @@
-# CHECKPOINT 2968 — read me first, then TASKS.md
+# CHECKPOINT 2971 — read me first, then TASKS.md
 
-**Written:** 2026-11-22T07:24:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-144aedec-7apwin` · **builds on:** `3736b46d` (this checkpoint is the commit after it)
+**Written:** 2026-11-22T07:29:07Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-144aedec-7apwin` · **builds on:** `89f169f8` (this checkpoint is the commit after it)
 
 ## Just done
-PERF8 code (not released): (a) VideoFlow.offerSiblings gives the player that is up the film's other lists after every playlist look (the late hand-over started before the sibling lists were read: no quality button), PlayerQuality.updateAlts, NativePlayerActivity.offerAlts + live ref, InlinePlayer.offerAlts, lookAsap on a declined press, a look pass reads up to 6 lists; (b) new page script calm.js (turns the stuck loading circle of a paused never-played video into a play mark, reports 'video calm <element> <size> <parent clip cutBottom>' via verr code 98) + web-tests/calm.test.js 5 green + background.test.js updated (130 green); (c) GeckoEngine.logDrawPrefs 'engine draw-prefs' line 20 s after start; OwnerRulesTest.perf8 pin; compile + OwnerRulesTest green
+pre-ship: alpha93: quality button in the full-screen player, the stuck loading circle, and a proof line for the clipped circle. (1) Your upload shows why the full-screen player had no quality controls: after a fresh page load the first press finds no film yet, so Kestrel's player starts a moment later (the late hand-over) and at that moment it had not read the film's other qualities. It now reads all the film's lists at once when a press is declined, and gives the player that is already up the other qualities as soon as they are read, so the quality button appears in full screen and in the page. (2) The loading circle that stays on the site's player (pornhub's player waits for a film Kestrel is holding or has taken over): a big video that is paused and never played, with a circle that spins for ever on it, now shows a play mark instead of the circle (tap it as before); the mark goes away when the video plays. A box cutting the circle off is a page layout fact, so the app also logs which element the circle is and whether a parent box clips it and by how many pixels (line video calm in Diagnostics): that settles whether the clipped circle is the page or the engine's drawing. (3) A line engine draw-prefs now tells what the engine really has for the Safe drawing settings. Not run on the tablet: the circle change and the quality button (the emulator has no pornhub).
 
 ## Do this next
-Next: wait for web-tests full run (w1.log in scratchpad, EXIT line), then versionCode 194 / alpha93: write docs/handoff/ALPHA93_RELEASE_NOTE.txt, bash ship.sh gecko with the note, ONE dispatch, tag + jobs + get_release_by_tag, record-release.sh with the identical note, tick PERF8a (alts late) as shipped-not-confirmed, PERF8b calm.js shipped-not-confirmed (the next upload line 'video calm' names the circle element and whether a parent clips it), PERF8c draw-prefs line; then answer the owner
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: wait for web-tests full run (w1.log in scratchpad, EXIT line), then versio
 
 ## Last ten checkpoints
 ```
+  335cc029 ckpt 2968: PERF8 code (not released): (a) VideoFlow.offerSiblings gives the player that
   06774fc1 ckpt 2959: PERF8 written to TASKS.md (owner after alpha92: fullscreen Kestrel player wo
   f41f8f8b ckpt 2958: alpha92 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha92 (gecko code 193, run
   292067e6 ckpt 2955: alpha92 (gecko code 193) gated by ship.sh (core+app suites, lint, handoff se
@@ -25,8 +26,7 @@ Next: wait for web-tests full run (w1.log in scratchpad, EXIT line), then versio
   449480c7 ckpt 2933: PERF7 started on branch ccr-144aedec-7apwin: owner request + 2 screenshots w
   4da54c18 ckpt 2915: alpha91 RELEASED and recorded (run 44987313373 green, Release has the APK). 
   a42e5268 ckpt 2913: alpha91 (code 192) gated (ship.sh green on attempt 3) and ONE dispatch made 
-  df3d34d1 ckpt 2912: gated kestrel-g-v0.3.0-alpha91 (gecko code 192) and pushed it: handoff self-
 ```
 
-(8 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
