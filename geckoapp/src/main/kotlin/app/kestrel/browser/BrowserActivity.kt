@@ -2653,6 +2653,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 else -> {
                     val code = m.optInt("c"); val src = m.optString("s", "none")
+                    if (code == 98) { Health.log("video", "calm", "$host ${m.optString("x").take(160)} net=${m.optInt("ns")} ready=${m.optInt("rs")} frame=$sub"); return@post }   // PERF8b: calm.js turned a loading circle of a paused video into a play mark and says what it found (a private tab was dropped above)
                     app.kestrel.browser.web.VideoBySite.sites.error(host, code, src)
                     Health.log("video", "error", "$host code=$code net=${m.optInt("ns")} ready=${m.optInt("rs")} src=$src frame=$sub el=${m.optString("e", "v")}" + (if (code == 99) " paused=${m.optInt("pa")} buf=${m.optInt("b")}" else ""))   // 99 = stuck loading: no error event, no data (videoprobe.js)
                 }
