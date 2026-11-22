@@ -60,7 +60,7 @@ function harness(app, opts) {
   opts = opts || {};
   const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 }, filters = [];
   const ctx = {
-    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder,
+    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder, URL,   // (URL: BK10 reads the address of a main page)
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
@@ -86,7 +86,7 @@ function harness(app, opts) {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
         // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
-        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
+        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.types && filter.types.length === 1 && filter.types[0] === 'main_frame') { listeners.bkHeaders = f; listeners.bkFilter = filter; } else if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
         filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
         onBeforeRedirect: { addListener: (f) => { listeners.redirect = f; } },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
@@ -1906,4 +1906,64 @@ test('RVW2 F16: a redirected media request reports the FINAL address and the add
   assert.equal(m.length, 2);
   assert.equal(m[0].u, C); assert.equal(m[0].ru, A);
   assert.equal('ru' in m[1], false);
+});
+
+// ---- BK10 (owner 2026-11-21: Back is slow and sits on a picture; "caching sites for instant reloading may be the answer"; RX3-BK5): a main page that forbids caching is made cacheable for Back, never where it is a safety rule
+const BKCFG = `1:1:${ID}:0:0:0:1`;   // the app's 7th field = 1: Settings > Instant Back is on
+const bkRes = (h, url, headers, extra) => h.listeners.bkHeaders(Object.assign({ tabId: 1, frameId: 0, type: 'main_frame', method: 'GET', url, statusCode: 200, requestId: '9', responseHeaders: headers }, extra || {}));
+const html = (cc) => [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }, { name: 'Cache-Control', value: cc }];
+const ccOf = (r) => r && r.responseHeaders && r.responseHeaders.filter((x) => x.name === 'Cache-Control').map((x) => x.value);
+
+test('BK10: with Instant Back on, a no-store web page is answered with no-cache instead, and the app is told so (once, with rx)', async () => {
+  const h = harness(standardApp({ cfg: BKCFG }));
+  h.mainFrame(PAGE, { requestId: '9' });
+  await tick(20);                                                    // the page answer (and its 7th field) has arrived
+  const r = bkRes(h, 'https://news.example.org/story/5', html('private, No-Store, max-age=0'));
+  eq(ccOf(r), ['private, max-age=0, no-cache']);
+  eq(ccOf(bkRes(h, 'https://news.example.org/a', html('no-store'), { requestId: '10' })), ['no-cache']);
+  eq(ccOf(bkRes(h, 'https://news.example.org/b', html('no-store, no-cache'), { requestId: '11' })), ['no-cache']);
+  await tick(20);
+  eq(h.of('ns').filter((m) => m.rx === 1).map((m) => m.p), ['https://news.example.org/story/5', 'https://news.example.org/a', 'https://news.example.org/b']);
+});
+
+test('BK10: nothing changes with the switch off, in a private tab, for a non-page, a non-GET, an answer that is not 200 or an address with a password', async () => {
+  const off = harness(standardApp());                                // the old 6-field answer: off
+  off.mainFrame(PAGE, { requestId: '9' }); await tick(20);
+  eq(off.listeners.bkHeaders({ tabId: 1, frameId: 0, type: 'main_frame', method: 'GET', url: 'https://news.example.org/x', statusCode: 200, requestId: '9', responseHeaders: html('no-store') }), {});
+  const h = harness(standardApp({ cfg: BKCFG }));
+  h.mainFrame(PAGE, { requestId: '9' }); await tick(20);
+  const u = 'https://news.example.org/x';
+  eq(bkRes(h, u, html('no-store'), { incognito: true }), {});
+  eq(bkRes(h, u, html('no-store'), { method: 'POST' }), {});
+  eq(bkRes(h, u, html('no-store'), { statusCode: 302 }), {});
+  eq(bkRes(h, 'https://user:pw@news.example.org/x', html('no-store')), {});
+  eq(bkRes(h, 'https://files.example.org/a.pdf', [{ name: 'Content-Type', value: 'application/pdf' }, { name: 'Cache-Control', value: 'no-store' }]), {});
+  eq(bkRes(h, u, html('max-age=60')), {});                           // cacheable already: nothing to relax
+  await tick(20);
+  eq(h.of('ns').filter((m) => m.rx === 1).length, 0);
+});
+
+test('BK10: mail, banking, payment, sign-in, account and health addresses keep no-store whatever the setting says', async () => {
+  const h = harness(standardApp({ cfg: BKCFG }));
+  h.mainFrame(PAGE, { requestId: '9' }); await tick(20);
+  const kept = [
+    'https://mail.google.com/mail/u/0/', 'https://outlook.live.com/mail/0/', 'https://mail.proton.me/u/0/inbox', 'https://www.chase.com/personal', 'https://secure.bankofamerica.com/login',
+    'https://accounts.google.com/signin/v2', 'https://www.paypal.com/myaccount/summary', 'https://shop.example.com/checkout/step2', 'https://example.com/login?next=%2F', 'https://example.com/account/orders',
+    'https://example.com/auth/callback?code=abc', 'https://example.com/page?token=xyz', 'https://portal.example.edu/grades', 'https://www.irs.gov/refunds', 'https://myhealth.example.org/',
+    'https://www.firstcreditunion.example/', 'https://id.example.com/', 'https://example.com/settings/privacy', 'https://web.coinbase.com/', 'https://www.icloud.com/photos',
+  ];
+  for (const u of kept) eq([u, bkRes(h, u, html('no-store'))], [u, {}]);
+  const relaxed = ['https://www.reddit.com/r/android/', 'https://x.com/home', 'https://gemini.google.com/app', 'https://www.facebook.com/', 'https://news.example.org/politics/2026/story', 'https://doraby.com/ozark/'];
+  for (const u of relaxed) eq([u, ccOf(bkRes(h, u, html('no-store')))], [u, ['no-cache']]);
+});
+
+test('BK10: the plain "this page forbids caching" report is not sent for a page that was just made cacheable; it still is for one that was kept as it was', async () => {
+  const h = harness(standardApp({ cfg: BKCFG }));
+  h.mainFrame(PAGE, { requestId: '5' }); await tick(20);
+  bkRes(h, PAGE, html('no-store'), { requestId: '5' });                                   // relaxed here
+  h.listeners.headers({ tabId: 1, frameId: 0, type: 'main_frame', url: PAGE, statusCode: 200, requestId: '5', responseHeaders: html('no-store') });
+  h.mainFrame('https://mail.google.com/mail/', { requestId: '6' });
+  h.listeners.headers({ tabId: 1, frameId: 0, type: 'main_frame', url: 'https://mail.google.com/mail/', statusCode: 200, requestId: '6', responseHeaders: html('no-store') });
+  await tick(20);
+  eq(h.of('ns').map((m) => [m.p, m.rx || 0]), [[PAGE, 1], ['https://mail.google.com/mail/', 0]]);
 });
