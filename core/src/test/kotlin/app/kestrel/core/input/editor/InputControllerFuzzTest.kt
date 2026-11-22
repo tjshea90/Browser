@@ -47,14 +47,14 @@ class InputControllerFuzzTest {
         }
     }
 
-    private fun run(seed: Long, ops: Int, lazy: Boolean, external: Boolean, flaky: Boolean = false) {
+    private fun run(seed: Long, ops: Int, lazy: Boolean, external: Boolean, flaky: Boolean = false, inlineReports: Boolean = false) {
         val rnd = Random(seed)
         val start = listOf("", "hello world", "x".repeat(130), "line one\nline two")[rnd.nextInt(4)]
         val log = ArrayList<String>()
         var firstForeign: String? = null
         val traceLines = ArrayList<String>()
         val r = Rig(start, if (rnd.nextBoolean()) start.length else rnd.nextInt(start.length + 1), multiline = rnd.nextInt(4) != 0,
-            action = if (rnd.nextInt(5) == 0) ImeActions.SEARCH else ImeActions.UNSPECIFIED)
+            action = if (rnd.nextInt(5) == 0) ImeActions.SEARCH else ImeActions.UNSPECIFIED, inlineReports = inlineReports)
         try {
             for (i in 0 until ops) {
                 if (flaky && rnd.nextInt(15) == 0) {
@@ -77,6 +77,9 @@ class InputControllerFuzzTest {
 
     @Test fun ownEditsOnlyReportsDeliveredAtOnce() { for (s in 1L..(1L + (250 - 1) * scale)) run(s, 120, lazy = false, external = false) }
     @Test fun ownEditsOnlyReportsArriveLateAndInBatches() { for (s in 1000L..(1000L + (1250 - 1000) * scale)) run(s, 120, lazy = true, external = false) }
+    /** The editor reports INSIDE each call, as an editor in the keyboard's own process does on Android 10 (TASKS Q-SMARTSPACE). */
+    @Test fun ownEditsOnlyReportsComeInsideTheEditCall() { for (s in 1L..(1L + (250 - 1) * scale)) run(s, 120, lazy = false, external = false, inlineReports = true) }          // (the same streams as the first test: only the way the reports arrive differs)
+    @Test fun reportsInsideTheEditCallWhileTheUserAndTheAppChangeTheText() { for (s in 2000L..(2000L + (2250 - 2000) * scale)) run(s, 120, lazy = false, external = true, inlineReports = true) }     // (the same streams as the third test)
     @Test fun theUserAndTheAppChangeTheTextInBetweenReportsAtOnce() { for (s in 2000L..(2000L + (2250 - 2000) * scale)) run(s, 120, lazy = false, external = true) }
     @Test fun theUserAndTheAppChangeTheTextInBetweenReportsLate() { for (s in 3000L..(3000L + (3250 - 3000) * scale)) run(s, 120, lazy = true, external = true) }
     @Test fun anEditorThatDiesAndComesBack() { for (s in 4000L..(4000L + (4150 - 4000) * scale)) run(s, 120, lazy = false, external = false, flaky = true) }

@@ -15,7 +15,7 @@ on:
       suite:
         description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box turned sideways and back, with the system bars hidden and kept (owner message 46), then the sound check; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, pack, sweep, aot, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
@@ -26,6 +26,11 @@ on:
         type: choice
         options: [full, hotspot]
         default: full
+      profile:
+        description: 'Which device: standard = the older lab (x86_64 Android 10, as every earlier run), tablet = as close to the owner tablet as an emulator gets (low-RAM flag asked for, font scale 1.2, 2 GB, 600x973 at 170 dpi; NOT 32-bit: no 32-bit x86 GeckoView exists), auto = tablet for the daily suite and standard for the rest'
+        type: choice
+        options: [auto, tablet, standard]
+        default: auto
   workflow_call:
     inputs:
       suite:
@@ -37,6 +42,9 @@ on:
       net:
         type: string
         default: full
+      profile:
+        type: string
+        default: auto
 
 permissions:
   contents: read
@@ -70,21 +78,62 @@ jobs:
       - name: ffmpeg (the lab makes its own video clips)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
+      - name: Choose the device profile (LAB3a)
+        env:
+          PROFILE_IN: ${{ inputs.profile }}
+          SUITE_IN: ${{ inputs.suite }}
+        run: |
+          P="$PROFILE_IN"
+          if [ -z "$P" ] || [ "$P" = auto ]; then if [ "$SUITE_IN" = daily ]; then P=tablet; else P=standard; fi; fi
+          # the tablet's userland is 32-bit (sys_mssi_t_32_ago, docs/HARDWARE.md) but NO 32-bit match is possible: Mozilla publishes no geckoview-x86 for GeckoView 160 (lab run 43997001918:
+          # "Could not find org.mozilla.geckoview:geckoview-x86:160.0.20261104181552"), so both profiles use x86_64; the report's hardware table says so
+          IMG=x86_64
+          echo "PROFILE=$P" >> "$GITHUB_ENV"
+          echo "IMG_ABI=$IMG" >> "$GITHUB_ENV"
+          echo "device profile: $P (image android-29 default $IMG)"
+
       - name: Android emulator and the Android 10 system image
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses >/dev/null 2>&1 || true
-          "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;x86_64" 2>&1 | tr '\r' '\n' | tail -4
-          ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/x86_64" | head -5
+          "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;$IMG_ABI" 2>&1 | tr '\r' '\n' | tail -4
+          ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/$IMG_ABI" | head -5
 
-      - name: Build the Kestrel G debug app for x86_64 (the real Firefox engine, GeckoView 160)
-        run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64 --console=plain
+      - name: Build the Kestrel G debug app for the emulator's ABI (the real Firefox engine, GeckoView 160)
+        run: |
+          if [ "$SUITE" = pack ]; then
+            # LAB5b: the packaging A/B builds four APKs of the SAME code: A = the old layout (omni.ja deflated, libs extracted), B = omni.ja stored (the alpha64 default), C = native libraries kept in the APK, D = both (geckoapp/build.gradle.kts switches)
+            mkdir -p "$RUNNER_TEMP/apks"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=false --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/A.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/B.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=false -PlibsInApk=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/C.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
+            ls -l "$RUNNER_TEMP/apks"
+          elif [ "$SUITE" = aot ] && [ "$MINUTES" != dm ] && [ "$MINUTES" != breadth ]; then
+            # LAB7b: the update lab needs the SAME code twice, the second build with the NEXT versionCode and extension version = what an update looks like to the engine (a new install path, a new built-in extension version)
+            mkdir -p "$RUNNER_TEMP/apks"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/old.apk"
+            VC="$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' geckoapp/build.gradle.kts | head -1)"
+            sed -i "s/^\( *versionCode = \)$VC/\1$((VC+1))/" geckoapp/build.gradle.kts
+            bash tools/sync-ext-version.sh
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/new.apk"
+            git checkout -- geckoapp/build.gradle.kts geckoapp/src/main/assets/kestrel-shields/manifest.json
+            echo "update pair: versionCode $VC -> $((VC+1))"; ls -l "$RUNNER_TEMP/apks"
+          else
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+          fi
 
       - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 2 cores)
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p "$ANDROID_AVD_HOME"
-          echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;x86_64" -d pixel --force
+          echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;$IMG_ABI" -d pixel --force
           avdmanager list avd | head -12
           CFG="$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
           [ -f "$CFG" ] || { echo "::error::no config.ini at $CFG"; find "$HOME" -name config.ini -path '*avd*' 2>/dev/null | head; exit 1; }
@@ -103,18 +152,40 @@ jobs:
       - name: Start the emulator and wait until Android 10 has booted
         run: |
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
-          nohup emulator -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          BASE="-avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics"
+          # LAB3a: the tablet is a low-RAM (Go) device: ask the emulator for ro.config.low_ram=true at boot. The read-back below says whether the image took it; if the emulator
+          # refuses the option it is started again without it (the run then says so in the report)
+          EXTRA=""
+          if [ "$PROFILE" = tablet ]; then EXTRA="-prop ro.config.low_ram=true"; fi
+          ASKED="$EXTRA"; OUTCOME="not asked"
+          nohup emulator $BASE $EXTRA > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          EPID=$!
+          sleep 25
+          if [ -n "$ASKED" ]; then OUTCOME="the emulator started with $ASKED"; fi
+          if ! kill -0 "$EPID" 2>/dev/null && [ -n "$EXTRA" ]; then
+            echo "::warning::the emulator did not start with $EXTRA: starting it without (the lab report will say the low-RAM flag is not set)"
+            OUTCOME="the emulator REFUSED $ASKED and was started without it: $(tail -3 "$RUNNER_TEMP/emulator.log" | tr '\n' ' ' | cut -c1-200)"
+            tail -5 "$RUNNER_TEMP/emulator.log"
+            EXTRA=""
+            nohup emulator $BASE > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          fi
+          echo "$OUTCOME" > "$RUNNER_TEMP/lowram-attempt.txt"
+          echo "EMU_EXTRA=$EXTRA" >> "$GITHUB_ENV"
           adb start-server
           adb wait-for-device
           timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 5; done' || { echo "::error::the emulator did not finish booting in 10 minutes"; tail -30 "$RUNNER_TEMP/emulator.log"; exit 1; }
           sleep 10
           adb shell getprop ro.build.version.release
+          echo "device facts (LAB3a): abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r') abilist=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r') low_ram=$(adb shell getprop ro.config.low_ram | tr -d '\r') sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r') cores=$(adb shell nproc | tr -d '\r') mem=$(adb shell 'grep MemTotal /proc/meminfo' | tr -d '\r')"
+          adb shell getprop > "$RUNNER_TEMP/device-props.txt" 2>/dev/null || true
+          echo "read-back after boot: ro.config.low_ram='$(adb shell getprop ro.config.low_ram | tr -d '\r')'" >> "$RUNNER_TEMP/lowram-attempt.txt"
           echo "java heap properties of this boot:"; adb shell getprop | grep -i "dalvik.vm.heap" || true   # lab run 43753283814: the first emulator boot gave apps a 16 MB heap limit (the app died of OutOfMemoryError in a crash loop); the next one had 512 MB
           adb shell wm size
           adb shell wm density
           emulator -version | head -2
 
       - name: Install the app and start the lab server
+        if: inputs.suite != 'pack' && inputs.suite != 'sweep' && inputs.suite != 'aot'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           APK="$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
@@ -129,14 +200,118 @@ jobs:
           adb reverse tcp:8091 tcp:8091
           cat "$RUNNER_TEMP/lab-out/soaklab.log"
 
+      - name: Run the packaging lab (LAB5b)
+        if: inputs.suite == 'pack'
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$RUNNER_TEMP/lab-out"
+          python3 -u -I tools/emu/packlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --rounds 3 --starts 4 --apk A="$RUNNER_TEMP/apks/A.apk" --apk B="$RUNNER_TEMP/apks/B.apk" --apk C="$RUNNER_TEMP/apks/C.apk" --apk D="$RUNNER_TEMP/apks/D.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          if [ -f "$RUNNER_TEMP/lab-out/PACK-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/PACK-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Run the engine preference sweep (LAB5b)
+        if: inputs.suite == 'sweep'
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$RUNNER_TEMP/lab-out"
+          ARGS=""
+          while IFS= read -r line; do case "$line" in ''|'#'*) continue;; esac; ARGS="$ARGS --variant $(printf '%q' "$line")"; done < tools/emu/sweep-variants.txt
+          echo "variants:$ARGS"
+          eval python3 -u -I tools/emu/prefsweep.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --rounds "${MINUTES:-5}" $ARGS 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          if [ -f "$RUNNER_TEMP/lab-out/SWEEP-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/SWEEP-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Run the ahead-of-time compile lab (LAB5b)
+        if: inputs.suite == 'aot'
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$RUNNER_TEMP/lab-out"
+          APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
+          # LAB7a: THREE release builds (R8-minified, for the emulator's ABI, signed with the repository's public dev key) that differ only in the baseline profile rules (tools/emu/profvariant.py):
+          # base = the shipped rules, exercised = every method the lab ran marked hot, all = one wildcard rule that marks every method hot
+          mkdir -p "$RUNNER_TEMP/apks"
+          buildrel() {
+            ./gradlew :geckoapp:assembleRelease -PgeckoAbi=$IMG_ABI --console=plain > "$RUNNER_TEMP/release-build-$1.log" 2>&1 || tail -30 "$RUNNER_TEMP/release-build-$1.log"
+            cp geckoapp/build/outputs/apk/release/geckoapp-release.apk "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null || echo "::warning::release build $1 produced no APK"
+            cp geckoapp/build/outputs/apk/release/baselineProfiles/1/geckoapp-release.dm "$RUNNER_TEMP/apks/rel-$1.dm" 2>/dev/null || true
+            { echo "== $1"; unzip -l "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null | grep -E "dexopt|classes.*dex"; ls -l geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm 2>/dev/null; } >> "$RUNNER_TEMP/lab-out/profile-builds.txt"
+          }
+          # lab_minutes picks the run: dm = the shipped profile through the updater's own install path (quick check of a release candidate); breadth = the install-time compile variants again with many more
+          # samples (LAB7a); anything else = the full LAB7 run (the update test and the breadth test)
+          case "$MINUTES" in dm) MODE=dm;; breadth) MODE=breadth;; *) MODE=full;; esac
+          if [ "$MODE" = dm ]; then
+            buildrel shipped
+          else
+            python3 -I tools/emu/profvariant.py current geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+            buildrel current
+            git checkout -- geckoapp/src/main/baseline-prof.txt
+            if [ "$MODE" = full ]; then
+              python3 -I tools/emu/profvariant.py exercised geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+              buildrel exercised
+              git checkout -- geckoapp/src/main/baseline-prof.txt
+            fi
+            python3 -I tools/emu/profvariant.py all geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+            buildrel all
+            git checkout -- geckoapp/src/main/baseline-prof.txt
+          fi
+          cat "$RUNNER_TEMP/lab-out/profile-builds.txt"
+          if [ "$MODE" = dm ]; then
+            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases dm --dm-only --release-apk "$RUNNER_TEMP/apks/rel-shipped.apk" --release-dm "$RUNNER_TEMP/apks/rel-shipped.dm" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          elif [ "$MODE" = breadth ]; then
+            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases breadth --breadth-rounds 6 --starts 4 --variants sp-current,sp-all \
+              --release-apk "$RUNNER_TEMP/apks/rel-current.apk" --apk-all "$RUNNER_TEMP/apks/rel-all.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          else
+            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --phases update,breadth --update-rounds 2 --breadth-rounds 2 --starts 4 \
+              --old-apk "$RUNNER_TEMP/apks/old.apk" --new-apk "$RUNNER_TEMP/apks/new.apk" \
+              --release-apk "$RUNNER_TEMP/apks/rel-current.apk" --apk-exercised "$RUNNER_TEMP/apks/rel-exercised.apk" --apk-all "$RUNNER_TEMP/apks/rel-all.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          fi
+          if [ -f "$RUNNER_TEMP/lab-out/AOT-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/AOT-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
+        if: inputs.suite != 'pack' && inputs.suite != 'sweep' && inputs.suite != 'aot'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
           # when the emulated phone's system keeps dying (lab runs 3 and 5) the driver starts this same emulator again from a clean disk and installs the app again
-          EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics"
-          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics $EMU_EXTRA"
+          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+
+      - name: Keep the ART profile of this run (LAB5b, the methods the app really runs, raw material of a baseline profile)
+        if: always() && inputs.suite != 'pack' && inputs.suite != 'sweep' && inputs.suite != 'aot'
+        continue-on-error: true
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          OUT="$RUNNER_TEMP/lab-out/profile"; mkdir -p "$OUT"
+          adb root >/dev/null 2>&1 || true
+          sleep 2
+          PID="$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')"
+          echo "pid of $PKG: ${PID:-none}" > "$OUT/notes.txt"
+          # SIGUSR1 makes ART write its in-memory JIT profile now; dump-profiles turns it into text (research/LAB5_PACKAGING.md)
+          if [ -n "$PID" ]; then adb shell kill -SIGUSR1 "$PID"; sleep 8; fi
+          adb shell cmd package dump-profiles "$PKG" > "$OUT/dump-profiles.out" 2>&1 || true
+          adb shell "ls -laR /data/misc/profman /data/misc/profiles/cur/0/$PKG /data/misc/profiles/ref/$PKG 2>&1" > "$OUT/ls.txt" 2>&1 || true
+          adb pull /data/misc/profman "$OUT/profman" > /dev/null 2>&1 || true
+          adb pull "/data/misc/profiles/cur/0/$PKG" "$OUT/cur" > /dev/null 2>&1 || true
+          adb shell "dumpsys package dexopt 2>&1 | grep -A10 $PKG" > "$OUT/dexopt.txt" 2>&1 || true
+          # the text form with classes and methods (the baseline-profile format), if the platform's profman can read the profile
+          PROFMAN="$(adb shell 'ls /apex/*/bin/profman 2>/dev/null | head -1' | tr -d '\r')"
+          echo "profman: ${PROFMAN:-none}" >> "$OUT/notes.txt"
+          BASEAPK="$(adb shell pm path "$PKG" | head -1 | sed 's/package://' | tr -d '\r')"
+          if [ -n "$PROFMAN" ] && [ -n "$BASEAPK" ]; then
+            adb shell "$PROFMAN --dump-classes-and-methods --profile-file=/data/misc/profiles/cur/0/$PKG/primary.prof --apk=$BASEAPK --dex-location=$BASEAPK" > "$OUT/classes-and-methods.txt" 2>&1 || true
+          fi
+          ls -la "$OUT" | head -20
+          wc -l "$OUT"/*.txt "$OUT"/*.out 2>/dev/null | tail -8
+
+      - name: The report for this build (LAB3d)
+        if: always() && inputs.suite != 'pack' && inputs.suite != 'sweep' && inputs.suite != 'aot'
+        run: |
+          OUT="$RUNNER_TEMP/lab-out"
+          mkdir -p "$OUT"
+          cp "$RUNNER_TEMP/device-props.txt" "$OUT/device-props.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lowram-attempt.txt" "$OUT/lowram-attempt.txt" 2>/dev/null || true
+          # reads the run's own files (events, Health lines, logcat, Diagnostics) and the repository's last baseline; never fails the job
+          python3 -I tools/emu/buildreport.py --out "$OUT" --repo-root "$PWD" --baseline research/lab-baseline.json --suite "$SUITE" --profile "$PROFILE" --net "$NET" --run-id "$GITHUB_RUN_ID" --sha "$GITHUB_SHA" 2>&1 | tail -25 || true
+          if [ -f "$OUT/BUILD-REPORT.md" ]; then head -c 900000 "$OUT/BUILD-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Put the report on the run's summary page
         if: always()
@@ -165,7 +340,34 @@ jobs:
             ${{ runner.temp }}/lab-out/emulator-restart.txt
             ${{ runner.temp }}/lab-out/soaklab.log
             ${{ runner.temp }}/lab-out/lab/report.jsonl
+            ${{ runner.temp }}/lab-out/device.json
+            ${{ runner.temp }}/lab-out/lowram-attempt.txt
+            ${{ runner.temp }}/lab-out/ui-*.txt
+            ${{ runner.temp }}/lab-out/profile/**
+            ${{ runner.temp }}/lab-out/PACK-REPORT.md
+            ${{ runner.temp }}/lab-out/pack-results.json
+            ${{ runner.temp }}/lab-out/SWEEP-REPORT.md
+            ${{ runner.temp }}/lab-out/sweep-results.json
+            ${{ runner.temp }}/lab-out/AOT-REPORT.md
+            ${{ runner.temp }}/lab-out/aot-results.json
+            ${{ runner.temp }}/lab-out/profile-builds.txt
+            ${{ runner.temp }}/lab-out/update-health/*.txt
           retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Keep the build report (30 days)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-report
+          path: |
+            ${{ runner.temp }}/lab-out/BUILD-REPORT.md
+            ${{ runner.temp }}/lab-out/build-report.json
+            ${{ runner.temp }}/lab-out/device-props.txt
+            ${{ runner.temp }}/lab-out/device.json
+            ${{ runner.temp }}/lab-out/lowram-attempt.txt
+            ${{ runner.temp }}/lab-out/ui-*.txt
+          retention-days: 30
           if-no-files-found: ignore
 
       - name: Keep the screenshots of the problem moments (3 days)

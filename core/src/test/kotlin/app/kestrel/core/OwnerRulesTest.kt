@@ -1,5 +1,6 @@
 package app.kestrel.core
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -655,5 +656,42 @@ class OwnerRulesTest {
         assertTrue("the app reads the bit into the element, asks the finder about the file, and breaks the loop with the clip Kestrel's player played to its end", flow.contains("m.optInt(\"a\") == 1)") && flow.contains("tab.media.find(d.url)?.decoy == true") && flow.contains("WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl"))
         val core = source("core/src/main/kotlin/app/kestrel/core/media/WebHandOver.kt")
         assertTrue("the pure rule: an ad state or an ad address is never handed over (the long film of the frame is, when known), a short list under an ad state is the ad", core.contains("val adLike = el.ad || looksLikeAdAddress(direct.url)") && core.contains("adLike -> null") && core.contains("if (el.ad && !filmLong) null"))
+    }
+
+    // LAB5 (owner message 2026-11-17T06:42Z: "ultra fast, snappy, and lightweight"): what the emulator lab MEASURED stays (research/LAB5_*.md); a later session must not undo it by accident
+    @Test fun lab5MeasuredPackagingProfileAndPrefsStay() {
+        val gradle = source("geckoapp/build.gradle.kts")
+        assertTrue("omni.ja is stored uncompressed unless -PomniStored=false (pack run: warm start -11 %, memory -28 MB), the native libraries stay extracted unless -PlibsInApk=true (no gain, +65 MB download)",
+            gradle.contains("val omniStored = (findProperty(\"omniStored\") as String?) != \"false\"") && gradle.contains("if (omniStored) noCompress += \"ja\"") && gradle.contains("val libsInApk = (findProperty(\"libsInApk\") as String?) == \"true\""))
+        val verify = source("tools/verify-apk.sh")
+        assertTrue("the APK gate fails a deflated omni.ja and a missing or tiny baseline profile", verify.contains("assets/omni.ja is DEFLATED") && verify.contains("assets/dexopt/baseline.prof") && verify.contains("-ge 2500"))
+        val prof = source("geckoapp/src/main/baseline-prof.txt")
+        assertTrue("the baseline profile (from the lab's real ART profile) holds thousands of rules of this app, the engine's Java and the player", prof.lineSequence().count { it.isNotBlank() } > 8000 && prof.contains("Lapp/kestrel/browser/BrowserActivity;") && prof.contains("Lorg/mozilla/geckoview/GeckoSession;"))
+        assertTrue("no comment lines in the rule file (profgen does not promise to accept them)", prof.lineSequence().none { it.startsWith("#") })
+        val prefs = source("geckoapp/src/main/assets/gecko-prefs.txt")
+        assertTrue("config v10: the captcha telemetry actor, the login and the form-history machinery are off (nothing is stored; autofill is off in the GeckoView)",
+            prefs.contains("kestrel.config.version = 10") && prefs.contains("captchadetection.actor.enabled = false") && prefs.contains("signon.rememberSignons = false") && prefs.contains("browser.formfill.enable = false"))
+        val manifest = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        assertTrue("the manifest has no duplicate exclude_matches key in one entry (the players.js entry had two: JSON kept the last and the script ran inside human-check frames)",
+            Regex("\"exclude_matches\": \\[[^\\]]*\\],\\s*\"exclude_matches\"").find(manifest) == null)
+        val bg = source("geckoapp/src/main/assets/kestrel-shields/background.js")
+        assertEquals("the background script registers ONE runtime.onMessage listener (the browser clones every message once per registered listener)", 1, Regex("browser\\.runtime\\.onMessage\\.addListener\\(").findAll(bg).count())
+        val storage = source("app/src/main/kotlin/app/kestrel/browser/diag/StorageInfo.kt")
+        assertTrue("the cold-start cache purge does not walk cache2/entries (10-40k files)", storage.contains("d.name == \"entries\" && d.parentFile?.name == \"cache2\""))
+    }
+
+    /** LAB7 (owner: "If there is a way to make the install and updates take even longer, but the browser run faster, do it."): Android compiles an app at install only the methods its profile marks HOT. */
+    @Test fun lab7WholeAppIsCompiledAtInstall() {
+        val prof = source("geckoapp/src/main/baseline-prof.txt")
+        val rule = "HL**;->**(**)**"
+        assertEquals("the profile file ends with the ONE catch-all rule that marks every method hot (measured: 2553 of 14996 methods were hot without it; compile 2 s on the emulator, 13 MB of compiled code, no start-up regression)", rule, prof.lineSequence().filter { it.isNotBlank() }.last())
+        assertEquals("exactly one copy of the rule", 1, prof.lineSequence().count { it == rule })
+        assertTrue("the rule has no S flag and no P flag: the start-up and post-start-up flags of the lab's rules must keep ordering the compiled code (a method named by several rules gets the union)", !rule.startsWith("HS") && !rule.startsWith("HP"))
+        assertTrue("the regeneration tool keeps the rule", source("tools/profile-to-baseline.py").contains("CATCH_ALL = '$rule'"))
+        assertTrue("the lab's variant tool names the same rule", source("tools/emu/profvariant.py").contains("WILDCARD = \"$rule\""))
+        val gate = source("tools/check-profile-coverage.sh")
+        assertTrue("the release gate reads the profile R8 wrote and fails when the rule does not expand", gate.contains("minifyReleaseWithR8/baseline-prof.txt") && gate.contains("MIN_PCT") && gate.contains(rule))
+        assertTrue("the release workflow runs that gate right after the release build", source(".github/workflows/android.yml").contains("bash tools/check-profile-coverage.sh"))
+        assertTrue("Diagnostics says what Android compiled for this install (line `start oat`: the sizes of odex / vdex / art), so the owner can send proof from the tablet", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"start\", \"oat\", oatSizes())"))
     }
 }

@@ -25,6 +25,11 @@ class UpdateOffer(
     val sha256: String?,
     val notes: String,
     val pageUrl: String,
+    /** LAB6: the release's dex-metadata file (`<apk name>.dm`, the start-up profile Android compiles WHILE INSTALLING, see [DexMetadata]); null for a release that has none. Its SHA-256 is GitHub's per-asset digest. */
+    val dmName: String? = null,
+    val dmUrl: String? = null,
+    val dmSize: Long = -1,
+    val dmSha256: String? = null,
 )
 
 /**
@@ -95,6 +100,13 @@ object UpdateLogic {
         return d.substring(7).takeIf { it.length == 64 && it.all { c -> c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F' } }?.lowercase()
     }
 
+    /** GitHub's own per-asset "sha256:<hex>" digest as lower-case hex, or null (the dex-metadata file has no line in the release text: only this). */
+    fun digestOf(asset: ReleaseAsset): String? {
+        val d = asset.digest ?: return null
+        if (!d.startsWith("sha256:")) return null
+        return d.substring(7).takeIf { it.length == 64 && it.all { c -> c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F' } }?.lowercase()
+    }
+
     /** The human change note: everything before the generated "**Title version** (versionCode N)" paragraph. */
     fun notes(body: String): String {
         val at = Regex("""(?m)^\*\*.+\*\*\s+\(versionCode""").find(body)?.range?.first ?: body.length
@@ -112,7 +124,8 @@ object UpdateLogic {
             val code = versionCode(r.body) ?: continue
             if (code <= currentCode || (best != null && code <= best.versionCode)) continue
             val apk = r.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: continue
-            best = UpdateOffer(r.tag, r.tag.removePrefix(tagPrefix), code, apk.name, apk.url, apk.size, sha256(r.body, apk), notes(r.body), r.pageUrl)
+            val dm = r.assets.firstOrNull { it.name == DexMetadata.nameFor(apk.name) }
+            best = UpdateOffer(r.tag, r.tag.removePrefix(tagPrefix), code, apk.name, apk.url, apk.size, sha256(r.body, apk), notes(r.body), r.pageUrl, dm?.name, dm?.url, dm?.size ?: -1, dm?.let { digestOf(it) })
         }
         return best
     }

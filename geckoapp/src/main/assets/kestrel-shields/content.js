@@ -30,11 +30,16 @@
         if (t.length > 81 || seen[t]) return;
         seen[t] = 1; fresh.push(t);
       }
+      var seenCls = Object.create(null), nCls = 0;
       function addEl(el) {
         var id = el.id;
         if (id && typeof id === 'string') note('#' + id.toLowerCase());
         var cls = el.getAttribute ? el.getAttribute('class') : null; // not className: on an SVG element that is an object
         if (cls) {
+          // LAB5 (research/LAB5_EXTENSION.md row 3): the same attribute text again (500 list items with class="item", and the second whole-page pass at load) holds only names that are already noted: skip the split,
+          // the lower-casing and the per-name table lookups. Bounded: short strings only, 3000 of them.
+          if (seenCls[cls] === 1) return;
+          if (cls.length <= 160 && nCls < 3000) { seenCls[cls] = 1; nCls++; }
           var parts = cls.split(/\s+/);
           for (var i = 0; i < parts.length; i++) if (parts[i]) note('.' + parts[i].toLowerCase());
         }
@@ -55,7 +60,8 @@
       function later() { if (!timer && !off) timer = setTimeout(flush, DELAY); }
       function first() { if (!startedAt) startedAt = nowMs(); scan(document); later(); }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
-      window.addEventListener('load', first);
+      // LAB5: the second whole-page pass (classes that scripts gave to EXISTING elements after DOMContentLoaded; the observer below only sees new nodes) runs when the page is idle, not inside the busiest moment of the load
+      window.addEventListener('load', function () { if (window.requestIdleCallback) requestIdleCallback(first, { timeout: 1000 }); else setTimeout(first, 300); });
       if (window.MutationObserver) {
         var mo = new MutationObserver(function (recs) {
           if (off) { mo.disconnect(); return; }
