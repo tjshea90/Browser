@@ -1,13 +1,13 @@
-# CHECKPOINT 2890 — read me first, then TASKS.md
+# CHECKPOINT 2891 — read me first, then TASKS.md
 
-**Written:** 2026-11-22T03:46:10Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `b02ae3d2` (this checkpoint is the commit after it)
+**Written:** 2026-11-22T03:46:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `ed86677d` (this checkpoint is the commit after it)
 
 ## Just done
-Owner after alpha90 (PERF4 in TASKS.md): photos still cannot be uploaded to this Claude chat; invisible-line clipping (pornhub loading circle); NEW: pornhub plays at 240p, never stops loading at the default 720p, and plays 720p very laggy when switched from 240p
+Owner clarified: 'typing here' and 'photos to this Claude chat' = claude.ai IN Kestrel G (PERF4e): typing lag, slow load and the failing photo upload are all claude.ai in Kestrel
 
 ## Do this next
-Next: python3 -B -I tools/diag_digest.py for the alpha90 upload(s); read TYPING LATENCY, VIDEO PROBLEMS, page report hidden rules, video quality/decoder lines; decide the 720p fix
+Next: read the alpha90 uploads (033935, 034203): TYPING LATENCY page vs address, claude.ai page timing + Shields A/B, filepick picked lines, pornhub video page rules/stall; then fix
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: python3 -B -I tools/diag_digest.py for the alpha90 upload(s); read TYPING 
 
 ## Last ten checkpoints
 ```
+  ed86677d ckpt 2890: Owner after alpha90 (PERF4 in TASKS.md): photos still cannot be uploaded to 
   b02ae3d2 ckpt 2889: alpha90 RELEASED and recorded (run 44970827834 green, Release has the APK). 
   16cc4189 ckpt 2887: alpha90 (code 191) gated and shipped: ONE dispatch made right after ship.sh 
   eb28b328 ckpt 2886: gated kestrel-g-v0.3.0-alpha90 (gecko code 191) and pushed it: handoff self-
@@ -25,5 +26,4 @@ Next: python3 -B -I tools/diag_digest.py for the alpha90 upload(s); read TYPING 
   df05f162 ckpt 2874: alpha89 RELEASED and recorded (run 44964790281 green, Release has the APK). 
   69bc7341 ckpt 2872: alpha89 (code 190) gated and shipped: ONE dispatch made right after ship.sh 
   d89d6370 ckpt 2871: gated kestrel-g-v0.3.0-alpha89 (gecko code 190) and pushed it: handoff self-
-  c66293fb ckpt 2870: pre-ship: alpha89: the lag, and the cut-off loading circle. Your last upload
 ```
