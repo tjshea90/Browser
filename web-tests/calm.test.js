@@ -66,7 +66,7 @@ test('PERF8b: a parent that cuts the circle says how many pixels at the bottom',
   await context.close();
 });
 
-test('PERF8b: a video with controls, a small video, a playing video, a button, a too big circle and a circle outside are left alone', async () => {
+test('PERF8b: a video with controls, a small video, a button, a too big circle and a circle outside are left alone', async () => {
   const { page, got, context } = await open(
     '<div class="box"><video id="c" controls muted></video><div class="sp" id="s1"></div></div>' +
     '<div class="box" style="width:200px;height:100px"><video muted style="width:200px;height:100px"></video><div class="sp" id="s2" style="left:76px;top:26px"></div></div>' +
