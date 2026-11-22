@@ -142,3 +142,21 @@ test('with the guard switched off for the site nothing is touched', async () => 
   assert.notEqual(await noneOf(page, '#layer'), 'none');
   await page.context().close();
 });
+
+// ---------------------------------------------------------------- RVW2 P5b: the sweep only looks at the page when a frame COULD be a fake layer
+test('P5b: a page whose frames are plain visible ones is never swept (no candidate query, no layout reads); a hidden fixed frame of another site still is', async () => {
+  const plain = await open(`${VIDEO}<iframe src="https://widget.example/w" style="position:absolute;left:450px;top:20px;width:40px;height:40px"></iframe>`);
+  await plain.evaluate(() => {
+    window.__q = 0; window.__r = 0;
+    const q = Document.prototype.querySelectorAll; Document.prototype.querySelectorAll = function (s) { if (String(s).indexOf('player') >= 0) window.__q++; return q.apply(this, arguments); };
+    const r = Element.prototype.getBoundingClientRect; Element.prototype.getBoundingClientRect = function () { window.__r++; return r.apply(this, arguments); };
+  });
+  await plain.waitForTimeout(10500);                                           // the sweeps at 0, 1.5, 4 and 9 s have all happened
+  const seen = await plain.evaluate(() => ({ q: window.__q, r: window.__r }));
+  assert.equal(seen.q, 0, 'the whole-document candidate query never ran');
+  await plain.context().close();
+  const fake = await open(`${VIDEO}<iframe id="fk" src="https://ads.example/f" style="position:fixed;left:0;top:0;width:100%;height:100%;opacity:0"></iframe>`);
+  await fake.waitForTimeout(1200);
+  assert.equal(await noneOf(fake, '#fk'), 'none', 'a see-through fixed frame of another site over the player is still switched off');
+  await fake.context().close();
+});

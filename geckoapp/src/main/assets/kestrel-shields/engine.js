@@ -165,6 +165,10 @@ var KestrelEngine = (function () {
     var nPslRules = pslRules.length >> 1, nPslWild = pslWild.length >> 1, nPslExc = pslExc.length >> 1;
     if (patOff.length !== nRules + 1 || dom.length !== nRules || hostFlags.length !== nHost || excFlags.length !== nExc) throw new Error('image tables');
     if (tabKey.length < 16 || (tabKey.length & (tabKey.length - 1)) !== 0 || gramKey.length < 16 || (gramKey.length & (gramKey.length - 1)) !== 0) throw new Error('image index');
+    // RVW1 P2: which first-two-byte pairs START a rule's 4-gram (65536 bits = 8 KB, built once per image). The scan below probed the table at EVERY position of every URL (about 150 positions, each a hash, a slot and a
+    // probe: about 4000 operations for a URL that matches nothing, inside a blocking onBeforeRequest); a position whose first two bytes begin no gram cannot match, so it is skipped before any of that.
+    var gramPair = new Uint8Array(8192);
+    for (var gs = 0; gs < gramKey.length; gs++) if (gramLen[gs] !== 0) { var gk = gramKey[gs] >>> 16; gramPair[gk >> 3] |= 1 << (gk & 7); }
 
     // ---- Public Suffix List (Psl.kt)
     var siteCache = new Map();
@@ -373,6 +377,8 @@ var KestrelEngine = (function () {
       if (gramIds.length > 0 && n >= 4) {
         var start = cEvals; // rules without a usable token: bounded by work, not by a set (grams repeat freely in ordinary URLs)
         for (var g = 0; g <= n - 4; g++) {
+          var k2 = ((url.charCodeAt(g) & 0xFF) << 8) | (url.charCodeAt(g + 1) & 0xFF);
+          if ((gramPair[k2 >> 3] & (1 << (k2 & 7))) === 0) continue;   // RVW1 P2: no gram starts with these two bytes
           scanBucket(gramKey, gramStart, gramLen, gramIds, gramOf(url, g));
           if (cImportant) return;
           if (cEvals - start > MAX_GRAM_EVALS) break;

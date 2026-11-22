@@ -15,7 +15,8 @@ object Downloads {
 
     fun fileName(url: String, contentDisposition: String?, mime: String?): String {
         val raw = URLUtil.guessFileName(url, contentDisposition, mime)
-        val clean = raw.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trimStart('.').take(120)
+        // RVW1 S10: the same cleaning as the Gecko build: bidi overrides and zero-width characters (a name "photo<RLO>gpj.apk" shows as "photokpa.jpg") are removed too, and the cut never splits a surrogate pair
+        val clean = app.kestrel.core.download.FileNames.cutChars(app.kestrel.core.download.FileNames.sanitize(raw, 120), 120).trim()
         return clean.ifEmpty { "download" }
     }
 

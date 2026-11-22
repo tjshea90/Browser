@@ -104,6 +104,7 @@ class VideoFlow(private val a: BrowserActivity) {
      */
     fun gone(page: String, docs: List<String>) = Io.ui {
         val t = tabOf(page) ?: run { Health.log("media", "frame-gone-no-tab", "docs=${docs.size}"); return@ui }
+        for (d in docs) goneDocs.gone(t.id.toString() + "|" + d, System.currentTimeMillis())   // RVW2 F19
         val keys = t.media.dropFrames(docs)
         // those documents are gone: an address asked about in one of them (even one that turned out not to be media) is news again when a new document asks for it
         val p = t.id.toString() + "|"
@@ -118,7 +119,8 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) lookSoon(t) }
+        // RVW1 F3: a DASH manifest gets the early look too (lookNow already handles it: its length, its picture heights, "protected"); only HLS used to trigger it, so a DRM or live .mpd counted for the badge and was never matched to a blob: player
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS || c.kind == MediaKind.DASH) lookSoon(t) }
     }
 
     // ---- RX3-V5 (research/FINDER_LAB.md section 3): the early look. A stream playlist the page asked for is read at idle (a few KB: the master and its lowest quality) so that live, protected and clip-sized streams
@@ -140,19 +142,20 @@ class VideoFlow(private val a: BrowserActivity) {
             if ((c.kind != MediaKind.HLS && c.kind != MediaKind.DASH) || !lookedKeys.add(c.key)) continue
             looks[t.id] = n + 1
             if (c.kind == MediaKind.DASH) { // RX3-V4: a DASH manifest says its length and its picture heights in its first bytes
-                fetchPlaylist(t, c, c.url, { Dash.parse(it, c.url) != null }) { text, _ ->
-                    val m = text?.let { Dash.parse(it, c.url) }
+                fetchPlaylist(t, c, c.url, { Dash.parse(it, c.base) != null }) { text, _ ->
+                    val m = text?.let { Dash.parse(it, c.base) }
                     if (m != null) noteStream(t, c, m.problem, m.durationMs, 0L, 0, m.video.map { it.height }.filter { it > 0 }.distinct().toIntArray())
                 }
                 continue
             }
-            fetchPlaylist(t, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ ->
-                when (val pl = text?.let { Hls.parse(it, c.url) }) {
+            fetchPlaylist(t, c, c.url, { Hls.parse(it, c.base) != null }) { text, _ ->
+                when (val pl = text?.let { Hls.parse(it, c.base) }) {
                     is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
                         c.master = true
                         noteMaster(c, pl.master)
                         val vs = pl.master.variants
+                        t.media.noteChildren(vs.map { it.url } + pl.master.renditions.mapNotNull { it.url })   // RVW2 F17: the rungs are not videos of their own, and not looked at
                         val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
                         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
                         if (probe != null) DownloadController.fetchText(a, probe.url, requestHeaders(t, c), 1, t.isPrivateTab) { txt -> (txt?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media?.let { noteLook(t, c, it, heights) } }
@@ -186,7 +189,7 @@ class VideoFlow(private val a: BrowserActivity) {
         verifyPending.remove(t.id)
         if (t.isNewTab || t.loading) return
         var asked = 0
-        for (c in t.media.unverifiedToCheck(3)) {
+        for (c in t.media.unverifiedToCheck(4)) {
             if (c.length >= 0 || !sized.add(c.key)) continue
             asked++
             DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(t, c), 1, t.isPrivateTab, onTotal = { n -> if (t.media.setLength(c.url, n)) { a.refreshDownloadButton(); refresh(t); Health.log("media", "verified", "length=${n / 1024} KB counted=${t.media.usableCount()} of ${t.media.size}") } }) { }
@@ -196,6 +199,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** "tab id|document|address" already read, so a player that asks for the same playlist again does not make us read it again. Per DOCUMENT: another server (another document) that asks for the same address is news ([gone] forgets the replaced document's entries, [clearTab] a tab's). */
     private val maybeAsked = HashSet<String>()
+    /** RVW2 F19: when each player document went away (core [GoneDocs]): a first-bytes probe that STARTED before that must not bring its row back. */
+    private val goneDocs = app.kestrel.core.media.GoneDocs()
 
     /**
      * The extension saw a response that says nothing about being media (text/plain, octet-stream, a "picture" or "stylesheet" a script fetched): stream sites disguise their playlists that way. Read its first
@@ -215,6 +220,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val sets = MediaHeaders.sets(seed, t.url)
         val host = UrlParts.hostOf(url) ?: ""
         val method = m.optString("mt")
+        val probeStartedAt = System.currentTimeMillis()                                                    // RVW2 F19
         Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")} method=${method.ifEmpty { "?" }}")
         if (!MediaHeaders.replayable(method)) { Health.log("media", "maybe-skipped", "$host the page asked with $method: an API call, not a stream"); return@ui }
         fun attempt(i: Int, last: Int, notFound: Int) {
@@ -231,7 +237,10 @@ class VideoFlow(private val a: BrowserActivity) {
                 val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
                 c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]; c.frameChain = seed.frameChain
                 Health.log("media", "maybe-hit", "$host ${s.kind} ext=${s.ext} set=${i + 1}/${sets.size}")
-                if (t.media.add(c)) a.refreshDownloadButton()
+                if (frame.isNotEmpty() && goneDocs.goneSince(t.id.toString() + "|" + frame, probeStartedAt)) { Health.log("media", "maybe-gone", "$host the document that asked went away meanwhile"); return@fetchBytes }   // RVW2 F19
+                // RVW1 F3: a stream found by its first bytes (the doraby / vidsrc playlist under .txt, a DASH manifest under .bin) gets the early look like one found by name: without it it was never `looked`, so live / protected / clip
+                // rules never applied to it, a blob: player never matched it, and `capture()` (a read stream is the film evidence) never kept it
+                if (t.media.add(c)) { a.refreshDownloadButton(); if (c.kind != MediaKind.FILE) lookSoon(t) }
             }
         }
         attempt(0, 0, 0)
@@ -354,7 +363,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.maxByOrNull { it.durationMs } ?: return null   // (clip-sized streams are not counted: the longest counted one is the film)
         val r = masterRungs[c.key]
         if (r == null) {
-            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ -> (text?.let { Hls.parse(it, c.url) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
+            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.base) != null }) { text, _ -> (text?.let { Hls.parse(it, c.base) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
             return null
         }
         return if (PageQuality.hasChoice(r)) PageFilm(c, r) else null
@@ -598,7 +607,8 @@ class VideoFlow(private val a: BrowserActivity) {
         val host = UrlParts.hostOf(url) ?: ""
         fun attempt(i: Int, last: Int) {
             if (i >= sets.size) { Health.log("media", "list-failed", "$host http=$last tried=${sets.size}"); done(null, last); return }
-            DownloadController.fetchTextStatus(a, url, sets[i], 1, tab.isPrivateTab) { text, status ->
+            DownloadController.fetchTextFinal(a, url, sets[i], 1, tab.isPrivateTab) { text, status, finalUrl ->
+                if (finalUrl != null && finalUrl != url && url == c.url) c.playlistBase = finalUrl   // RVW1 V10: relative addresses in this playlist resolve against where it really came from (set before the callers parse)
                 if (text != null && valid(text)) {
                     if (c.viaHeaders != sets[i]) c.viaHeaders = sets[i]
                     Health.log("media", "list-ok", "$host http=$status set=${i + 1}/${sets.size} referer=${UrlParts.hostOf(sets[i]["Referer"] ?: "") ?: "none"}")
@@ -611,8 +621,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun loadStream(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, status ->
-            val pl = text?.let { Hls.parse(it, c.url) }
+        fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.base) != null }) { text, status ->
+            val pl = text?.let { Hls.parse(it, c.base) }
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
@@ -627,6 +637,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val vs = master.variants
         for (v in vs) children.add(v.url)
         for (r in master.renditions) r.url?.let { children.add(it) }
+        tab.media.noteChildren(vs.map { it.url } + master.renditions.mapNotNull { it.url })   // RVW2 F17
         childUrls[c.key] = vs.map { it.url } + master.renditions.mapNotNull { it.url }
         if (vs.isEmpty()) { streamInfo[c.key] = Loaded.Failed("This stream lists no qualities."); refresh(tab); return }
         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }!!
@@ -713,7 +724,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (master == null) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
             val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
-            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c), cand = c)
+            val pick = StreamPick(if (audio) "audio" else "", c.base, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c), cand = c)
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
             rows.add(streamChoice(tab, c, pick, if (audio) "Audio only" else "Video", rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), ext) to pick)
             return Loaded.Ready(rows, null)
@@ -737,8 +748,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun loadDash(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        fetchPlaylist(tab, c, c.url, { Dash.parse(it, c.url) != null }) { text, status ->
-            val man = text?.let { Dash.parse(it, c.url) }
+        fetchPlaylist(tab, c, c.url, { Dash.parse(it, c.base) != null }) { text, status ->
+            val man = text?.let { Dash.parse(it, c.base) }
             streamInfo[c.key] = if (man == null || text == null) Loaded.Failed(whyNotRead(status)) else dashReady(tab, c, man, text)
             refresh(tab)
         }
@@ -756,10 +767,11 @@ class VideoFlow(private val a: BrowserActivity) {
         val dur = MediaLabels.duration(man.durationMs)
         val sound = man.audio.firstOrNull { it.mp4Friendly && it.media != null }
         val rows = ArrayList<Pair<VideoPanel.Choice, StreamPick>>()
-        var skipped = 0
+        var skipped = 0; var noPlan = 0; var badFormat = 0   // RVW2 V8: say WHICH reason it was
         val seen = HashSet<String>()
         for (v in man.video) {
-            if (v.media == null || !v.mp4Friendly) { skipped++; continue }
+            if (v.media == null) { skipped++; noPlan++; continue }
+            if (!v.mp4Friendly) { skipped++; badFormat++; continue }
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
             val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id, headers = requestHeaders(tab, c), cand = c)
@@ -770,8 +782,10 @@ class VideoFlow(private val a: BrowserActivity) {
             val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a", headers = requestHeaders(tab, c), cand = c)
             rows.add(streamChoice(tab, c, pick, "Audio only", rowDetail("M4A", MediaLabels.size(est, estimate = true), dur), "m4a") to pick)
         }
-        if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
-        return Loaded.Ready(rows, if (skipped > 0) "Some qualities use a format (WebM / VP9) that Kestrel cannot save yet." else null)
+        val noPlanText = "Kestrel could not work out the list of parts of this stream (its manifest is laid out in a way Kestrel does not read yet)."
+        val formatText = "use a format (WebM / VP9) that Kestrel cannot save yet."
+        if (rows.isEmpty()) return Loaded.Failed(if (badFormat == 0 && noPlan > 0) noPlanText else "This stream's qualities $formatText")
+        return Loaded.Ready(rows, if (skipped > 0) (if (badFormat == 0) "Some qualities could not be listed: their manifest is laid out in a way Kestrel does not read yet." else "Some qualities $formatText") else null)
     }
 
     private fun pickStream(tab: Tab, p: StreamPick, stem: String) {
