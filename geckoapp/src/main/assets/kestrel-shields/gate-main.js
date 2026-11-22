@@ -184,6 +184,11 @@
             if (n3 - r3.askedAt > 400 && n3 >= r3.noUntil) ask(el, 'press', function (handed) { if (handed) pauseEl(el); else openEl(el, 'press'); });
             else if (!(r3.ask && !r3.ask.done)) openEl(el, 'press');
           }
+          else if (hand && !el.controls && el.paused && !el.loop && (rec(el).hasSrc || !(el.currentSrc || el.src)) && !interactive(target, el)) {                                                         // PERF9 (owner 2026-11-22: "I pressed play again and it did the loading animation for about 1 second then stopped"): a tap on the picture of a held SCRIPT player (a MediaSource, or no source yet; not a loop, not a file with a source of its own) that hit no control (the video itself, a loading circle, a plain overlay) is a press as well: the app is asked first, the page's own player opens only on a no
+            var r4 = rec(el), n4 = dnow.call(Date);
+            if (n4 - r4.askedAt > 400 && n4 >= r4.noUntil) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });
+            else if (!(r4.ask && !r4.ask.done) && !r4.open && n4 < r4.noUntil) openEl(el, 'press');
+          }
           else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
         }   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }
@@ -267,6 +272,18 @@
   // does the tap's target look like a PLAY control that sits over the picture (not the picture itself, and not Mute, Share or Get started)? A word 'play' in its own label, title, class or id (vjs-big-play-button,
   // ytp-large-play-button, aria-label Play video, PlayButton), or a button whose short text says Play. Walks up to the player's box. (Players that name their button otherwise are asked when their play() comes.)
   function playWord(s) { var w = String(s).toLowerCase().split(/[^a-z]+/); for (var i = 0; i < w.length; i++) if (/^(button|btn|big|large|center|centre|video|main)?play(button|btn|icon|overlay)?$/.test(w[i])) return true; return false; }
+  // a tap on a real control (a link, a button, a field, an element that says it is a button / link / menu item / slider) is that control's own business: Mute, Share, Get started (PERF9: the gate asks only for a tap that hit no control)
+  function interactive(t, el) {
+    try {
+      for (var n = t, i = 0; n && n !== el && i < 6; i++, n = n.parentElement) {
+        var nn = n.nodeName;
+        if (nn === 'A' || nn === 'BUTTON' || nn === 'INPUT' || nn === 'SELECT' || nn === 'TEXTAREA' || nn === 'LABEL' || nn === 'SUMMARY') return true;
+        var role = n.getAttribute ? n.getAttribute('role') : null;
+        if (role === 'button' || role === 'link' || role === 'menuitem' || role === 'slider' || role === 'switch' || role === 'checkbox' || role === 'tab') return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
   function playLike(t, el) {
     try {
       for (var n = t, i = 0; n && n !== el && i < 6; i++, n = n.parentElement) {

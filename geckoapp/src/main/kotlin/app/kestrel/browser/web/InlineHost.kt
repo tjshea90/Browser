@@ -43,7 +43,7 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
     fun boxFor(page: InlineBox.Page): InlineBox.Rect? = InlineBox.toView(page, engine.width, engine.height)
 
     /** Plays [url] over [boxNow] of [tab]'s page. false = it did not start (the caller opens the full-screen screen). */
-    fun start(tab: Tab, url: String, headerLines: List<String>, startMs: Long, page: InlineBox.Page, boxNow: InlineBox.Rect): Boolean {
+    fun start(tab: Tab, url: String, headerLines: List<String>, startMs: Long, page: InlineBox.Page, boxNow: InlineBox.Rect, alts: List<app.kestrel.core.media.SiblingQualities.Alt> = emptyList()): Boolean {
         val s = tab.session ?: return false
         if (view.active) view.stop("a new film")
         this.tab = tab; this.session = s; this.headers = headerLines; this.priv = tab.isPrivateTab
@@ -51,7 +51,7 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
         updates = 0; lastLogAt = 0L
         try { s.compositorScrollDelegate = scrollDelegate } catch (e: Throwable) { if (!tab.isPrivateTab) Health.log("inline", "scroll-delegate-failed", e.toString().take(80)); cleanup(); return false }
         val cap = 480                                                                                          // a box is small: 480p is plenty and a slow link thanks it (a size the person picked in the list inside the page is remembered and wins)
-        if (!view.start(url, headerLines, startMs, tab.isPrivateTab, boxNow, cap)) { cleanup(); return false }
+        if (!view.start(url, headerLines, startMs, tab.isPrivateTab, boxNow, cap, alts)) { cleanup(); return false }
         a.inlineChanged()
         if (!tab.isPrivateTab) Health.log("inline", "placed", "page box ${page.w.toInt()}x${page.h.toInt()} css at ${page.x.toInt()},${page.y.toInt()} scroll ${page.pageX.toInt()},${page.pageY.toInt()} -> view $boxNow in ${engine.width}x${engine.height}")
         return true
@@ -91,13 +91,13 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
 
     override fun onEnded(why: String, positionMs: Long, fullscreen: Boolean, failed: Boolean) {
         sheet.dismiss()                                                    // (a list of a film that is gone)
-        val t = tab; val u = playing; val h = headers; val p = priv
+        val t = tab; val u = view.url.ifEmpty { playing }; val h = headers; val p = priv; val alts = view.altsPlaying          // (PERF5b: the list that plays NOW, and the other qualities, go on in the full-screen screen)
         cleanup()
         a.inlineChanged()
         if (!p) { WebHandStats.lastInlineEnd = why; if (fullscreen) WebHandStats.inlineFull++ }
         if (fullscreen && u.isNotEmpty() && t != null && a.current === t) {
             // the film goes on in the full-screen screen at the same second (it is its own window: Back returns to the page, where the person presses play again)
-            NativePlayerActivity.launch(a, u, h, positionMs, if (PlayerFactory.isHls(u)) 720 else 1080, p, 0, 0, fromPage = true)
+            NativePlayerActivity.launch(a, u, h, positionMs, if (PlayerFactory.isHls(u)) 720 else 1080, p, 0, 0, fromPage = true, alts = alts)
         } else if (failed) {
             a.nativeFilmFailed()                                              // the page's own player plays its films for two minutes, and the person is told
         }
