@@ -2192,16 +2192,6 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
     private fun flushAddressTyping() { addressTyping.take()?.let { Health.log("win", "typing-address", it) } }
-    private fun onTypingWait(m: org.json.JSONObject) {
-        val page = m.optString("p")
-        if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
-        Io.main.post {
-            val tab = tabForPage(page) ?: return@post
-            if (tab.isPrivateTab) return@post
-            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"} resp=${m.optInt("ra", -1)}ms respworst=${m.optInt("rm")}ms resp150=${m.optInt("ro")}")
-        }
-    }
-
     /**
      * PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE received when a file input changed (pagetime.js, checked by background.js): ONE `filepick page-got` line (type and size of the page's File, its first bytes,
      * whether the picture decodes, whether a canvas can draw and re-encode it) and the Diagnostics sentence. Numbers and fixed words only. Never for a private tab, never while one exists (PV1).
@@ -2221,6 +2211,16 @@ open class BrowserActivity : Activity(), DockListener {
             if (tab.isPrivateTab || PrivateGuard.active()) return@post
             Health.log("filepick", "page-got", app.kestrel.core.prompt.FilePickFacts.pageLine(host, m.optInt("n", files.size), files))
             filePicks.pageGot(app.kestrel.core.prompt.FilePickFacts.pageVerdict(files[0]))
+        }
+    }
+
+    private fun onTypingWait(m: org.json.JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
+        Io.main.post {
+            val tab = tabForPage(page) ?: return@post
+            if (tab.isPrivateTab) return@post
+            Health.log("win", "typing-page", "keys=${m.optInt("n")} avg=${m.optInt("a")}ms worst=${m.optInt("m")}ms over150=${m.optInt("o")} frame=${if (m.optInt("f", 1) == 1) "top" else "sub"} resp=${m.optInt("ra", -1)}ms respworst=${m.optInt("rm")}ms resp150=${m.optInt("ro")}")
         }
     }
 
