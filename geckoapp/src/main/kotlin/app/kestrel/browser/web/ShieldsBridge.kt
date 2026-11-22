@@ -94,6 +94,8 @@ class ShieldsBridge(
     private val videoGate: (JSONObject) -> Unit = {},
     private val videoCodec: (JSONObject) -> Unit = {},
     private val videoError: (JSONObject) -> Unit = {},
+    /** PERF3c: how long typed characters waited before the page saw them (`typ`: n keys, a mean ms, m worst ms, o waits of 150 ms or more, p the page of its tab). Numbers only. Worker thread. */
+    private val typingWait: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -161,6 +163,7 @@ class ShieldsBridge(
                     "vgh" -> { videoGate(m); "" }
                     "vch" -> { videoCodec(m); "" }
                     "verr" -> { videoError(m); "" }
+                    "typ" -> { typingWait(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""

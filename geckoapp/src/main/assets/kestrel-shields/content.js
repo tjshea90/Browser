@@ -1004,3 +1004,33 @@
     }, true);
   } catch (e) { /* never break the page */ }
 })();
+
+// PERF3c (owner 2026-11-22: "typing is very laggy"): how long a typed character waits before the PAGE sees it. A trusted `input` event carries the time it was made (the parent process, when the keyboard handed the text over);
+// the difference to the time this handler runs is the queue in front of the page's main thread (the page being busy, the engine's parent process being busy). Numbers only, never the text: how many keys, the mean and the worst wait in
+// milliseconds and how many waited 150 ms or more; told once 4 s after the last key (at most 6 times a page). A page the person does not type into costs nothing: one capture listener.
+(function () {
+  try {
+    if (typeof browser === 'undefined' || !browser || !browser.runtime || !/^https?:$/.test(String(location.protocol))) return;
+    var n = 0, sum = 0, mx = 0, over = 0, timer = 0, told = 0, perf = window.performance;
+    if (!perf || typeof perf.now !== 'function') return;
+    function tell() {
+      timer = 0;
+      if (!n || told >= 6) { n = 0; sum = 0; mx = 0; over = 0; return; }
+      told++;
+      var m = { k: 'typ', n: Math.min(n, 99999), a: Math.round(sum / n), m: Math.round(mx), o: over, f: window === window.top ? 1 : 0 };
+      n = 0; sum = 0; mx = 0; over = 0;
+      try { browser.runtime.sendMessage(m).catch(function () { /* no background page */ }); } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('input', function (e) {
+      try {
+        if (!e || e.isTrusted !== true) return;
+        var d = perf.now() - e.timeStamp;
+        if (!(d >= 0 && d < 60000)) return;
+        n++; sum += d; if (d > mx) mx = d; if (d >= 150) over++;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(tell, 4000);
+      } catch (x) { /* a page must never feel this */ }
+    }, true);
+    window.KestrelTyp = { tell: tell };      // for the tests
+  } catch (e) { /* ignore */ }
+})();
