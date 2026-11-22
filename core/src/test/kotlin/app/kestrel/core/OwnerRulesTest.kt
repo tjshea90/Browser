@@ -680,6 +680,18 @@ class OwnerRulesTest {
         assertTrue("the cold-start cache purge does not walk cache2/entries (10-40k files)", storage.contains("d.name == \"entries\" && d.parentFile?.name == \"cache2\""))
     }
 
+    /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
+    @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
+        assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false"))
+            assertTrue("drawLines writes $name", gp.contains(name))
+        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (!p.labDraw) \"\""))
+        assertTrue("the person can switch it off in Settings", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
+        assertTrue("it is part of a backup", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
+        assertTrue("the pref check reads the names GeckoPrefs.kt writes", source("tools/check-gecko-prefs.sh").contains("GeckoPrefs.kt"))
+    }
+
     /** LAB7 (owner: "If there is a way to make the install and updates take even longer, but the browser run faster, do it."): Android compiles an app at install only the methods its profile marks HOT. */
     @Test fun lab7WholeAppIsCompiledAtInstall() {
         val prof = source("geckoapp/src/main/baseline-prof.txt")
