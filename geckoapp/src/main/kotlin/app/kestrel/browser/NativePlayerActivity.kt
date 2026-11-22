@@ -423,7 +423,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 val dc = p.videoDecoderCounters
                 if (!priv) { NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); NativePlayerStats.playedMs += p.currentPosition.coerceAtLeast(0L) }
                 lastPositionMs = p.currentPosition.coerceAtLeast(0L)
-                if (priv) lastUrl = "" else { lastUrl = shownUrl; lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; lastStoppedAt = SystemClock.uptimeMillis() }   // (RAM only, never for a private tab)
+                if (priv) { lastUrl = ""; lastAlts = emptyList() } else { lastUrl = shownUrl; lastAlts = if (::quality.isInitialized) quality.alts.map { it.url } else emptyList(); lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; lastStoppedAt = SystemClock.uptimeMillis() }   // (RAM only, never for a private tab)
                 if (!priv) NativePlayerStats.last = "ended after ${(SystemClock.uptimeMillis() - startedAt) / 1000} s"
             } catch (e: Throwable) { /* gone */ }
             try { p.release() } catch (e: Throwable) { /* gone */ }
@@ -455,6 +455,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         @Volatile var lastPositionMs = 0L
         /** The film Kestrel's own player showed last (never a private tab's), how long it is and when it ended: a page film pressed again continues from where it stopped (core WebHandOver.resumeMs). */
         @Volatile var lastUrl = ""
+        /** PERF5b: every list (quality) of the film that played last: pressing play again on ANY of them continues where the person stopped (VideoFlow.lastFor). RAM only, never a private tab's. */
+        @Volatile var lastAlts: List<String> = emptyList()
         @Volatile var lastDurationMs = 0L
         @Volatile var lastStoppedAt = 0L
 

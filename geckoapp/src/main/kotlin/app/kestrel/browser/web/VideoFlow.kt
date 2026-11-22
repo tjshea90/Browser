@@ -427,7 +427,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val adWhy = when {
             d == null -> null
             tab.media.find(d.url)?.decoy == true -> "the finder marked this file as an advertisement or decoration"
-            !tab.isPrivateTab && WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+            !tab.isPrivateTab && WebHandOver.playedThrough(d.url, lastFor(d.url), NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
                 if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt) -> "Kestrel's player played this clip to its end a moment ago (an advertisement the page has to see finished)"
             else -> null
         }
@@ -444,7 +444,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val headers = MediaHeaders.sets(seed, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
         try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may have no media session */ }
         // pressed again on the same page (Back from Kestrel's player, play once more): it continues where the person stopped, not from the page's own start (RAM only, never for a private tab)
-        val startMs = if (tab.isPrivateTab) d.startMs else WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+        val startMs = if (tab.isPrivateTab) d.startMs else WebHandOver.resumeMs(d.startMs, d.url, lastFor(d.url), NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
             if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt)
         if (!tab.isPrivateTab) {
             when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }

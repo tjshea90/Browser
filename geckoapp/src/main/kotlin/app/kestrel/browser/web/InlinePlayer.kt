@@ -227,7 +227,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             val dc = p.videoDecoderCounters
             if (!priv) NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); if (!priv) NativePlayerStats.playedMs += pos
             NativePlayerActivity.lastPositionMs = pos
-            if (priv) NativePlayerActivity.lastUrl = "" else { NativePlayerActivity.lastUrl = url; NativePlayerActivity.lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; NativePlayerActivity.lastStoppedAt = SystemClock.uptimeMillis() }
+            if (priv) { NativePlayerActivity.lastUrl = ""; NativePlayerActivity.lastAlts = emptyList() } else { NativePlayerActivity.lastUrl = url; NativePlayerActivity.lastAlts = altsPlaying.map { it.url }; NativePlayerActivity.lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; NativePlayerActivity.lastStoppedAt = SystemClock.uptimeMillis() }
             if (!priv) NativePlayerStats.last = "ended inside the page after ${(SystemClock.uptimeMillis() - startedAt) / 1000} s"
         } catch (e: Throwable) { /* gone */ }
         try { p.release() } catch (e: Throwable) { /* gone */ }
