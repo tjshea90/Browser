@@ -12,6 +12,20 @@ class HttpSemanticsTest {
     private fun h(vararg kv: Pair<String, String>): (String) -> String? { val m = kv.toMap(); return { k -> m.entries.firstOrNull { it.key.equals(k, true) }?.value } }
     private val now = 1_767_225_600_000L // 2026-01-01T00:00:00Z
 
+    @Test fun aOneByteProbeLearnsTheFileSizeButNotThePageSizeOfAWebPage() {
+        assertEquals(48213L, HttpSemantics.probeTotal(206, "bytes 0-0/48213", "1", "video/mp4"))
+        assertEquals(61878609L, HttpSemantics.probeTotal(200, null, "61878609", "video/mp4"))
+        assertEquals(-1L, HttpSemantics.probeTotal(206, "bytes 0-0/*", null, "video/mp4"))
+        assertEquals(-1L, HttpSemantics.probeTotal(404, null, "300", "video/mp4"))
+        // a Wikimedia "File:x.webm" page (HTML, 300 KB) must not become a 300 KB video
+        assertEquals(-1L, HttpSemantics.probeTotal(200, null, "307200", "text/html; charset=utf-8"))
+        assertEquals(-1L, HttpSemantics.probeTotal(206, "bytes 0-0/307200", null, "TEXT/HTML"))
+        assertEquals(-1L, HttpSemantics.probeTotal(200, null, "5000", "application/xhtml+xml"))
+        // a server that mislabels a real file as octet-stream or says nothing is still measured
+        assertEquals(9000000L, HttpSemantics.probeTotal(200, null, "9000000", "application/octet-stream"))
+        assertEquals(9000000L, HttpSemantics.probeTotal(200, null, "9000000", null))
+    }
+
     @Test fun contentRange() {
         val a = HttpSemantics.parseContentRange("bytes 0-99/1000")!!
         assertEquals(0L, a.first); assertEquals(99L, a.last); assertEquals(1000L, a.total)

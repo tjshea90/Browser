@@ -112,6 +112,21 @@ object HttpSemantics {
         return if (status in 500..599) Classified(Verdict.RETRY, 0, status) else Classified(Verdict.FATAL_HTTP, 0, status)
     }
 
+    /**
+     * RVW4: the size of the file a one-byte probe learned: the end of "Content-Range: bytes 0-0/48213" for a 206, the plain Content-Length of a 200 that ignored Range, -1 when unknown.
+     * A reply that is a WEB PAGE says nothing about a file (found on real pages: a Wikimedia "File:x.webm" description page, an address that only ENDS like a video, was probed and its page size
+     * of a few hundred KB made it "a verified 300 KB video"): -1 then, so the row stays unverified.
+     */
+    fun probeTotal(status: Int, contentRange: String?, contentLength: String?, contentType: String?): Long {
+        val ct = contentType?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT) ?: ""
+        if (ct == "text/html" || ct == "application/xhtml+xml") return -1L
+        return when (status) {
+            206 -> contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull()
+            200 -> contentLength?.trim()?.toLongOrNull()
+            else -> null
+        } ?: -1L
+    }
+
     /** Content-Encoding other than identity: the bytes on the wire are not the file's bytes, so ranges are meaningless (RFC 9110 14.1.2). */
     fun isEncoded(contentEncoding: String?): Boolean {
         val e = contentEncoding?.trim()?.lowercase(Locale.ROOT) ?: return false
