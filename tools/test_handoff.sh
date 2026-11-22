@@ -334,7 +334,7 @@ ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 fra
       '+71.0s video error exempt.example.net code=2 net=3 ready=0 src=http frame=top el=v',
       '+75.0s video error stuck.example.net code=99 net=2 ready=0 src=blob frame=top el=v paused=1 buf=0',
       '+78.0s win typing-address keys=20 avg=180ms worst=900ms over100=12',
-      '+79.0s win typing-page keys=30 avg=20ms worst=60ms over150=0',
+      '+79.0s win typing-page keys=30 avg=20ms worst=60ms over150=0 frame=top resp=250ms respworst=900ms resp150=12',
       '+80.0s filepick picked type=image/png kb=811 size=600x973 decodes=1 ext=1 freeMb=300',
       '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40']
 now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -345,7 +345,7 @@ PY
 check "digest VIDEO PROBLEMS names the site the press-to-play rule held back and points at the per-site switch" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/vd1/diag" > "$T/vd1/out.txt"; grep -E "reels.example.com .*held 2, kept 6, refused 17" "$T/vd1/out.txt" && grep -q "cause 1: the press-to-play rule held/refused videos here" "$T/vd1/out.txt"'
 check "digest VIDEO PROBLEMS ties a refused frame rate plus a failed element to the format policy, and says the rule is not the cause where the site was exempt" 'grep -q "cause 3: the format policy said no (size 0, H.264-only 0, 30 fps 4, last avc_60fps)" "$T/vd1/out.txt" && grep -q "the rule was OFF for this site and elements still failed" "$T/vd1/out.txt" && grep -q "code 2 http: network error" "$T/vd1/out.txt"'
 check "digest VIDEO PROBLEMS says what an element stuck loading with no error means" 'grep -q "stuck.example.net" "$T/vd1/out.txt" && grep -q "never got data, with no error" "$T/vd1/out.txt"'
-check "digest TYPING LATENCY calls the slow address bar slow and the quick page fine and says how to read it" 'grep -q "address bar / Home field (the app) .*20 keys, mean 180 ms, worst 900 ms -> SLOW" "$T/vd1/out.txt" && grep -q "page fields (the page and the engine) .*30 keys, mean 20 ms, worst 60 ms -> fine" "$T/vd1/out.txt" && grep -q "Reading it: slow in the ADDRESS BAR" "$T/vd1/out.txt"'
+check "digest TYPING LATENCY calls the slow address bar slow and the quick page fine and says how to read it" 'grep -q "address bar / Home field (the app) .*20 keys, mean 180 ms, worst 900 ms -> SLOW" "$T/vd1/out.txt" && grep -q "page fields (the page and the engine) .*30 keys, mean 20 ms, worst 60 ms -> fine" "$T/vd1/out.txt" && grep -q "Reading it: slow in the ADDRESS BAR" "$T/vd1/out.txt" && grep -q "page RESPONSE (key to the next frame) .*30 keys, mean 250 ms, worst 900 ms, 12 waited 150 ms or more -> SLOW" "$T/vd1/out.txt"'
 check "digest FILE PICKS counts the empty file and the unreadable picture and blames the file, not the page" 'grep -q "FILE PICKS.*2 file" "$T/vd1/out.txt" && grep -q "empty files 1, pictures Android cannot read 1" "$T/vd1/out.txt" && grep -q "the FILE or the tablet is a cause" "$T/vd1/out.txt"'
 check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
