@@ -413,6 +413,32 @@ def video_analysis(batches):
             print('      -> ' + w)
 
 
+def page_got_analysis(batches):
+    """PERF10c: what the PAGE received when a file input changed (`filepick page-got host= n= type= kb= bytes= decode= WxH canvas= reencode= Nms`, one `;`-separated group per file, measured inside the page): names the side at fault for 'I can't attach photos'."""
+    seen = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' filepick page-got ' in e:
+                seen.append(e.split(' filepick page-got ', 1)[1].strip())
+    print('  what the PAGE received (`filepick page-got`, alpha95 or newer): %d attach(es)' % len(seen))
+    for line in seen[-6:]:
+        head, _, rest = line.partition(' type=')
+        first = ('type=' + rest).split(' ; ')[0]
+        kv = dict(re.findall(r'(\w+)=(\S+)', first))
+        dec, canvas, enc, kb = kv.get('decode', '-'), kv.get('canvas', '-'), kv.get('reencode', '-'), kv.get('kb', '?')
+        if kb == '0':
+            v = 'the page\'s file is EMPTY: the engine\'s copy of the pick was cut short'
+        elif dec == 'failed':
+            v = 'the engine could NOT decode the picture it gave the page (copy or engine at fault)'
+        elif canvas in ('refused', 'transparent', 'flat') or enc in ('refused', 'empty'):
+            v = 'the engine\'s canvas refused or returned a blank / flat picture (fingerprint protection or the graphics driver): sites cannot re-encode the picture before the upload'
+        elif dec == 'ok' and canvas == 'ok' and enc.startswith('ok'):
+            v = 'the file and the engine are fine: claude.ai (or its server) refused it'
+        else:
+            v = 'not a decodable picture or not tried (decode %s, canvas %s, reencode %s)' % (dec, canvas, enc)
+        print('      %s | %s -> %s' % (head.strip(), first, v))
+
+
 def filepick_analysis(batches):
     """IMG1: what the files picked for a page looked like to Android (`filepick picked type= kb= size=WxH decodes= ext= freeMb=`): says whether a file or the page is to blame for a refused upload."""
     rows = []
@@ -424,6 +450,7 @@ def filepick_analysis(batches):
             elif isinstance(e, str) and ' filepick picked-failed ' in e:
                 rows.append({'failed': e.split(' filepick picked-failed ', 1)[1].strip()[:40]})
     print('\n== FILE PICKS (what the files attached to pages looked like to Android; %d file(s)) ==' % len(rows))
+    page_got_analysis(batches)
     if not rows:
         print('  (no `filepick picked` lines yet: needs alpha87 or newer and one attached file in a normal tab)')
         return
