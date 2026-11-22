@@ -54,7 +54,7 @@ test('GL1: a page where no rule matches sends nothing, and a selector the engine
   await quiet.context.close();
 });
 
-test('GL1: at most eight rules are sent and a page with a hundred and fifty rules is looked at only once', async () => {
+test('GL1: at most eight rules are sent and a page with many rules is looked at only once', async () => {
   let css = '', body = '';
   for (let i = 0; i < 20; i++) { css += '.r' + i + '{display:none!important} '; body += '<i class="r' + i + '"></i>'; }
   const { page, context } = await open(css, body);

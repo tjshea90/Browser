@@ -3,7 +3,9 @@
 // D2: when that CSS starts with the marker, the generic selectors that name a class or an id were NOT sent (there are ~29,000 of them): this top document tells the app which classes and ids it holds,
 // in small batches (the page at load, then what gets added), and injects only the selectors that can match (research/ADBLOCK_ENGINE.md, core/filter/CosmeticTokens.kt).
 (function () {
+  var injected = [];      // GL1: every style sheet injected here (the site's own first, then the generic batches), read once by the hiding count
   function inject(css, tag) {
+    if (injected.length < 40) injected.push(String(css));
     var st = document.createElement('style');
     st.setAttribute('data-kestrel', tag);
     st.textContent = css;
@@ -180,15 +182,15 @@
     } catch (e) { /* never break the page */ }
   }
   // GL1 (owner 2026-11-21: "some elements of pages are not drawn ... an invisible line, and under the line is blank"; on pornhub the loading circle over a video was cut off with Shields on and whole with Shields off): once the page has loaded,
-  // count how many elements each of THIS site's element-hiding rules (the first 150 of the injected CSS: the site's own come first) matches, and tell the extension the rules that matched, with the number: [selector, count, hides 1|0]. The
+  // count how many elements each element-hiding rule injected into this page (the first 400 rules: the site's own come first, then the generic batches the page asked for) matches, and tell the extension the rules that matched, with the number: [selector, count, hides 1|0]. The
   // selectors are the public lists' own text, no page content. Idle, once, 3.5 s after the load, never longer than 40 ms in all (a slow page is skipped), at most 8 rules sent. The app shows them in the page report, so a blank area has a named rule.
   function startHidCount(css) {
     try {
       var go = function () {
         setTimeout(function () {
           try {
-            var plain = String(css).replace(/\/\*[\s\S]*?\*\//g, ''), re = /([^{}]+)\{([^}]*)\}/g, m, n = 0, hit = [], t0 = (window.performance && performance.now) ? performance.now() : 0;
-            while ((m = re.exec(plain)) !== null && n < 150) {
+            var plain = String(injected.join('\n')).replace(/\/\*[\s\S]*?\*\//g, ''), re = /([^{}]+)\{([^}]*)\}/g, m, n = 0, hit = [], t0 = (window.performance && performance.now) ? performance.now() : 0;
+            while ((m = re.exec(plain)) !== null && n < 400) {
               n++;
               var sel = m[1].replace(/^\s+|\s+$/g, '');
               if (!sel || sel.length > 200) continue;
