@@ -229,7 +229,8 @@ class PrivateTabsTest {
         assertTrue(h.contains("pageIsPrivate(page)") && h.contains("PrivateGuard.active()") && h.contains("tab.isPrivateTab"))
         assertTrue("it logs the pieces FilePickFacts builds", h.contains("FilePickFacts.pageLine(") && h.contains("FilePickFacts.pageVerdict("))
         assertFalse("no address or title in the line", h.contains("tab.url") || h.contains("tab.title"))
-        assertFalse("the page script never reads a file name", gecko("../assets/kestrel-shields/pagetime.js").contains(".name)") && false)
+        val pt = File("../geckoapp/src/main/assets/kestrel-shields/pagetime.js").readText()
+        assertFalse("the page script never reads a file name or path", pt.contains("f.name") || pt.contains("fl[i].name") || pt.contains("webkitRelativePath"))
     }
 }
 
