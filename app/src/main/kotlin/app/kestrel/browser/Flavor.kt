@@ -20,6 +20,9 @@ object Flavor {
     /** The engine view reports pull-down gestures (Gecko build only): Settings shows the "Pull down to refresh" row. */
     @JvmField var hasPullRefresh = false
 
+    /** The Gecko build declares the (never requested) Storage / Photos permission, so Settings can send the person to Android's page where it is switched on (PERF10d). */
+    @JvmField var hasFilePermission = false
+
     /** Video and social embeds can wait for a tap (Gecko build only: the built-in extension does it): Shields and Settings show the "Embeds wait for a tap" switch. */
     @JvmField var hasEmbedWait = false
 

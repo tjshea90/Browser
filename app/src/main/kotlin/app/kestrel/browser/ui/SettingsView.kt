@@ -351,6 +351,15 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         }
     }
 
+    /** PERF10d: Android's own page of this app's permissions (Storage / Photos and videos appear there only because the manifest declares them). Never throws. */
+    private fun openAppPermissions() {
+        try {
+            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", ctx.packageName, null)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(ctx, "Open Android Settings > Apps > this app > Permissions.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun confirm(title: String, message: String, ok: () -> Unit) {
         AlertDialog.Builder(ctx).setTitle(title).setMessage(message)
             .setPositiveButton("Clear") { _, _ -> ok() }.setNegativeButton("Cancel", null).show()
