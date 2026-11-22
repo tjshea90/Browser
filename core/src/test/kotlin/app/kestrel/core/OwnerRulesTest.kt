@@ -680,6 +680,16 @@ class OwnerRulesTest {
         assertTrue("the cold-start cache purge does not walk cache2/entries (10-40k files)", storage.contains("d.name == \"entries\" && d.parentFile?.name == \"cache2\""))
     }
 
+    /** PERF5b (owner 2026-11-22: "with the kestrel player running it there is no video quality selection at all"): a site that gives one list per quality (pornhub) gets a quality list in Kestrel's player, in both screens. */
+    @Test fun perf5bKestrelsPlayerOffersTheOtherQualitiesOfTheSameFilm() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("the hand-over, the inline player and the sheet's play all pass the film's other lists", flow.contains("private fun siblingsOf(tab: Tab, url: String)") && flow.contains("a.inline.start(tab, d.url, headers, startMs, geometry, box, alts)") && flow.contains("fromPage = true, alts = alts)") && flow.contains("siblingsOf(tab, target.url)"))
+        val pq = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt")
+        assertTrue("the quality button shows for several lists, the rows are Automatic + one per quality, a pick swaps the list", pq.contains("return distinct >= 2 || alts.size >= 2") && pq.contains("private fun altRows()") && pq.contains("switchTo?.invoke(a)") && pq.contains("SiblingQualities.startFor(alts, capH)"))
+        assertTrue("the full-screen screen and the player inside the page start with the quality that fits the cap and swap the source at the same second", source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("quality.setAlts(alts, url)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("q.setAlts(alts, url)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt").contains("val newSource: (String) -> MediaSource"))
+        assertTrue("the lines of the qualities are written only for a person's own tab (PlayerQuality.say is silent for a private tab)", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("private fun say(event: String, text: String) { if (!priv) Health.log"))
+    }
+
     /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
     @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
         assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
