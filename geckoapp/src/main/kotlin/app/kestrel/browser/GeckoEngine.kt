@@ -205,6 +205,17 @@ object GeckoEngine {
         "layout.display-list.retain", "dom.ipc.processPriorityManager.enabled", "browser.cache.memory.capacity", "layout.frame_rate", "network.http.max-connections",
         "network.http.max-persistent-connections-per-server", "network.http.speculative-parallel-limit", "network.http.pacing.requests.enabled", "network.dnsCacheEntries",
         "network.dnsCacheExpiration", "layout.css.scroll-anchoring.enabled", "dom.lazy-loading.margin.top", "image.cache.size")
+    /** PERF8c: the engine's own values of the graphics prefs "Safe drawing" sets (and the ones to try next), as ONE Health line, so the live diagnostics prove whether the setting reached the engine. */
+    private val drawPrefs = listOf("gfx.webrender.scissored-cache-clears.enabled", "gfx.webrender.batched-texture-uploads", "gfx.webrender.max-partial-present-rects", "gfx.webrender.allow-partial-present-buffer-age",
+        "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "gfx.webrender.software", "layers.gpu-process.enabled")
+    fun logDrawPrefs() {
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(drawPrefs).accept({ list ->
+                app.kestrel.browser.diag.Health.log("engine", "draw-prefs", list?.joinToString(" ") { "${it.pref.removePrefix("gfx.webrender.")}=${it.value}" } ?: "none")
+            }, { e -> app.kestrel.browser.diag.Health.log("engine", "draw-prefs", "read failed $e") })
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "draw-prefs", "unavailable ${e.javaClass.simpleName}") }
+    }
+
     fun readBackPrefs(done: () -> Unit) {
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(scrollPrefs).accept({ list ->

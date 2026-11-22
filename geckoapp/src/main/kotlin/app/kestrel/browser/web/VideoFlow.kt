@@ -411,7 +411,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** PERF8a: the person pressed play and the film was not known yet: read the playlists the finder has found NOW (it waits 3 s after a find to see the page settle), so the film moves to Kestrel's player about two seconds sooner. */
-    private fun lookAsap(tab: Tab) { if (!tab.isPrivateTab || true) Io.main.post { if (a.current === tab && !tab.loading) { lookPending.remove(tab.id); lookNow(tab, 6) } } }
+    private fun lookAsap(tab: Tab) { Io.main.post { if (a.current === tab) { lookPending.remove(tab.id); lookNow(tab, 6) } } }
 
     /** PERF5b: the address the last film played under, for [u]: any quality of the film that played counts as it (so "press play again" continues where the person stopped whichever quality the page asks for now). */
     private fun lastFor(u: String): String = if (u in NativePlayerActivity.lastAlts) u else NativePlayerActivity.lastUrl
