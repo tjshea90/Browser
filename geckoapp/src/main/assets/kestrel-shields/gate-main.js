@@ -184,6 +184,11 @@
             if (n3 - r3.askedAt > 400 && n3 >= r3.noUntil) ask(el, 'press', function (handed) { if (handed) pauseEl(el); else openEl(el, 'press'); });
             else if (!(r3.ask && !r3.ask.done)) openEl(el, 'press');
           }
+          else if (hand && !el.controls && el.paused) {                                                         // PERF9 (owner 2026-11-22: "I pressed play again and it did the loading animation for about 1 second then stopped"): a tap on the picture of a held script player that is no play button BY NAME (the video itself, a loading circle, the mark that calm.js makes) is a press as well: the app is asked first, the page's own player opens only on a no
+            var r4 = rec(el), n4 = dnow.call(Date);
+            if (n4 - r4.askedAt > 400 && n4 >= r4.noUntil) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });
+            else if (!(r4.ask && !r4.ask.done) && !r4.open && n4 < r4.noUntil) openEl(el, 'press');
+          }
           else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
         }   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }

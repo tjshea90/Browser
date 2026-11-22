@@ -50,7 +50,14 @@
       into.appendChild(st); styleDone = true;
     }
     function uncalm() {
-      for (var i = 0; i < calmed.length; i++) { try { calmed[i].removeAttribute('data-kst-calm'); } catch (e) { /* gone */ } }
+      for (var i = 0; i < calmed.length; i++) {
+        var c = calmed[i];
+        try {
+          c.el.removeAttribute('data-kst-calm');
+          if (c.label === null) c.el.removeAttribute('aria-label'); else c.el.setAttribute('aria-label', c.label);          // (what the page had is put back)
+          if (c.role === null) c.el.removeAttribute('role'); else c.el.setAttribute('role', c.role);
+        } catch (e) { /* gone */ }
+      }
       calmed = [];
     }
     // the circle of a big paused video: an infinite CSS animation on an element of circle size whose centre lies inside the video's box (an svg child counts as its outermost svg)
@@ -89,7 +96,9 @@
         if (!t) continue;
         var text = 'circle ' + name(t) + ' ' + Math.round(t.getBoundingClientRect().width) + 'x' + Math.round(t.getBoundingClientRect().height) + ' in a paused video ' + Math.round(r.width) + 'x' + Math.round(r.height) + ', ' + clipOf(t);
         addStyle();
-        t.setAttribute('data-kst-calm', '1'); calmed.push(t);
+        // the mark is a PLAY button: labelled as one (the press-to-play gate asks Kestrel's player first for a tap on a control that is named so: PERF9, a tap on the mark opened the page's own player, which stalled)
+        calmed.push({ el: t, label: t.getAttribute('aria-label'), role: t.getAttribute('role') });
+        t.setAttribute('data-kst-calm', '1'); t.setAttribute('aria-label', 'Play video'); t.setAttribute('role', 'button');
         if (told < MAX_TOLD) {
           told++;
           try { browser.runtime.sendMessage({ k: 'verr', c: 98, x: text.slice(0, 160), ns: v.networkState | 0, rs: v.readyState | 0, s: 'none', f: window === window.top ? 1 : 0, e: 'v' }).catch(function () { /* no background page */ }); } catch (e) { /* ignore */ }
