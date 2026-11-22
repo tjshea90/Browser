@@ -4,6 +4,8 @@ import app.kestrel.core.media.WebHandOver.Element
 import app.kestrel.core.media.WebHandOver.Known
 import app.kestrel.core.media.WebHandOver.Why
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
