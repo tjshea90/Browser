@@ -260,6 +260,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (notify) l.navOpenChanged(open)
     }
 
+    /** The Swoop link had to ask the person to choose Swoop first (it is installed but not the chosen keyboard yet): nothing is up, and the bar must not say it is. */
+    fun swoopNotUp() { if (swoopUp) { swoopUp = false; barMode() } }
+
     fun openKeyboard() {
         if (!isOpen || keyboardShowing || swoopUp) return
         if (l.navSwoop(true)) { swoopUp = true; swoopOpenings++; barMode(); return }       // Swoop is the chosen keyboard: it floats over the page, the typing goes through Android's own path (and into Swoop's one memory)
