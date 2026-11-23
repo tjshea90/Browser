@@ -1386,10 +1386,16 @@ onMsg(function (m, sender) {
   return undefined;
 });
 
+// PERF14: does the person want Instant Back (Settings > Instant Back, the app's 7th answer field)? content.js asks once per page and keeps the answer, because the stop of a leaving page must be decided in the click itself.
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'bkm' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  return Promise.resolve(bkMode ? 1 : 0);
+});
+
 // PERF13: the engine's own verdict at the moment a page is left (content.js `pagehide`, top frame): kept by the back/forward cache (ps 1) or refused (0), and how far the page had loaded (rs 0 loading, 1 interactive, 2 complete). Numbers and the address.
 onMsg(function (m, sender) {
   if (!m || m.k !== 'ph' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
-  send({ k: 'ph', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, rs: Math.max(0, Math.min(2, m.rs | 0)) }).catch(function () {});
+  send({ k: 'ph', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, rs: Math.max(0, Math.min(2, m.rs | 0)), st: m.st ? 1 : 0 }).catch(function () {});
   return undefined;
 });
 

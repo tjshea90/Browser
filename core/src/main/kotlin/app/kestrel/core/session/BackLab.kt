@@ -112,9 +112,9 @@ class BackLab(private val log: (String) -> Unit = {}) {
      * Back press to it as `left=kept`, `left=refused-loaded` (the engine refused a finished page: open requests, a stream, no-store, an opener ...) or `left=refused-loading` (it was still loading: slow hotspot), so the real reason for
      * "Back is not instant" is read from the tablet instead of guessed.
      */
-    fun pageHide(url: String, persisted: Boolean, readyState: Int) {
+    fun pageHide(url: String, persisted: Boolean, readyState: Int, stopped: Boolean = false) {
         val k = BackScrollRules.keyOf(url); if (k.isEmpty()) return
-        leftVerdict.put(k, if (persisted) "kept" else if (readyState >= 2) "refused-loaded" else "refused-loading")
+        leftVerdict.put(k, (if (persisted) "kept" else if (readyState >= 2) "refused-loaded" else "refused-loading") + (if (stopped) "+stop" else ""))   // "+stop": the person's link tap cancelled the page's unfinished loads first (PERF14)
     }
 
     /** The tab's address became the target's (the engine committed it): the first sighting after the press counts. */

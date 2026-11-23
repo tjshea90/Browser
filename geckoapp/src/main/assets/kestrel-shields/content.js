@@ -488,10 +488,33 @@
     }
     // PERF13 (owner 2026-11-23: "other browsers can immediately go back to the last page"): the engine's OWN verdict when a page is left: `pagehide.persisted` is true only when the page really enters the engine's back/forward
     // cache. The app joins it with the next Back press to this page (Health `back press ... left=`), so the next upload says whether pages are refused at the moment they are left, and whether they were still loading then.
+    var stopOnLeave = false, didStop = false;
+    function askStopMode() { try { browser.runtime.sendMessage({ k: 'bkm' }).then(function (r) { stopOnLeave = (r === 1 || r === '1'); }, function () { /* the background page is not there */ }); } catch (x) { /* ignore */ } }
+    askStopMode();
+    window.addEventListener('load', function () { setTimeout(askStopMode, 1500); }, false);   // (the very first page of a run asks before the app has answered the page configuration)
+    // PERF14 (owner 2026-11-23: "I was already on the page and it was already loaded"): the engine keeps a page for Back only when it has FINISHED loading; late scripts, styles and frames of ad hosts on a slow hotspot keep it "loading" long
+    // after the person has seen all of it. When the person taps an ordinary link to a new page, the unfinished loads of the page that is being left are cancelled (window.stop()) so the engine can keep it. This listener runs AFTER
+    // the page's own handlers (bubble phase) and BEFORE the link's own navigation (the browser starts it after the click event has been dispatched), so the navigation is not cancelled; a click the page handled itself is left alone.
+    window.addEventListener('click', function (e) {
+      try {
+        if (!stopOnLeave || didStop || !e || e.isTrusted !== true || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a || a.hasAttribute('download')) return;
+        var tg = (a.getAttribute('target') || '').toLowerCase();
+        if (tg && tg !== '_self') return;
+        var u = new URL(a.href, location.href);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+        if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search) return;     // the same page (a place in it)
+        var ms = document.querySelectorAll('video, audio'), i;
+        for (i = 0; i < ms.length; i++) if (!ms[i].paused && !ms[i].ended) return;                                    // never cut a playing film or song
+        didStop = true;
+        window.stop();
+      } catch (x) { /* never break the page */ }
+    }, false);
     window.addEventListener('pagehide', function (e) {
       try {
         var rs = document.readyState;
-        browser.runtime.sendMessage({ k: 'ph', p: location.href, ps: (e && e.persisted) ? 1 : 0, rs: rs === 'complete' ? 2 : (rs === 'interactive' ? 1 : 0) }).catch(function () {});
+        browser.runtime.sendMessage({ k: 'ph', p: location.href, ps: (e && e.persisted) ? 1 : 0, rs: rs === 'complete' ? 2 : (rs === 'interactive' ? 1 : 0), st: didStop ? 1 : 0 }).catch(function () {});
       } catch (x) { /* never break the page */ }
     }, false);
     window.addEventListener('pageshow', function (e) {
