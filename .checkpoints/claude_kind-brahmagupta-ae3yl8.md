@@ -1,22 +1,22 @@
-# CHECKPOINT 3033 — read me first, then TASKS.md
+# CHECKPOINT 3034 — read me first, then TASKS.md
 
-**Written:** 2026-11-22T23:31:59Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `489d966d` (this checkpoint is the commit after it)
+**Written:** 2026-11-23T18:15:47Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `b375e29e` (this checkpoint is the commit after it)
 
 ## Just done
-PERF11a done + research written (alpha95 uploads: Safe drawing + PBO off applied, blocks persist, Shields were down on YouTube, surface resize / resume churn, scroll_feel 2, lab_font off; attach probe silent after a real pick)
+PERF12 written to TASKS.md (owner 2026-11-23: look at the latest diagnostics and see if anything can be improved)
 
 ## Do this next
-Next: waiting for the owner's answers to the A/Bs (Software drawing ON + restart; Scroll feel Standard; Show text sooner ON) and where the blocks sit (fixed on screen vs move with text). Then PERF11b/c. NEXT RELEASE alpha96 = PERF11d diagnostics (ext-version log, page-seen beacon, maybe the guard-main.js click hook for detached file inputs) bundled with whatever the A/B proves.
+Next: PERF12a: python3 -B -I tools/diag_digest.py --days 2 and read every upload newer than diag/2026-11-22/232442 in Kestrel-Private origin/main; then PERF12b
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
      M TASKS.md
-     M research/PAINT_GLITCH.md
 
 ## Last ten checkpoints
 ```
+  b375e29e ckpt 3033: PERF11a done + research written (alpha95 uploads: Safe drawing + PBO off app
   489d966d ckpt 3032: PERF11 written to TASKS.md (owner after alpha95: invisible blocks covering w
   eefcc152 ckpt 3031: alpha95 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha95 (gecko code 196, run
   f107edb6 ckpt 3029: alpha95 (gecko code 196) gated by ship.sh (core+app+geckoapp suites, handoff
@@ -26,5 +26,4 @@ Next: waiting for the owner's answers to the A/Bs (Software drawing ON + restart
   5f4fb686 ckpt 3009: PERF10a research written: paint (draw-prefs read-back proves Safe drawing re
   89edc274 ckpt 3008: PERF10 written to TASKS.md (owner after alpha94: paint still chopped, cannot
   37893d32 ckpt 2991: alpha94 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha94 (gecko code 195, run
-  41643a29 ckpt 2989: alpha94 (gecko code 195) gated by ship.sh (web 683/683, core+app suites, lin
 ```
