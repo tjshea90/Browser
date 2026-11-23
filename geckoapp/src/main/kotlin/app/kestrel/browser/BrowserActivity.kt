@@ -1544,14 +1544,12 @@ open class BrowserActivity : Activity(), DockListener {
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
         showRestoring(t, false, "", b.picture, 0x33) // stays until the page is painted AND back at its place (backCheck, 20 s at most): taking it away earlier would show the page the owner just left, or the top of this one
         backCover = BackCover(t, b.savedY)
-        // BK10 (owner: "stuck on a picture of the page"): a picture that looks like the page but does not answer looks frozen. After 1 s a thin line runs along the top edge (the page is loading), after 4 s a note says which site
-        backWaitHost = if (t.isPrivateTab) "" else (UrlParts.hostOf(t.url) ?: "")
-        Io.main.removeCallbacks(backWaitLine); Io.main.removeCallbacks(backWaitNote)
-        Io.main.postDelayed(backWaitLine, 1_000L); Io.main.postDelayed(backWaitNote, 4_000L)
+        // BK10 (owner: "stuck on a picture of the page"): a picture that looks like the page but does not answer looks frozen: a thin line runs along the top edge while the page loads.
+        // PERF13 (owner 2026-11-23: "it pauses with a box that says loading, but other browsers can immediately go back"): the line comes after 0.6 s (was 1 s) and the note box "Still loading <site>" is gone: the other browsers show the page, not a notice.
+        Io.main.removeCallbacks(backWaitLine)
+        Io.main.postDelayed(backWaitLine, 600L)
     }
-    private var backWaitHost = ""
     private val backWaitLine = Runnable { if (backCover != null) restoreOverlay.setWait(true, "") }
-    private val backWaitNote = Runnable { if (backCover != null) restoreOverlay.setWait(true, if (backWaitHost.isNotEmpty()) "Still loading $backWaitHost" else "Still loading") }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
     internal fun goForward(t: Tab) { armBackPicture(t, +1); t.session?.goForward() }
