@@ -46,6 +46,7 @@ object GeckoPrefs {
         if (p.labBuffer) append("  network.buffer.cache.size: 32768\n")
         if (p.labFontDelay) append("  gfx.downloadable_fonts.fallback_delay: 500\n")
         if (p.labDnsPrefetch && p.dataSaver == app.kestrel.core.shield.DataSaver.OFF) append("  dom.prefetch_dns_for_anchor_https_document: true\n")
+        if (p.labFps30) append("  layout.frame_rate: 30\n")      // PERF14: 30 redraws a second at most (the engine's own value is -1: every screen refresh); A/B in the digest: pages' own load timing split by this setting
         if (p.labSpec > 0) { append("  dom.speculation_rules.enabled: true\n"); append("  dom.speculation_rules.prefetch.dry_run: ").append(p.labSpec == 1).append('\n') }
     }
 

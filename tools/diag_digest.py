@@ -439,6 +439,53 @@ def page_got_analysis(batches):
         print('      %s | %s -> %s' % (head.strip(), first, v))
 
 
+def setting_ab(batches):
+    """PERF14: the uploads carry the owner's changed settings AND the pages' own load timing, so a setting can be judged by the numbers instead of by feel: for each watched setting, per site with at least 2 timed loads on each side, the median first contentful paint and load time with the setting ON against OFF (a setting that was never changed counts as OFF)."""
+    WATCH = ['lab_soft', 'lab_fps30', 'lab_draw', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
+    import statistics
+    rows = []
+    for b in batches:
+        st = b.get('settings', {}) or {}
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' page timing ' in e:
+                hm = re.search(r'host=(\S+)', e)
+                if not hm:
+                    continue
+                kv = dict(re.findall(r'(\w+)=(-?\d+)', e))
+                rows.append((st, hm.group(1), kv))
+    print('\n== SETTING A/B (page timing split by the owner\'s settings; medians in ms; only sites with 2+ loads on both sides) ==')
+    shown = 0
+    for key in WATCH:
+        vals = sorted({st.get(key, 'default') for st, _, _ in rows})
+        if len(vals) < 2:
+            continue
+        base = 'default' if 'default' in vals else vals[0]
+        for v in vals:
+            if v == base:
+                continue
+            per = {}
+            for st, host, kv in rows:
+                side = st.get(key, 'default')
+                if side not in (base, v):
+                    continue
+                per.setdefault(host, {base: [], v: []})[side].append(kv)
+            lines = []
+            for host, d in sorted(per.items(), key=lambda x: -len(x[1][base]) - len(x[1][v])):
+                if len(d[base]) < 2 or len(d[v]) < 2:
+                    continue
+                def med(side, k):
+                    xs = [int(x[k]) for x in d[side] if k in x and int(x[k]) >= 0]
+                    return statistics.median(xs) if xs else None
+                lines.append('    %-26s fcp %s -> %s | load %s -> %s  (%d / %d loads)' % (host[:26], med(base, 'fcp'), med(v, 'fcp'), med(base, 'load'), med(v, 'load'), len(d[base]), len(d[v])))
+            if lines:
+                shown += 1
+                print('  %s: %s -> %s' % (key, base, v))
+                for ln in lines[:8]:
+                    print(ln)
+    if not shown:
+        print('  (no setting has two sides with enough loads yet)')
+
+
 def back_analysis(batches):
     """PERF13: what Back did on the tablet (`back press kind= dir= loc= show= paint= y= to= left=`, normal tabs only): how many were instant, how long the others took, how often the place was missed, and what the engine said when the page was left (`left=`)."""
     rows = []
@@ -678,6 +725,7 @@ def main(argv):
     video_analysis(batches)
     filepick_analysis(batches)
     back_analysis(batches)
+    setting_ab(batches)
     typing_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
