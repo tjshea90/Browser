@@ -2010,9 +2010,10 @@ test('PERF10c: a file-pick report is checked in the background page: fixed words
   assert.ok(JSON.stringify(fc[0]).indexOf('Holiday') < 0 && JSON.stringify(fc[0]).indexOf('Secret') < 0 && JSON.stringify(fc[0]).indexOf('/storage') < 0, 'no name or path');
   h.message(good, 1, undefined, 5);                                         // a sub-frame
   h.message(good, -1);                                                      // no tab at all
-  h.message({ k: 'fc', n: 1, a: [] }, 1, undefined, 0);                     // nothing to tell
+  h.message({ k: 'fc', n: 1, a: [] }, 1, undefined, 0);                     // the beacon: a file arrived, the test is still running
   await tick(10);
-  assert.equal(h.of('fc').length, 1, 'only the top frame of a real tab, and only when a file was seen');
+  assert.equal(h.of('fc').length, 2, 'only the top frame of a real tab: the good report and the beacon');
+  assert.equal(h.of('fc')[1].a.length, 0); assert.equal(h.of('fc')[1].n, 1); assert.equal(h.of('fc')[1].p, PAGE);
 });
 
 test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {

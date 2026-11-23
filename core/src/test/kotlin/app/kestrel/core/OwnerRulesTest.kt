@@ -823,4 +823,15 @@ class OwnerRulesTest {
         assertTrue("the app logs it for a normal tab only and never while a private tab exists", act.contains("private fun onFileCheck(") && act.contains("if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return\n        val arr = m.optJSONArray(\"a\")") && act.contains("Health.log(\"filepick\", \"page-got\""))
         assertTrue("the bridge routes it", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"fc\" -> { fileCheck(m); \"\" }"))
     }
+
+    /** PERF12 (owner 2026-11-23: "Look at the latest diagnostics and see if anything can be improved"): cut-short loads, loops, the quieter journal, the attach beacon, the extension version. */
+    @Test fun perf12TheDiagnosticsSayWhatReallyHappened() {
+        val td = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("a load that ends without success and without an engine load error is cut short, not failed", td.contains("val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt") && td.contains("tab.gecko.loadErrorAt = android.os.SystemClock.uptimeMillis()"))
+        assertTrue("the live diagnostics do not count `cut=1` as a failure", source("core/src/main/kotlin/app/kestrel/core/livediag/DiagStats.kt").contains("m.groupValues[5] != \"1\""))
+        assertTrue("the old consumers still see ok=false", source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").contains("ok=\$ok\" + (if (!ok && cut) \" cut=1\" else \"\")"))
+        assertTrue("a loop of one site in one tab is named (normal tabs only: PageTimes.start returns before it for a private tab)", source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").contains("loop.hit(key, host, l.startedAt)") && source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").indexOf("if (priv) { open.remove(key); return }") < source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").indexOf("loop.hit(key"))
+        assertTrue("the extension version the engine runs is logged against the one wanted", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"ext-version\", \"installed=\${ext.metaData.version} wanted=1.0.\${bridge.salt}\""))
+        assertTrue("the attach beacon is sent before the test and logged as page-seen", source("geckoapp/src/main/assets/kestrel-shields/pagetime.js").contains("{ k: 'fc', n: fl.length, a: [] }") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"filepick\", \"page-seen\""))
+    }
 }

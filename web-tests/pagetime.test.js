@@ -123,7 +123,8 @@ test('LD4: a frame sends nothing, and nothing runs for a page without the extens
 });
 
 // ---- PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE receives when a file input changes
-const fcs = (got) => got.filter((g) => g.frame === 'top' && g.m.k === 'fc').map((g) => g.m);
+const fcs = (got) => got.filter((g) => g.frame === 'top' && g.m.k === 'fc' && g.m.a.length > 0).map((g) => g.m);          // the finished tests
+const beacons = (got) => got.filter((g) => g.frame === 'top' && g.m.k === 'fc' && g.m.a.length === 0).map((g) => g.m);   // PERF12: told at once, before the test
 async function png(page) { return Buffer.from((await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 64; c.height = 48; const g = c.getContext('2d'); for (let x = 0; x < 64; x++) { g.fillStyle = 'rgb(' + (x * 4) + ',' + (255 - x * 4) + ',90)'; g.fillRect(x, 0, 1, 48); } g.fillStyle = '#000'; g.fillRect(10, 10, 20, 12); return c.toDataURL('image/png'); })).split(',')[1], 'base64'); }
 
 test('PERF10c: a picked picture is read by the page: type, size, first bytes, decode, canvas draw and re-encode; no file name leaves the page', async () => {
@@ -134,6 +135,7 @@ test('PERF10c: a picked picture is read by the page: type, size, first bytes, de
   await until(() => fcs(got).length >= 1, 'the file report');
   const m = fcs(got)[0];
   assert.equal(m.n, 1); assert.equal(m.a.length, 1);
+  assert.equal(beacons(got).length, 1, 'the page says at once that a file arrived (the beacon), then the test follows'); assert.equal(beacons(got)[0].n, 1);
   const a = m.a[0];
   assert.equal(a.t, 'image/png'); assert.equal(a.mg, 'png'); assert.equal(a.dec, 1); assert.equal(a.w, 64); assert.equal(a.h, 48);
   assert.equal(a.px, 1, 'drawn, not blank'); assert.equal(a.enc, 1, 're-encoded'); assert.ok(a.ek >= 0 && a.ms >= 0 && a.kb >= 0);
