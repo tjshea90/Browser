@@ -84,6 +84,7 @@
         var fl = t.files, now = perf.now();
         if (!fl || !fl.length || now - fcLast < 1500) return;                  // (a change and an input event of the same pick count once)
         fcLast = now; FCN++;
+        try { browser.runtime.sendMessage({ k: 'fc', n: fl.length, a: [] }).catch(function () { /* no background page */ }); } catch (e1) { /* same */ }   // PERF12: told at once, before the (slower) test: proves the page DID see a file arrive even if the test below never finishes
         var total = Math.min(fl.length, 3), out = [], i;
         function one(r) { out.push(r); if (out.length === total) { try { browser.runtime.sendMessage({ k: 'fc', n: fl.length, a: out }).catch(function () { /* no background page */ }); } catch (e) { /* same */ } } }
         for (i = 0; i < total; i++) probeFile(fl[i], one);

@@ -403,7 +403,7 @@ onMsg(function (m, sender) {
       fcA.push({ t: /^[a-z0-9]+\/[a-z0-9.+-]{1,40}$/.test(fcT) ? fcT : (fcT === '' ? 'none' : 'odd'), kb: fcN(fcE.kb, 1e7), mg: fcMg[fcE.mg] === 1 ? fcE.mg : 'other',
         dec: fcN(fcE.dec, 3), w: fcN(fcE.w, 1e5), h: fcN(fcE.h, 1e5), px: fcN(fcE.px, 4), enc: fcN(fcE.enc, 4), ek: fcN(fcE.ek, 1e7), ms: fcN(fcE.ms, 6e5) });
     }
-    if (fcA.length) send({ k: 'fc', p: tabTop.get(tabId) || '', n: fcN(m.n, 9999), a: fcA }).catch(function () {});
+    send({ k: 'fc', p: tabTop.get(tabId) || '', n: fcN(m.n, 9999), a: fcA }).catch(function () {});   // (a: [] = the beacon: a file arrived, the test has not finished yet)
     return undefined;
   }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)

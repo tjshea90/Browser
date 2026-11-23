@@ -2199,16 +2199,16 @@ open class BrowserActivity : Activity(), DockListener {
     private fun onFileCheck(m: org.json.JSONObject) {
         val page = m.optString("p")
         if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return
-        val arr = m.optJSONArray("a") ?: return
+        val arr = m.optJSONArray("a")
         val files = ArrayList<app.kestrel.core.prompt.FilePickFacts.PageGot>()
-        for (i in 0 until minOf(arr.length(), 3)) arr.optJSONObject(i)?.let { e ->
+        if (arr != null) for (i in 0 until minOf(arr.length(), 3)) arr.optJSONObject(i)?.let { e ->
             files.add(app.kestrel.core.prompt.FilePickFacts.PageGot(e.optString("t"), e.optLong("kb", -1L), e.optString("mg"), e.optInt("dec"), e.optInt("w"), e.optInt("h"), e.optInt("px"), e.optInt("enc"), e.optLong("ek"), e.optLong("ms")))
         }
-        if (files.isEmpty()) return
         Io.main.post {
             val tab = tabForPage(page) ?: return@post
             val host = tab.topHost ?: return@post
             if (tab.isPrivateTab || PrivateGuard.active()) return@post
+            if (files.isEmpty()) { Health.log("filepick", "page-seen", "host=$host n=${m.optInt("n", 0)} (the page received a file; its test is still running)"); return@post }   // the beacon
             Health.log("filepick", "page-got", app.kestrel.core.prompt.FilePickFacts.pageLine(host, m.optInt("n", files.size), files))
             filePicks.pageGot(app.kestrel.core.prompt.FilePickFacts.pageVerdict(files[0]))
         }

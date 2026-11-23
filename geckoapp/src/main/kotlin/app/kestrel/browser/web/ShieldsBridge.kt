@@ -451,6 +451,8 @@ class ShieldsBridge(
             else -> RequestType.OTHER
         }
 
+        @Volatile private var extVersionLogged = false
+
         /** Installs the built-in extension (idempotent) and (re)attaches [bridge]; call from every Activity instance. */
         fun install(ctx: Context, bridge: ShieldsBridge) {
             bridge.salt = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode } catch (e: Exception) { 0L }
@@ -458,6 +460,8 @@ class ShieldsBridge(
             controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
                 { ext ->
                     ext?.setMessageDelegate(bridge, "kestrel")
+                    // PERF12: which extension code the engine really runs (a stale copy would make every new page script silently absent: the alpha95 attach test never answered); once per run
+                    if (ext != null && !extVersionLogged) { extVersionLogged = true; app.kestrel.browser.diag.Health.log("shields", "ext-version", "installed=${ext.metaData.version} wanted=1.0.${bridge.salt}") }
                     // Blocking must cover private tabs too. Built-in extensions are allowed there already; asking again RELOADS the running extension (a full shutdown and start of its background page,
                     // measured in the engine's own code), which this used to do at every launch and every Activity re-creation, right while the first page loaded. Ask only if it is really off.
                     if (ext != null && !ext.metaData.allowedInPrivateBrowsing) controller.setAllowedInPrivateBrowsing(ext, true)
