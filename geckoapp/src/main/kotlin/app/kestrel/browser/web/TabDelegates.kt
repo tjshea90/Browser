@@ -156,6 +156,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onLoadError(session: GeckoSession, uri: String?, error: WebRequestError): GeckoResult<String>? {
         val failing = uri ?: tab.url
         val host = UrlParts.hostOf(failing) ?: ""
+        tab.gecko.loadErrorAt = android.os.SystemClock.uptimeMillis()
         tab.loading = false
         tab.progress = 0
         when (error.code) {
@@ -208,7 +209,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPageStop(session: GeckoSession, success: Boolean) {
-        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success)
+        // PERF12 (owner 2026-11-23: "see if anything can be improved"; the digest said 19 of 44 amazon and 15 of 37 google loads "failed"): a load that ends WITHOUT success and WITHOUT an engine load error was cut short
+        // (a redirect hop, a tap on a result, Stop): it is said as `ok=false cut=1` and is not counted as a failed load by the live diagnostics (which then no longer advise "turn Shields off" for a tracking redirect).
+        val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt
+        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false

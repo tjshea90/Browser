@@ -22,6 +22,7 @@ class GeckoTabData {
     var pictureW = 0
     /** RX4-X2: when (uptime ms) and with which address the page's navigation began: a touch BEFORE it is the tap that opened the page, not a touch of the page. */
     var pageStartedAt = 0L
+    var loadErrorAt = 0L          // PERF12: when the engine last reported a real load error for this tab (onLoadError): a load that stops WITHOUT one was cut short (a redirect, a tap on a link, Stop), not failed
     /** PV1: this tab's current session has painted a page of its own (set at the first contentful paint, cleared when a session is made): a live tab coming back needs no curtain over the page view. */
     @JvmField var painted = false
     /** EM1k: the address of the page the engine last painted (first contentful paint); the "last look" of a page that is still loading is taken only when it matches the tab's address now. In memory only. */
