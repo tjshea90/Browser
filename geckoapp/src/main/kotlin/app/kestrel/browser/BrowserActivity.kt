@@ -1545,7 +1545,7 @@ open class BrowserActivity : Activity(), DockListener {
         showRestoring(t, false, "", b.picture, 0x33) // stays until the page is painted AND back at its place (backCheck, 20 s at most): taking it away earlier would show the page the owner just left, or the top of this one
         backCover = BackCover(t, b.savedY)
         // BK10 (owner: "stuck on a picture of the page"): a picture that looks like the page but does not answer looks frozen: a thin line runs along the top edge while the page loads.
-        // PERF13 (owner 2026-11-23: "it pauses with a box that says loading, but other browsers can immediately go back"): the line comes after 0.6 s (was 1 s) and the note box "Still loading <site>" is gone: the other browsers show the page, not a notice.
+        // PERF13 (owner 2026-11-23: "it pauses with a box that says loading, but other browsers can immediately go back"): the line comes after 0.6 s (was 1 s) and the note box with the site name (it said the page was still loading) is gone: the other browsers show the page, not a notice.
         Io.main.removeCallbacks(backWaitLine)
         Io.main.postDelayed(backWaitLine, 600L)
     }
