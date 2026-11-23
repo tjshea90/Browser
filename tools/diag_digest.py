@@ -480,7 +480,7 @@ def setting_ab(batches):
                 lines.append('    %-26s fcp %s -> %s | load %s -> %s  (%d / %d loads)' % (host[:26], med(base, 'fcp'), med(v, 'fcp'), med(base, 'load'), med(v, 'load'), len(d[base]), len(d[v])))
             if lines:
                 shown += 1
-                sig = tuple(l.split('(')[-1] for l in lines)
+                sig = tuple(tuple(sorted(l.split('(')[-1].replace(' loads)', '').split(' / '))) for l in lines)   # (the same loads, either way round)
                 if sig in seen_split:
                     print('  %s: %s -> %s  (the same loads as %s: these settings were changed together, so the numbers cannot tell them apart)' % (key, base, v, seen_split[sig]))
                     continue
