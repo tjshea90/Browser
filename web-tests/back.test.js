@@ -173,10 +173,7 @@ test('PERF13: leaving a page tells the app what the engine decided: persisted or
   const page = await site(TALL, '');
   await page.goto('https://site.example/a');
   await page.goto('https://site.example/b');
-  const ph = await ofKind(page, 'ph');                 // (the messages of /a went away with it; the ones of /b are read after /b is left)
   await page.goBack();
-  const all = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'ph'));
-  assert.ok(all.length >= 0);
   // a pagehide fired by hand: persisted false, document complete
   await page.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); });
   const one = await ofKind(page, 'ph');
