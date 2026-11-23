@@ -82,7 +82,7 @@ class DiagJournal(private val max: Int = 800, private val perKind: Int = 40) {
          * PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): lines that only say that the screen redrew, the window gained focus, a
          * picture of a tab was saved or a warm-up connection was made are counted in the histogram but kept to a few examples, so the 600 lines of an upload are spent on the five areas (their lines stay at the usual number).
          */
-        private val BOOKKEEPING = Regex("""^(gecko (first-composite|size|layout|view-attached|paint-reset|view)|win focus|life |tabs (look-|cover-|curtain-|thumb-|leave-shot|early-cover|private-anchor|back-|state-)|engine (warm|network-profile|burst|runtime|config-warm|scroll-feel|phone-proxy|etp)|cosmetic |shields ext-state|storage |start (frame|look|open|art|oat|heap|activity|stop|runtime)|media (maybe|verif)|video info)""")
+        private val BOOKKEEPING = Regex("""^(gecko (first-composite|size|layout|view-attached|paint-reset|view)|win focus|life |tabs (look-|cover-|curtain-|thumb-|leave-shot|early-cover|private-anchor|back-|state-)|engine (warm|network-profile|burst|runtime|config-warm|scroll-feel|phone-proxy)|cosmetic |shields ext-state|storage |start (frame|look|open|art|oat|heap|activity|stop|runtime)|media (maybe|verif)|video info)""")
         const val BOOKKEEPING_KEEP = 8
         fun bookkeeping(kind: String): Boolean = BOOKKEEPING.containsMatchIn(kind.lowercase())
 

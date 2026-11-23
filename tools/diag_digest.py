@@ -676,7 +676,7 @@ def back_analysis(batches):
     if loaded:
         print('  page loads: %d, kept (instant) %d; median pageshow %s ms, median first paint %s ms; place missed %d of %d measured' % (
             len(loaded), sum(1 for r in loaded if r.get('kind') == 'kept'), shows[len(shows) // 2] if shows else '-', paints[len(paints) // 2] if paints else '-',
-            sum(1 for r in loaded if r['_missed']), sum(1 for r in loaded if '/' in r.get('y', ''))))
+            sum(1 for r in loaded if r['_missed'] and r.get('kind') != 'kept'), sum(1 for r in loaded if '/' in r.get('y', '') and r.get('kind') != 'kept')))   # (a page the engine KEPT is where it was; its saved place is only a hint)
         words = Counter(r.get('left', '?') for r in loaded)
         print('  what the engine said when the page was LEFT: ' + ', '.join('%s x%d' % kv for kv in words.most_common()) + '   (+stop = the link tap cancelled the page\'s unfinished loads first, PERF14)')
         lefts = Counter(r.get('left', '?').split('+')[0] for r in loaded)
