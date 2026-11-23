@@ -455,6 +455,7 @@ def setting_ab(batches):
                 rows.append((st, hm.group(1), kv))
     print('\n== SETTING A/B (page timing split by the owner\'s settings; medians in ms; only sites with 2+ loads on both sides) ==')
     shown = 0
+    seen_split = {}
     for key in WATCH:
         vals = sorted({st.get(key, 'default') for st, _, _ in rows})
         if len(vals) < 2:
@@ -479,6 +480,11 @@ def setting_ab(batches):
                 lines.append('    %-26s fcp %s -> %s | load %s -> %s  (%d / %d loads)' % (host[:26], med(base, 'fcp'), med(v, 'fcp'), med(base, 'load'), med(v, 'load'), len(d[base]), len(d[v])))
             if lines:
                 shown += 1
+                sig = tuple(l.split('(')[-1] for l in lines)
+                if sig in seen_split:
+                    print('  %s: %s -> %s  (the same loads as %s: these settings were changed together, so the numbers cannot tell them apart)' % (key, base, v, seen_split[sig]))
+                    continue
+                seen_split[sig] = key
                 print('  %s: %s -> %s' % (key, base, v))
                 for ln in lines[:8]:
                     print(ln)
