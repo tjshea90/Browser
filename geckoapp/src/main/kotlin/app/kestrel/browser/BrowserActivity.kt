@@ -3112,6 +3112,9 @@ open class BrowserActivity : Activity(), DockListener {
      * The pop-up and redirect guard refused something ([kind]: "open" a window, "click" a script's click on a link, "overlay" an invisible link, "form" a form that wanted a new window, "redirect" a jump of this
      * tab to another site). Counted with the page's blocked requests, and a notice offers to open it anyway (the guard cannot know every window the user really wanted). UI thread.
      */
+    /** PERF16 (owner 2026-11-24: "Focus future diagnostics on ... privacy and security"): one `sec` line for a security-relevant decision (the host only, never a path; nothing for a private tab). Rate: a few a day. */
+    internal fun sec(tab: Tab?, event: String, detail: String) { if (tab != null && !tab.isPrivateTab) Health.log("sec", event, detail) }
+
     internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
         // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
         val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return // the same address may be open in several tabs: the one in front is the one the owner tapped in
@@ -3122,6 +3125,7 @@ open class BrowserActivity : Activity(), DockListener {
             return
         }
         tab.blocked.addAndGet(app.kestrel.core.filter.Category.ANNOYANCE, 1)
+        sec(tab, "popup-blocked", "kind=${kind.take(12)} host=${tab.topHost ?: "?"}")
         tab.pendingLifetime.addAndGet(1)
         shieldCountChanged(tab)
         Health.count("guard.$kind")
@@ -3678,6 +3682,7 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun httpsUnavailable(tab: Tab, httpsUrl: String): Boolean {
         val httpUrl = tab.upgradedFrom ?: HttpsPolicy.downgradeOf(httpsUrl) ?: return false
         val h = UrlParts.hostOf(httpUrl) ?: return false
+        sec(tab, "https-unavailable", "host=$h mode=${Shields.effective(prefs, h).https.name.lowercase()}")
         tab.upgradedTo = null
         if (Shields.effective(prefs, h).https == HttpsPolicy.Mode.UPGRADE) {
             tab.httpOkHosts.add(h)

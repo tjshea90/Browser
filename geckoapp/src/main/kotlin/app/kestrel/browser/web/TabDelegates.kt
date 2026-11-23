@@ -136,6 +136,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 if (request.isRedirect && up != null && prep.upgradedFrom != null && UrlParts.hostOf(up) == host) { a.httpsUnavailable(tab, up); return GeckoResult.fromValue(deny) }
                 tab.upgradedFrom = prep.upgradedFrom
                 tab.upgradedTo = if (prep.upgradedFrom != null) prep.url else null
+                if (prep.upgradedFrom != null) a.sec(tab, "https-upgraded", "host=${UrlParts.hostOf(prep.url) ?: "?"}")
                 a.loadInTab(tab, prep.url)
                 return GeckoResult.fromValue(deny)
             }
@@ -161,6 +162,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.progress = 0
         when (error.code) {
             WebRequestError.ERROR_SECURITY_SSL, WebRequestError.ERROR_SECURITY_BAD_CERT, WebRequestError.ERROR_BAD_HSTS_CERT -> {
+                a.sec(tab, "cert-error", "host=$host code=${error.code}")
                 // Certificate problems: the engine's own page knows the details and implements "accept the risk" correctly; show it.
                 val up = tab.upgradedTo
                 if (up != null && UrlParts.hostOf(up) == host && a.httpsUnavailable(tab, up)) return GeckoResult.fromValue(BLANK)
@@ -339,6 +341,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Video first (research/VIDEO_AUDIT.md): the engine asks the app whenever a page starts a video by itself. Refusing the MUTED ones (until alpha26) left every player that starts muted
         // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
+        a.sec(tab, "perm-asked", "kind=${permName(perm.permission)} host=${UrlParts.hostOf(perm.uri) ?: "?"}")
         when (perm.permission) {
             // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
             PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> {
