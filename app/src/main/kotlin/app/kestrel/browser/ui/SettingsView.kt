@@ -87,7 +87,6 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Import what the keyboard learned", "Pick such a file from Downloads. It is added to what this keyboard already learned; the same file twice changes nothing.") { l.importKeyboard() }
         if (app.kestrel.browser.Flavor.hasMiniNav && app.kestrel.browser.SwoopLink.isInstalled(ctx)) button("Send what the keyboard learned to Swoop", "One tap hands the words, word pairs and corrections this small keyboard learned before to your Swoop keyboard. Swoop shows what is in it and adds it only when you tap Import. From now on Kestrel types with Swoop itself, so there is nothing more to send.") { l.handOverToSwoop() }
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Forget what the keyboard learned", "The mini keyboard's glide typing learns from the words you pick, keep and type, the shapes of your glides and how your thumb lands: it stays on this tablet. This deletes all of it; it starts learning again from the next word.") { confirm("Forget what the keyboard learned?", "Your own words, word habits, glide shapes and thumb habit for glide typing will be deleted.") { l.forgetGlide() } }
-        if (app.kestrel.browser.Flavor.hasFilePermission) button("Photos and files permission", "Opens Android's own settings for this app: Permissions, then Storage (Android 10) or Photos and videos (Android 13 and later). Attaching a picture to a page works without it, because Kestrel receives the file you choose in Android's picker; this only lets Kestrel read pictures directly. Android 10 has no \"All files\" switch (it begins with Android 11).") { openAppPermissions() }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 
         section("Data saver (off: this hotspot is unmetered)")
@@ -348,15 +347,6 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             wait.dismiss()
             AlertDialog.Builder(ctx).setTitle(if (report != null) "Phone link" else "No test").setMessage(if (report != null) bridge.describe(report) else error).setPositiveButton("OK", null).show()
             rebuild()
-        }
-    }
-
-    /** PERF10d: Android's own page of this app's permissions (Storage / Photos and videos appear there only because the manifest declares them). Never throws. */
-    private fun openAppPermissions() {
-        try {
-            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", ctx.packageName, null)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-            android.widget.Toast.makeText(ctx, "Open Android Settings > Apps > this app > Permissions.", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

@@ -18,10 +18,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- PERF10d (owner: "give the browser all files permission, it does not show as an option"): declared so Android's Permissions page for this app OFFERS it; never requested by the app, off until the person turns it on.
-         Android 10 has no "All files access" (that begins with Android 11, MANAGE_EXTERNAL_STORAGE, deliberately NOT declared); this reads shared pictures / video only. A page's attach button needs none of it: the picker hands over the chosen file. -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />

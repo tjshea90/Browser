@@ -17,7 +17,6 @@ class GeckoApp : Application() {
         Flavor.hasEmbedWait = true
         Flavor.hasTabBudget = true
         Flavor.hasPullRefresh = true
-        Flavor.hasFilePermission = true
         Flavor.hasPopupGuard = true
         Flavor.hasMiniNav = true
         Flavor.hasScriptlets = true

@@ -512,8 +512,8 @@ open class BrowserActivity : Activity(), DockListener {
     // ================================================================== lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (!picksWiped) { picksWiped = true; val c0 = applicationContext; Io.exec { app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, false)); app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, true)) } }
         super.onCreate(savedInstanceState)
+        if (!picksWiped) { picksWiped = true; val c0 = applicationContext; Io.exec { app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, false)); app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, true)) } }
         // RV8: an activity that is recreated while a full screen had forced an orientation must not start with it (the system keeps the request of the old record)
         if (requestedOrientation != android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         turnSettler.init(resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) // ROT1: the first turn counts too
