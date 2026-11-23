@@ -230,4 +230,15 @@ class BackLabTest {
         press(b, url = "https://never-left.test/"); b.finish(2_000L)
         assertTrue(none[0], none[0].endsWith(" left=?"))
     }
+
+    /** PERF14: when the person's link tap cancelled the page's unfinished loads before leaving, the verdict says so, so the next upload shows whether the stop made the pages kept. */
+    @Test fun theVerdictSaysWhenThePageWasStoppedBeforeItWasLeft() {
+        val lines = ArrayList<String>(); val lab = BackLab { lines += it }
+        lab.pageHide(B, persisted = true, readyState = 2, stopped = true)
+        press(lab); lab.pageshow(1_030L, B, persisted = true, navType = "back_forward", transferSize = 0, y = 10); lab.finish(4_000L)
+        lab.pageHide(B, persisted = false, readyState = 2, stopped = true)
+        press(lab, at = 5_000L); lab.pageshow(6_500L, B, persisted = false, navType = "back_forward", transferSize = 0, y = 10); lab.finish(9_000L)
+        assertTrue(lines[0], lines[0].endsWith(" left=kept+stop"))
+        assertTrue(lines[1], lines[1].endsWith(" left=refused-loaded+stop"))
+    }
 }

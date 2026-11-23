@@ -832,6 +832,17 @@ class OwnerRulesTest {
         assertTrue("the engine is given file:// answers by TabDelegates unchanged", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("r.complete(prompt.confirm(a, uris.toTypedArray()))"))
     }
 
+    /** PERF14 (owner 2026-11-23: "Back still takes a long time ... I was already on the page and it was already loaded"): the engine keeps a page for Back only when it has finished loading, so a plain link tap stops the unfinished loads of the page being left. */
+    @Test fun perf14ALinkTapStopsTheUnfinishedLoadsOfThePageBeingLeftSoTheEngineCanKeepIt() {
+        val c = source("geckoapp/src/main/assets/kestrel-shields/content.js")
+        assertTrue("it runs in the bubble phase after the page's own handlers and only for a real person's plain tap", c.contains("window.addEventListener('click', function (e) {") && c.contains("e.isTrusted !== true || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey"))
+        assertTrue("only for an ordinary link to another web page, never while media plays, once per page, and only with Instant Back on", c.contains("if (!stopOnLeave || didStop") && c.contains("a.hasAttribute('download')") && c.contains("u.protocol !== 'http:' && u.protocol !== 'https:'") && c.contains("document.querySelectorAll('video, audio')") && c.contains("window.stop();"))
+        assertTrue("the answer comes from the background page's Instant Back mode", source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("m.k !== 'bkm'") && source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("Promise.resolve(bkMode ? 1 : 0)"))
+        assertTrue("the leaving page reports whether it was stopped, and the Back line says +stop", c.contains("st: didStop ? 1 : 0") && source("core/src/main/kotlin/app/kestrel/core/session/BackLab.kt").contains("(if (stopped) \"+stop\" else \"\")"))
+        assertTrue("it is explained in Settings > Instant Back", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("stops downloading what it had not finished"))
+        assertTrue("the leave-stop web tests have their own file", java.io.File("../web-tests/leavestop.test.js").exists() || java.io.File("web-tests/leavestop.test.js").exists())
+    }
+
     /** PERF12 (owner 2026-11-23: "Look at the latest diagnostics and see if anything can be improved"): cut-short loads, loops, the quieter journal, the attach beacon, the extension version. */
     @Test fun perf12TheDiagnosticsSayWhatReallyHappened() {
         val td = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")

@@ -2027,6 +2027,10 @@ test('PERF13: the engine verdict at the moment a page is left is forwarded from 
   assert.equal(ph.length, 2, 'only the top frame of a real tab');
   assert.equal(ph[0].ps, 1); assert.equal(ph[0].rs, 2);
   assert.equal(ph[1].ps, 0); assert.equal(ph[1].rs, 2, 'rs is clamped to 0..2'); assert.ok(ph[1].p.length <= 600);
+  assert.equal(ph[0].st, 0); assert.equal(ph[1].st, 0);
+  h.message({ k: 'ph', p: PAGE, ps: 0, rs: 2, st: 1 }, 1, undefined, 0);
+  await tick(10);
+  assert.equal(h.of('ph')[2].st, 1, 'the page says its link tap stopped the unfinished loads');
 });
 
 test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {

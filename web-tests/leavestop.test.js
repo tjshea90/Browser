@@ -25,12 +25,10 @@ async function site(bkm) {
   const page = await context.newPage();
   await page.addInitScript((cfg) => {
     window.__msgs = []; window.__stops = 0;
-    const keep = () => { try { sessionStorage.setItem('kst', JSON.stringify({ stops: (JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}').stops) + 0, ph: JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}').ph })); } catch (e) { /* none */ } };
     const note = (f) => { try { const o = JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}'); f(o); sessionStorage.setItem('kst', JSON.stringify(o)); } catch (e) { /* none */ } };
     const real = window.stop.bind(window);
     window.stop = function () { window.__stops++; note((o) => { o.stops++; }); return real(); };
     window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); if (m.k === 'ph') note((o) => { o.ph.push(m); }); if (m.k === 'bkm') return Promise.resolve(cfg.bkm); return Promise.resolve(undefined); } } };
-    void keep;
   }, { bkm });
   await page.addInitScript({ content: CONTENT });
   await page.goto('https://site.example/a');
