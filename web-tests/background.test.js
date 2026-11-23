@@ -2016,6 +2016,19 @@ test('PERF10c: a file-pick report is checked in the background page: fixed words
   assert.equal(h.of('fc')[1].a.length, 0); assert.equal(h.of('fc')[1].n, 1); assert.equal(h.of('fc')[1].p, PAGE);
 });
 
+test('PERF13: the engine verdict at the moment a page is left is forwarded from the top frame only, with clamped numbers', async () => {
+  const h = await onPage();
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, 1, undefined, 0);
+  h.message({ k: 'ph', p: PAGE + '/' + 'x'.repeat(900), ps: 0, rs: 77 }, 1, undefined, 0);
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, 1, undefined, 5);          // a sub-frame
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, -1);                       // no tab
+  await tick(10);
+  const ph = h.of('ph');
+  assert.equal(ph.length, 2, 'only the top frame of a real tab');
+  assert.equal(ph[0].ps, 1); assert.equal(ph[0].rs, 2);
+  assert.equal(ph[1].ps, 0); assert.equal(ph[1].rs, 2, 'rs is clamped to 0..2'); assert.ok(ph[1].p.length <= 600);
+});
+
 test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {
   const h = await onPage();
   h.message({ k: 'vgt', n: [0, 0, 0, 0, 0, 0, 0] }, 1, undefined, 0);                 // nothing held or refused: nothing to tell about a page

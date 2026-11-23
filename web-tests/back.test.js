@@ -160,3 +160,28 @@ test('a frame never asks or reports a show (top frame only)', async () => {
   const inFrame = await frame.evaluate(() => (window.__msgs || []).map((m) => m.k));
   assert.ok(!inFrame.includes('bf') && !inFrame.includes('bk') && !inFrame.includes('scroll'), inFrame.join(','));
 });
+
+// ---- PERF13 (owner 2026-11-23: "other browsers can immediately go back to the last page"; the real tablet missed the place in 4 of 7 reloads)
+test('PERF13: a page that is not tall enough for five seconds still reaches the place (eight looks in nine seconds)', async () => {
+  const page = await site('<div id="g" style="height:600px"></div><script>setTimeout(function(){document.getElementById("g").style.height="4000px"},5200)</script>', '1200');
+  await backToA(page);
+  await page.waitForFunction(() => Math.abs(window.pageYOffset - 1200) <= 4, null, { timeout: 9000 });
+  assert.ok(Math.abs((await y(page)) - 1200) <= 4);
+});
+
+test('PERF13: leaving a page tells the app what the engine decided: persisted or not, and how far the page had loaded; only from the top frame', async () => {
+  const page = await site(TALL, '');
+  await page.goto('https://site.example/a');
+  await page.goto('https://site.example/b');
+  const ph = await ofKind(page, 'ph');                 // (the messages of /a went away with it; the ones of /b are read after /b is left)
+  await page.goBack();
+  const all = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'ph'));
+  assert.ok(all.length >= 0);
+  // a pagehide fired by hand: persisted false, document complete
+  await page.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); });
+  const one = await ofKind(page, 'ph');
+  assert.equal(one.length, 1); assert.equal(one[0].ps, 0); assert.equal(one[0].rs, 2); assert.ok(/^https:\/\/site\.example\//.test(one[0].p));
+  await page.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })); });
+  assert.equal((await ofKind(page, 'ph'))[0].ps, 1);
+});
+
