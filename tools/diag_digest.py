@@ -475,7 +475,6 @@ def focus_report(batches):
 
     # ---- 1. speed of the app
     print('\n-- 1. SPEED OF THE APP --')
-    colds = [num(k.get('cold', k.get('ms', -1))) for k in kvs('start paint')] or []
     paints = [int(m.group(1)) for e in ev for m in [re.search(r' start paint cold (\d+) ms', e)] if m]
     print(verdict(med(paints), 10000, 20000, ' ms', what='cold start to first paint (median)'))
     print(verdict(dev_med('coldRuntime'), 1500, 3000, ' ms', what='engine ready after start (median)'))
@@ -499,13 +498,15 @@ def focus_report(batches):
     load = [num(t.get('load')) for t in timing]
     print(verdict(med(fcp), 2500, 6000, ' ms', what='first contentful paint (median of %d loads)' % len(timing)))
     print(verdict(med(load), 6000, 15000, ' ms', what='load finished (median)'))
-    loaded = [e for e in ev if ' page loaded ' in e]
+    def alpha_of(b):
+        m = re.search(r'alpha(\d+)', str(b.get('app', '')))
+        return int(m.group(1)) if m else 0
+    # only an upload from alpha96 on says `cut=1` for a load that was cut short: older ok=false lines mix redirects and taps with real failures and are not counted as failures here
+    loaded = [e for b in batches if alpha_of(b) >= 96 for e in b.get('events', []) if isinstance(e, str) and ' page loaded ' in e]
     cut = sum(1 for e in loaded if ' ok=false cut=1' in e)
     fail = sum(1 for e in loaded if ' ok=false' in e and ' cut=1' not in e)
-    print(verdict(round(100.0 * fail / len(loaded), 1) if loaded else None, 5, 15, ' %', what='real load failures (%d of %d; %d cut short)' % (fail, len(loaded), cut)))
+    print(verdict(round(100.0 * fail / len(loaded), 1) if loaded else None, 5, 15, ' %', what='real load failures (%d of %d from alpha96 on; %d cut short)' % (fail, len(loaded), cut)))
     per = {}
-    for t in timing:
-        host = None
     for e in ev:
         if ' page timing ' in e:
             m = re.search(r'host=(\S+)', e)
