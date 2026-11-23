@@ -57,9 +57,21 @@ class LiveBudgetTest {
         assertEquals(6, LiveBudget.afterTrim(15, -1, 6)) // unknown: do not guess
     }
 
-    @Test fun aProcessNearKillKeepsOnlyTheTabInFront() {
-        assertEquals(1, LiveBudget.afterTrim(60, 900, 6))
+    @Test fun aProcessNearKillKeepsOnlyTheTabInFrontWhenTheFreeMemoryReallyIsShort() {
         assertEquals(1, LiveBudget.afterTrim(80, 100, 2))
+        assertEquals(1, LiveBudget.afterTrim(60, 250, 6))
+        assertEquals(1, LiveBudget.afterTrim(80, -1, 6))          // unknown free memory: the careful answer
+    }
+
+    /** PERF15 (owner 2026-11-23: "When i go between tabs it is very laggy and has to reload"): Android's 80 within a second of leaving the app, with 400 MB or more free, must not put the second tab to sleep. */
+    @Test fun leavingTheAppWithPlentyOfFreeMemoryKeepsTheTabsAndTheFloorIsKeptInBetween() {
+        assertEquals("the real alpha97 numbers: level 80, 402 MB free, Few = 2", 2, LiveBudget.afterTrim(80, 402, 2))
+        assertEquals(2, LiveBudget.afterTrim(80, 438, 2))
+        assertEquals(2, LiveBudget.afterTrim(80, 540, 2))
+        assertEquals("a bigger setting is cut back to the floor between 300 and 450 MB", 2, LiveBudget.afterTrim(80, 400, 6))
+        assertEquals("and stands above 450 MB", 6, LiveBudget.afterTrim(80, 500, 6))
+        assertEquals(6, LiveBudget.afterTrim(60, 900, 6))
+        assertEquals("below 300 MB only the tab in front stays", 1, LiveBudget.afterTrim(80, 299, 2))
     }
 
     @Test fun trimNeverRaisesTheBudget() {

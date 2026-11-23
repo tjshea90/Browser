@@ -62,7 +62,10 @@ object LiveBudget {
      * cached processes there are), so they change nothing by themselves; the levels that say "the system is short" shrink the set only when the free memory agrees.
      */
     fun afterTrim(level: Int, availMb: Int, budget: Int): Int = when {
-        level >= 60 -> 1                                                           // TRIM_MEMORY_MODERATE and up: this process is a prime candidate to be killed
+        // PERF15 (owner 2026-11-23: "When i go between tabs it is very laggy and has to reload"): on this tablet Android says 80 (COMPLETE) within a second of EVERY time the app is left, with 400 to 540 MB free and the low-memory
+        // threshold at 144 MB (alpha97 uploads), and the old rule closed every tab but one each time, so the next tab switch loaded a page again. 60 and up now shrink the set by what is really free: below 300 MB only the tab
+        // in front, below 450 MB at most the floor, otherwise the setting stands (the engine's own caches are flushed at these levels anyway). Android may still end the process; the tabs come back with their history then.
+        level >= 60 -> if (availMb < 0 || availMb < 300) 1 else if (availMb < 450) FLOOR.coerceAtMost(budget) else budget
         level >= 40 -> if (availMb in 0 until 600) FLOOR.coerceAtMost(budget) else budget // TRIM_MEMORY_BACKGROUND
         level in 15..19 -> if (availMb in 0 until 350) FLOOR.coerceAtMost(budget) else budget // TRIM_MEMORY_RUNNING_CRITICAL (the engine also flushes its own caches here)
         else -> budget
