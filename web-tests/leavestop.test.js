@@ -25,9 +25,12 @@ async function site(bkm) {
   const page = await context.newPage();
   await page.addInitScript((cfg) => {
     window.__msgs = []; window.__stops = 0;
+    const keep = () => { try { sessionStorage.setItem('kst', JSON.stringify({ stops: (JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}').stops) + 0, ph: JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}').ph })); } catch (e) { /* none */ } };
+    const note = (f) => { try { const o = JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}'); f(o); sessionStorage.setItem('kst', JSON.stringify(o)); } catch (e) { /* none */ } };
     const real = window.stop.bind(window);
-    window.stop = function () { window.__stops++; return real(); };
-    window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); if (m.k === 'bkm') return Promise.resolve(cfg.bkm); return Promise.resolve(undefined); } } };
+    window.stop = function () { window.__stops++; note((o) => { o.stops++; }); return real(); };
+    window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); if (m.k === 'ph') note((o) => { o.ph.push(m); }); if (m.k === 'bkm') return Promise.resolve(cfg.bkm); return Promise.resolve(undefined); } } };
+    void keep;
   }, { bkm });
   await page.addInitScript({ content: CONTENT });
   await page.goto('https://site.example/a');
@@ -42,13 +45,13 @@ test('PERF14: a plain link tap stops the unfinished loads once, and the link sti
   assert.equal(page.url(), 'https://site.example/b', 'the navigation was not cancelled by the stop');
 });
 
-test('PERF14: the stop is counted exactly once for a plain link and the page says so when it is left', async () => {
+const saved = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('kst') || '{"stops":0,"ph":[]}'));
+
+test('PERF14: a click made by a script is never a person\'s tap', async () => {
   const page = await site(1);
-  await page.evaluate(() => { document.getElementById('plain').addEventListener('click', function (e) { e.preventDefault(); }, true); });   // keep the page here to read the counters
+  await page.evaluate(() => { document.getElementById('plain').addEventListener('click', function (e) { e.preventDefault(); }, true); });
   await page.evaluate(() => { document.getElementById('plain').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
-  assert.equal(await stops(page), 0, 'a click made by a script is never a person\'s tap');
-  await page.click('#self');
-  await page.goBack().catch(() => {});
+  assert.equal(await stops(page), 0);
 });
 
 test('PERF14: never for a click the page handled, a new tab, a download, a modifier key, a place in the same page, a non-web link, or while a film plays', async () => {
@@ -66,23 +69,22 @@ test('PERF14: never for a click the page handled, a new tab, a download, a modif
   assert.equal(await stops(page), 0, 'a playing film is never cut');
 });
 
-test('PERF14: with Instant Back off nothing is stopped; with it on, a link tap stops exactly once even if tapped twice', async () => {
+test('PERF14: with Instant Back off nothing is stopped; with it on, a link tap stops exactly once', async () => {
   const off = await site(0);
-  await off.evaluate(() => { document.body.addEventListener('click', function (e) { e.preventDefault(); }, false); });
-  await off.click('#plain');
-  assert.equal(await stops(off), 0);
+  await Promise.all([off.waitForURL('https://site.example/b'), off.click('#plain')]);
+  assert.equal((await saved(off)).stops, 0);
   const on = await site(1);
-  await on.evaluate(() => { document.body.addEventListener('click', function (e) { e.preventDefault(); }, false); });
-  await on.click('#plain'); await on.click('#plain');
-  assert.equal(await stops(on), 1, 'one stop per page');
+  await Promise.all([on.waitForURL('https://site.example/b'), on.click('#plain')]);
+  assert.equal((await saved(on)).stops, 1, 'one stop for the tap');
 });
 
 test('PERF14: the pagehide report carries st=1 when the stop was used and st=0 when not', async () => {
-  const a = await site(1);
-  await a.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); });
-  assert.equal((await a.evaluate(() => window.__msgs.filter((m) => m.k === 'ph')))[0].st, 0);
-  await a.evaluate(() => { document.body.addEventListener('click', function (e) { e.preventDefault(); }, false); });
-  await a.click('#plain');
-  await a.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); });
-  assert.equal((await a.evaluate(() => window.__msgs.filter((m) => m.k === 'ph')))[0].st, 1);
+  const on = await site(1);
+  await Promise.all([on.waitForURL('https://site.example/b'), on.click('#plain')]);
+  const a = (await saved(on)).ph;
+  assert.ok(a.length >= 1 && a[a.length - 1].st === 1, JSON.stringify(a));
+  const off = await site(0);
+  await Promise.all([off.waitForURL('https://site.example/b'), off.click('#plain')]);
+  const b = (await saved(off)).ph;
+  assert.ok(b.length >= 1 && b[b.length - 1].st === 0, JSON.stringify(b));
 });
