@@ -1429,6 +1429,7 @@ open class BrowserActivity : Activity(), DockListener {
         val need = tabs.any { it.isPrivateTab }
         PrivateGuard.setOpen(need)                                                // PV1: the last private tab gone starts the two minutes in which late events are still masked
         if (!need) Shields.endPrivate()                                           // PV1: a Shields change made from a private tab is taken back (it was never saved)
+        if (!need) { val c = applicationContext; Io.exec { app.kestrel.core.prompt.PickStore.wipe(picksRoot(c, true)) } }   // PERF14: the copies of files picked in a private tab go with the last private tab
         if (need != GeckoEngine.safeBrowsingPaused) GeckoEngine.pauseSafeBrowsing(need)   // PV1: the engine asks Google about address hashes in a private tab too: not while one exists
         if (need && privateAnchor == null) {
             try {
@@ -3694,6 +3695,7 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun pickFiles(mimeTypes: Array<String>?, multiple: Boolean, done: (List<Uri>) -> Unit) {
         pendingFilePick?.invoke(emptyList())
         pendingFilePick = done
+        val sweepCtx = applicationContext; Io.exec { app.kestrel.core.prompt.PickStore.sweep(picksRoot(sweepCtx, false), 6L * 3_600_000L, System.currentTimeMillis()) }   // PERF14: copies older than 6 hours
         val types = app.kestrel.core.prompt.FilePickRules.mimeTypes(mimeTypes)
         filePicks.asked((if (multiple) "several files" else "one file") + ", " + (if (types == null) "no filter" else "${types.size} kind(s)"))
         Health.log("filepick", "asked", "multiple=$multiple accept=${mimeTypes?.size ?: 0} filter=${types?.size ?: 0}")
@@ -3744,7 +3746,48 @@ open class BrowserActivity : Activity(), DockListener {
             val given = uris.filter { it.scheme == "content" }.distinct()
             filePicks.result(given.size, resultCode); Health.log("filepick", "result", "code=$resultCode files=${given.size} dropped=${uris.size - given.size} answered=${cb != null}")
             if (given.isNotEmpty() && current?.isPrivateTab != true && !PrivateGuard.active()) { val look = given.take(3); Io.exec { for (u in look) pickedFacts(u) } }   // IMG1: what Android sees in the file (never a name; nothing while a private tab exists)
-            cb?.invoke(given)
+            if (given.isEmpty() || cb == null) { cb?.invoke(given); return }
+            // PERF14 (owner 2026-11-23: "Photos still won't attach to claude website"; research/ATTACH_ROOT_CAUSE.md): the engine turns a picked content address into a RAW PATH and opens it itself, which Android 10 and later forbid
+            // without the storage permission: the page got a File it could not read. So the file is copied (with the grant the picker gave for exactly this file) into the app's own cache and the engine is given the copy.
+            val priv = current?.isPrivateTab == true
+            val appCtx = applicationContext
+            Io.exec {
+                val copies = ArrayList<Uri>()
+                for (u in given.take(MAX_PICKS)) copyPick(appCtx, u, priv)?.let { copies.add(it) }
+                Io.main.post { cb.invoke(copies) }          // nothing copied = the prompt is dismissed (TabDelegates), never left waiting
+            }
+        }
+    }
+
+    /** PERF14: where the copies of picked files live (never shown to a page by name), and who may keep them how long: see research/ATTACH_ROOT_CAUSE.md. */
+    private fun picksRoot(ctx: android.content.Context, priv: Boolean) = java.io.File(ctx.cacheDir, if (priv) "picks-private" else "picks")
+
+    /** One picked file copied into the app's own cache, off the UI thread. Returns the copy's file:// address, or null (the reason is in the Health line; no file name is ever logged, nothing at all for a private tab). */
+    private fun copyPick(ctx: android.content.Context, u: Uri, priv: Boolean): Uri? {
+        val t0 = SystemClock.uptimeMillis()
+        val say = !priv && !PrivateGuard.active()
+        try {
+            val cr = ctx.contentResolver
+            var name: String? = null; var size = -1L
+            cr.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val ni = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (ni >= 0 && !c.isNull(ni)) name = c.getString(ni)
+                    val si = c.getColumnIndex(android.provider.OpenableColumns.SIZE); if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
+                }
+            }
+            val root = picksRoot(ctx, priv)
+            root.mkdirs()
+            if (size > app.kestrel.core.prompt.PickStore.MAX_BYTES) { if (say) Health.log("filepick", "copy-failed", "too big"); Io.main.post { toast("That file is too big to attach.") }; return null }
+            if (size > 0 && ctx.cacheDir.usableSpace < size + (64L shl 20)) { if (say) Health.log("filepick", "copy-failed", "no room"); Io.main.post { toast("Not enough free storage to attach that file.") }; return null }
+            val id = java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+            val file = cr.openInputStream(u)?.use { app.kestrel.core.prompt.PickStore.copy(root, id, it, name, cr.getType(u)) }
+            if (file == null) { if (say) Health.log("filepick", "copy-failed", "no copy"); Io.main.post { toast("Could not read that file.") }; return null }
+            if (say) Health.log("filepick", "copied", "kb=${(file.length() + 1023) / 1024} ms=${SystemClock.uptimeMillis() - t0}")
+            return Uri.fromFile(file)
+        } catch (e: Exception) {
+            if (say) Health.log("filepick", "copy-failed", e.javaClass.simpleName)
+            Io.main.post { toast("Could not read that file.") }
+            return null
         }
     }
 
@@ -4115,6 +4158,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     companion object {
         private const val REQ_FILE = 1001
+        private const val MAX_PICKS = 30   // PERF14: files copied for one attach
         private const val REQ_PERM = 1002
         private const val PULL_ARM_DP = 64f // chip travel at which letting go reloads (about 107 dp of finger travel)
         private const val PULL_MAX_DP = 84f
