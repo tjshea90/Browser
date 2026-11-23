@@ -20,6 +20,7 @@ object PageTimes {
     private val open = HashMap<Any, Load>()
     private val late = HashMap<Any, Load>()   // loads that ended before their first paint was reported (a fast page paints after its load ended): the paint is still wanted
     private val seen = HashMap<String, Int>()
+    private val loop = app.kestrel.core.livediag.LoopWatch()    // PERF12: the same site loaded again and again in one tab (a redirect chain, a page that reloads itself)
 
     private fun hostOf(url: String): String {
         val s = url.indexOf("://")
@@ -38,6 +39,8 @@ object PageTimes {
         seen[host] = n
         if (seen.size > 200) seen.clear()
         val l = Load(host, SystemClock.elapsedRealtime(), n)
+        val looping = loop.hit(key, host, l.startedAt)
+        if (looping > 0) { Health.count("page.loop"); Health.log("page", "loop", "host=$host n=$looping secs=${loop.spanSeconds(key)} (the same site was loaded again and again in one tab: a redirect chain or a page that reloads itself)") }
         open[key] = l
         loads.add(l)
         while (loads.size > KEEP) loads.removeAt(0)
