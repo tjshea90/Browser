@@ -1,13 +1,13 @@
-# CHECKPOINT 3034 — read me first, then TASKS.md
+# CHECKPOINT 3039 — read me first, then TASKS.md
 
-**Written:** 2026-11-23T18:15:47Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `b375e29e` (this checkpoint is the commit after it)
+**Written:** 2026-11-23T18:22:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `0eb591ef` (this checkpoint is the commit after it)
 
 ## Just done
-PERF12 written to TASKS.md (owner 2026-11-23: look at the latest diagnostics and see if anything can be improved)
+PERF13 written to TASKS.md (owner: instant first load and instant Back, find what other browsers do); PERF12 alpha96 diagnostics coded, gradle targeted tests running (scratchpad t3.log)
 
 ## Do this next
-Next: PERF12a: python3 -B -I tools/diag_digest.py --days 2 and read every upload newer than diag/2026-11-22/232442 in Kestrel-Private origin/main; then PERF12b
+Next: (1) read scratchpad/t3.log EXIT (targeted tests for PERF12: LoopWatchTest, DiagJournalTest, DiagStatsTest, PageTimesTest, PrivateTabsTest, OwnerRulesTest); fix; (2) PERF13a: diag Back numbers + the loading box + research/BACK_SCROLL.md; (3) PERF13b research file research/INSTANT_BACK.md; (4) code, then ONE release alpha96 bundling PERF12 + PERF13
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: PERF12a: python3 -B -I tools/diag_digest.py --days 2 and read every upload
 
 ## Last ten checkpoints
 ```
+  d41227d4 ckpt 3034: PERF12 written to TASKS.md (owner 2026-11-23: look at the latest diagnostics
   b375e29e ckpt 3033: PERF11a done + research written (alpha95 uploads: Safe drawing + PBO off app
   489d966d ckpt 3032: PERF11 written to TASKS.md (owner after alpha95: invisible blocks covering w
   eefcc152 ckpt 3031: alpha95 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha95 (gecko code 196, run
@@ -25,5 +26,7 @@ Next: PERF12a: python3 -B -I tools/diag_digest.py --days 2 and read every upload
   a732be58 ckpt 3020: PERF10 coded (not yet gated): pbo-uploads off in Safe drawing + Software dra
   5f4fb686 ckpt 3009: PERF10a research written: paint (draw-prefs read-back proves Safe drawing re
   89edc274 ckpt 3008: PERF10 written to TASKS.md (owner after alpha94: paint still chopped, cannot
-  37893d32 ckpt 2991: alpha94 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha94 (gecko code 195, run
 ```
+
+(4 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
