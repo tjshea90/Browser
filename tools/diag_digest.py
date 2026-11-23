@@ -676,6 +676,7 @@ def main(argv):
     load_analysis(batches, r)
     video_analysis(batches)
     filepick_analysis(batches)
+    back_analysis(batches)
     typing_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
