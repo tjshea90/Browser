@@ -143,6 +143,26 @@ class DiagJournalTest {
         assertTrue(a.kindCounts().size <= 3)           // 2 named + "other kinds"
         assertEquals(1, a.sites().size)
     }
+
+    /** PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): bookkeeping lines are kept to a few examples, the five areas' lines are not. */
+    @Test fun bookkeepingLinesAreKeptToAFewExamplesAndSecurityLinesAreNeverThinned() {
+        val j = DiagJournal(800, 40)
+        fill(j, 100, kind = "gecko first-composite")
+        fill(j, 100, kind = "win focus")
+        fill(j, 100, kind = "tabs look-saved")
+        fill(j, 100, kind = "sec cert-error")
+        fill(j, 100, kind = "tabs switch-done")
+        fill(j, 100, kind = "video quality")
+        val c = j.cut(800)
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("first-composite") })
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("win focus") })
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("look-saved") })
+        assertEquals("a security line is never thinned", 100, c.lines.count { it.contains("sec cert-error") })
+        assertEquals("a tab switch time stays at the usual number", 40, c.lines.count { it.contains("switch-done") })
+        assertEquals(40, c.lines.count { it.contains("video quality") })
+        assertTrue(DiagJournal.bookkeeping("gecko size")); assertTrue(!DiagJournal.bookkeeping("page timing")); assertTrue(!DiagJournal.bookkeeping("engine etp"))
+        assertTrue("the sec layer may be journalled", DiagPolicy.allows("sec", "https-upgraded"))
+    }
 }
 
 class DiagScheduleWaitTest {
@@ -180,25 +200,5 @@ class DiagScheduleWaitTest {
         assertEquals("diag/2026-11-21/064012-ab12cd34-2.json", b)
         assertEquals("diag/2026-11-21/064012-ab12cd34-3.json", c)
         assertNotEquals(a, b); assertNotEquals(b, c)
-    }
-
-    /** PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): bookkeeping lines are kept to a few examples, the five areas' lines are not. */
-    @Test fun bookkeepingLinesAreKeptToAFewExamplesAndSecurityLinesAreNeverThinned() {
-        val j = DiagJournal(800, 40)
-        fill(j, 100, kind = "gecko first-composite")
-        fill(j, 100, kind = "win focus")
-        fill(j, 100, kind = "tabs look-saved")
-        fill(j, 100, kind = "sec cert-error")
-        fill(j, 100, kind = "tabs switch-done")
-        fill(j, 100, kind = "video quality")
-        val c = j.cut(800)
-        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("first-composite") })
-        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("win focus") })
-        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("look-saved") })
-        assertEquals("a security line is never thinned", 100, c.lines.count { it.contains("sec cert-error") })
-        assertEquals("a tab switch time stays at the usual number", 40, c.lines.count { it.contains("switch-done") })
-        assertEquals(40, c.lines.count { it.contains("video quality") })
-        assertTrue(DiagJournal.bookkeeping("gecko size")); assertTrue(!DiagJournal.bookkeeping("page timing")); assertTrue(!DiagJournal.bookkeeping("engine etp"))
-        assertTrue("the sec layer may be journalled", DiagPolicy.allows("sec", "https-upgraded"))
     }
 }
