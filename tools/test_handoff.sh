@@ -338,7 +338,9 @@ ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 fra
       '+80.0s filepick picked type=image/png kb=811 size=600x973 decodes=1 ext=1 freeMb=300',
       '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40',
       '+82.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=flat reencode=ok(40kb) 55ms',
-      '+83.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=ok reencode=ok(40kb) 60ms']
+      '+83.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=ok reencode=ok(40kb) 60ms',
+      '+84.0s back press kind=cache dir=back loc=200 show=3400 paint=1600 y=991/5858 MISSED to=shop.example left=refused-loading',
+      '+85.0s back press kind=other dir=back loc=30 show=-1 paint=-1 y=- to=app.example left=?']
 now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha87', 'code': 188, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
      'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics'], 'events': ev}
@@ -350,6 +352,7 @@ check "digest VIDEO PROBLEMS says what an element stuck loading with no error me
 check "digest TYPING LATENCY calls the slow address bar slow and the quick page fine and says how to read it" 'grep -q "address bar / Home field (the app) .*20 keys, mean 180 ms, worst 900 ms -> SLOW" "$T/vd1/out.txt" && grep -q "page fields (the page and the engine) .*30 keys, mean 20 ms, worst 60 ms -> fine" "$T/vd1/out.txt" && grep -q "Reading it: slow in the ADDRESS BAR" "$T/vd1/out.txt" && grep -q "page RESPONSE (key to the next frame) .*30 keys, mean 250 ms, worst 900 ms, 12 waited 150 ms or more -> SLOW" "$T/vd1/out.txt"'
 check "digest FILE PICKS counts the empty file and the unreadable picture and blames the file, not the page" 'grep -q "FILE PICKS.*2 file" "$T/vd1/out.txt" && grep -q "empty files 1, pictures Android cannot read 1" "$T/vd1/out.txt" && grep -q "the FILE or the tablet is a cause" "$T/vd1/out.txt"'
 check "digest FILE PICKS names what the PAGE received and which side is at fault (a flat canvas = the engine; a good picture = claude.ai)" 'grep -q "what the PAGE received.*2 attach" "$T/vd1/out.txt" && grep -q "canvas refused or returned a blank / flat picture" "$T/vd1/out.txt" && grep -q "the file and the engine are fine: claude.ai" "$T/vd1/out.txt"'
+check "digest BACK counts the presses by kind, the missed place and what the engine said when the page was left (PERF13)" 'grep -q "== BACK .*2 press" "$T/vd1/out.txt" && grep -q "kinds: cache x1, other x1" "$T/vd1/out.txt" && grep -q "place missed 1 of 1 measured" "$T/vd1/out.txt" && grep -q "refused-loading x1" "$T/vd1/out.txt" && grep -q "left before they finished loading" "$T/vd1/out.txt"'
 check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
 
