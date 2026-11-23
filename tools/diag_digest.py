@@ -439,6 +439,135 @@ def page_got_analysis(batches):
         print('      %s | %s -> %s' % (head.strip(), first, v))
 
 
+def focus_report(batches):
+    """PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): five sections, each with its key numbers and a plain verdict
+    (OK / WATCH / BAD, the threshold is printed), built only from what the tablet already sends. Read this first; the older sections below are the detail. Verdicts are first guesses: judge them, do not relay them blind."""
+    import statistics
+    ev = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str):
+                ev.append(e)
+    def lines(kind):
+        return [e.split(' ' + kind + ' ', 1)[1] if (' ' + kind + ' ') in e else '' for e in ev if (' ' + kind + ' ') in e or e.endswith(' ' + kind)]
+    def kvs(kind):
+        return [dict(re.findall(r'([\w-]+)=(\S+)', t)) for t in lines(kind)]
+    def num(v, d=-1):
+        try:
+            return int(re.sub(r'[^\d-]', '', str(v)) or d)
+        except ValueError:
+            return d
+    def med(xs):
+        xs = sorted(x for x in xs if x is not None and x >= 0)
+        return xs[len(xs) // 2] if xs else None
+    def verdict(value, ok, watch, unit='', lower_is_better=True, what=''):
+        if value is None:
+            return '  ?     %-44s no data yet' % what
+        good = value <= ok if lower_is_better else value >= ok
+        mid = value <= watch if lower_is_better else value >= watch
+        word = 'OK   ' if good else ('WATCH' if mid else 'BAD  ')
+        return '  %s %-44s %s%s   (OK %s %s%s, WATCH %s %s%s)' % (word, what, value, unit, '<=' if lower_is_better else '>=', ok, unit, '<=' if lower_is_better else '>=', watch, unit)
+    devs = [b['device'] for b in batches if isinstance(b.get('device'), dict)]
+    def dev_med(key):
+        return med([num(d.get(key)) for d in devs if key in d])
+
+    print('\n== FOCUS REPORT (the five things the owner asked the diagnostics to watch; %d upload(s)) ==' % len(batches))
+
+    # ---- 1. speed of the app
+    print('\n-- 1. SPEED OF THE APP --')
+    colds = [num(k.get('cold', k.get('ms', -1))) for k in kvs('start paint')] or []
+    paints = [int(m.group(1)) for e in ev for m in [re.search(r' start paint cold (\d+) ms', e)] if m]
+    print(verdict(med(paints), 10000, 20000, ' ms', what='cold start to first paint (median)'))
+    print(verdict(dev_med('coldRuntime'), 1500, 3000, ' ms', what='engine ready after start (median)'))
+    addr = [num(k.get('avg')) for k in kvs('win typing-address')]
+    print(verdict(med(addr), 25, 80, ' ms', what='typing in the address bar, mean wait'))
+    sw = kvs('tabs switch-done')
+    live = [num(re.sub(r'ms$', '', k.get('first-frame', '-1'))) for k in sw if k.get('kind') == 'live']
+    rev = [num(re.sub(r'ms$', '', k.get('first-frame', '-1'))) for k in sw if k.get('kind') == 'revive']
+    print(verdict(med(live), 500, 1500, ' ms', what='switch to a live tab, first frame (median)'))
+    print('  info  switches to a SLEEPING tab (page loaded again): %d, median first frame %s ms' % (len(rev), med(rev) if rev else '-'))
+    hib = kvs('tabs hibernate')
+    print('  info  tabs put to sleep: %d (budget of one: %d); engine kills: %d' % (len(hib), sum(1 for h in hib if h.get('max') == '1'), sum(1 for e in ev if ' gecko onKill' in e)))
+    print(verdict(dev_med('memAvailMb'), 450, 300, ' MB', lower_is_better=False, what='free memory (median of the uploads)'))
+    print(verdict(dev_med('cpuParentAvg'), 40, 70, ' %', what='parent process CPU, average (one core = 100)'))
+    print(verdict(dev_med('jankFrames'), 60, 200, '', what='slow screen frames per upload (median)'))
+
+    # ---- 2. page loading speed
+    print('\n-- 2. PAGE LOADING SPEED --')
+    timing = kvs('page timing')
+    fcp = [num(t.get('fcp')) for t in timing]
+    load = [num(t.get('load')) for t in timing]
+    print(verdict(med(fcp), 2500, 6000, ' ms', what='first contentful paint (median of %d loads)' % len(timing)))
+    print(verdict(med(load), 6000, 15000, ' ms', what='load finished (median)'))
+    loaded = [e for e in ev if ' page loaded ' in e]
+    cut = sum(1 for e in loaded if ' ok=false cut=1' in e)
+    fail = sum(1 for e in loaded if ' ok=false' in e and ' cut=1' not in e)
+    print(verdict(round(100.0 * fail / len(loaded), 1) if loaded else None, 5, 15, ' %', what='real load failures (%d of %d; %d cut short)' % (fail, len(loaded), cut)))
+    per = {}
+    for t in timing:
+        host = None
+    for e in ev:
+        if ' page timing ' in e:
+            m = re.search(r'host=(\S+)', e)
+            if m:
+                kv = dict(re.findall(r'([\w-]+)=(-?\d+)', e))
+                per.setdefault(m.group(1), []).append(kv)
+    worst = sorted(((med([num(k.get('fcp')) for k in v]), h, len(v)) for h, v in per.items() if len(v) >= 2 and med([num(k.get('fcp')) for k in v]) is not None), reverse=True)[:4]
+    for f, h, n in worst:
+        print('  info  slowest first paint: %-26s %s ms (%d loads)' % (h[:26], f, n))
+    backs = kvs('back press')
+    loaded_back = [k for k in backs if k.get('kind') in ('kept', 'cache', 'network')]
+    if loaded_back:
+        print('  info  Back to a real page: %d, kept by the engine (instant) %d, from cache %d, from network %d' % (len(loaded_back), sum(1 for k in loaded_back if k.get('kind') == 'kept'),
+              sum(1 for k in loaded_back if k.get('kind') == 'cache'), sum(1 for k in loaded_back if k.get('kind') == 'network')))
+    loops = lines('page loop')
+    if loops:
+        print('  WATCH a site was loaded again and again in one tab %d time(s): %s' % (len(loops), loops[0][:100]))
+
+    # ---- 3. video playback
+    print('\n-- 3. VIDEO PLAYBACK --')
+    dropped = dev_med('framesDropped'); shown = dev_med('framesShown')
+    vq = kvs('video quality')
+    fr = sum(num(v.get('frames'), 0) for v in vq); dr = sum(num(v.get('dropped'), 0) for v in vq)
+    print(verdict(round(100.0 * dr / fr, 1) if fr else None, 2, 8, ' %', what='dropped frames (%d of %d frames, %d samples)' % (dr, fr, len(vq))))
+    stalls = [e for e in ev if ' player stall' in e or ' video stall' in e or ' inline stats' in e and 'stall(s)' in e]
+    print('  info  stalls reported: %d; video errors: %d (%s)' % (len(stalls), sum(1 for e in ev if ' video error ' in e),
+          ', '.join('%s x%d' % kv for kv in Counter(re.search(r'code=(\d+)', e).group(1) for e in ev if ' video error ' in e and re.search(r'code=(\d+)', e)).most_common(3)) or 'none'))
+    ho = [k for k in kvs('video hand-over')]; hd = [e for e in ev if ' video hand-declined' in e]
+    print('  info  hand-overs to Kestrel\'s own player: %d taken, %d declined; format policy said no %d time(s)' % (len(ho), len(hd), sum(1 for e in ev if ' video codec-no ' in e)))
+
+    # ---- 4. page compatibility
+    print('\n-- 4. PAGE COMPATIBILITY --')
+    errs = [e for e in ev if ' page error ' in e]
+    print('  info  page error lines: %d; real failed loads: %d; cut short: %d' % (len(errs), fail, cut))
+    shields_off = Counter(re.search(r'engine etp (\S+) off', e).group(1) for e in ev if re.search(r' engine etp (\S+) off', e))
+    shields_off.pop('?', None); shields_off.pop('private', None)
+    if shields_off:
+        print('  info  sites the owner runs with Shields DOWN (a sign Shields broke them or slowed them): ' + ', '.join('%s x%d' % kv for kv in shields_off.most_common(6)))
+    pops = len(lines('sec popup-blocked'))
+    print('  info  pop-ups and forced redirects blocked: %d; file attaches: %d (page-got ok %d, failed %d)' % (pops, len(lines('filepick copied')),
+          sum(1 for t in lines('filepick page-got') if 'decode=ok' in t), sum(1 for t in lines('filepick page-got') if 'decode=failed' in t)))
+    sf = [e for e in ev if ' sitefixes running' in e]
+    print('  info  Mozilla site fixes running: %s' % ('yes (%s)' % re.search(r'v=(\S+)', sf[-1]).group(1) if sf and re.search(r'v=(\S+)', sf[-1]) else 'not seen in these uploads'))
+
+    # ---- 5. privacy and security
+    print('\n-- 5. PRIVACY AND SECURITY --')
+    blocked = [num(re.search(r'blocked=(\d+)', e).group(1)) for e in loaded if re.search(r'blocked=(\d+)', e)]
+    print('  info  ad and tracker requests blocked on page loads: %d over %d loads (%.1f a page)' % (sum(blocked), len(blocked), (sum(blocked) / len(blocked)) if blocked else 0.0))
+    up = len(lines('sec https-upgraded')); fb = len(lines('sec https-unavailable')); cert = lines('sec cert-error')
+    print('  info  addresses upgraded to https: %d; https not available (fell back or asked): %d; certificate errors: %d%s' % (up, fb, len(cert), (' (e.g. ' + cert[0][:60] + ')') if cert else ''))
+    perm = Counter(re.search(r'kind=(\S+)', t).group(1) for t in lines('sec perm-asked') if re.search(r'kind=(\S+)', t))
+    print('  info  permission questions from pages: %s' % (', '.join('%s x%d' % kv for kv in perm.most_common()) or 'none'))
+    print('  info  engine Safe Browsing blocks: %d; downloads refused: %d; Shields ext version: %s' % (sum(1 for e in ev if ' page safebrowsing' in e),
+          sum(1 for e in ev if ' download auto-refused' in e or ' download lookalike-refused' in e), (lines('shields ext-version') or ['not seen'])[-1][:40]))
+    masked = [re.search(r'masked so far (\d+), live-diagnostic sends held back (\d+)', l) for b in batches for l in b.get('snapshot', []) if 'safety net' in l]
+    masked = [m for m in masked if m]
+    if masked:
+        print('  info  private tabs: names masked %s, sends held back %s (newest upload)' % (masked[-1].group(1), masked[-1].group(2)))
+    if fail and fail / max(1, len(loaded)) > 0.15:
+        print('  WATCH many loads failed: compatibility or network, see the PAGE COMPATIBILITY section')
+
+
 def tab_analysis(batches):
     """PERF15: tab switching. `tabs hibernate tab= live= max= avail=` (a tab was put to sleep: its next switch loads the page again), `tabs switch-done tab= kind=live|revive first-frame=Nms` (how long the switch took to the first frame) and the engine kills."""
     hib, sw, kills, trims = [], [], 0, 0
@@ -450,7 +579,7 @@ def tab_analysis(batches):
                 kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' tabs hibernate ', 1)[1]))
                 hib.append(kv)
             elif ' tabs switch-done ' in e:
-                kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' tabs switch-done ', 1)[1]))
+                kv = dict(re.findall(r'([\w-]+)=(\S+)', e.split(' tabs switch-done ', 1)[1]))
                 sw.append(kv)
             elif ' gecko onKill' in e:
                 kills += 1
@@ -740,6 +869,7 @@ def main(argv):
         print('\n== INTEGRITY: cannot be proven here (no git history: --dir or no origin/main). Use list_commits path=diag on tjshea90/Kestrel-Private. ==')
     for x in problems:
         print('  FILE PROBLEM: ' + x)
+    focus_report(batches)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
