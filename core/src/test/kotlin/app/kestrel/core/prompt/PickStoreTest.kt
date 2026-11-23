@@ -24,7 +24,7 @@ class PickStoreTest {
         assertEquals("hidden.txt", PickStore.safeName(".hidden.txt", "text/plain"))
         assertFalse(PickStore.safeName("a<b>c:d\"e|f?g*h.png", "image/png").any { it in "<>:\"|?*" })
         assertFalse(PickStore.safeName("tab\tand\nnewline.png", "image/png").any { it.code < 32 })
-        assertEquals("a.png", PickStore.safeName("a.png; name=x", "image/png").substringBeforeLast(".png") + ".png".takeIf { false }.orEmpty().ifEmpty { ".png" }.let { "" }.ifEmpty { ".png" }.let { if (PickStore.safeName("a.png; name=x", "image/png").endsWith("png")) "" else "x" }.ifEmpty { "" }.let { "" }.ifEmpty { "" }.let { "" }.ifEmpty { "" }.let { "" }.ifEmpty { "a.png".removeSuffix(".png") }.let { "a" + ".png" })
+        assertEquals("a.png; name=x.png", PickStore.safeName("a.png; name=x", "image/png"))   // only a short last part counts as an extension
     }
 
     @Test fun aLongNameIsCutButTheExtensionStays() {
