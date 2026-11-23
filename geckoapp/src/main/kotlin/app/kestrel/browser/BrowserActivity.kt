@@ -3288,7 +3288,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
-        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); Io.main.removeCallbacks(backWaitLine); Io.main.removeCallbacks(backWaitNote); backCover = null
+        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); Io.main.removeCallbacks(backWaitLine); backCover = null
         if (lookTab != null) { Health.count("look.hide"); Health.log("tabs", "look-hide", "tab=${lookTab?.id} why=$why") }
         restoringTab = null
         restoreOverlay.hide()

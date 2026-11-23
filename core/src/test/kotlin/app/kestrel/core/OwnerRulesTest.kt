@@ -799,7 +799,7 @@ class OwnerRulesTest {
         assertTrue("the owner can turn it off", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Instant Back\""))
         assertTrue("eight pictures of the pages left, not four", source("app/src/main/kotlin/app/kestrel/browser/ui/BackPictures.kt").contains("const val MAX = 8"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
-        assertTrue("a Back picture that waits shows a loading line after 1 s and the site's name after 4 s, and both go with the picture", act.contains("postDelayed(backWaitLine, 1_000L)") && act.contains("postDelayed(backWaitNote, 4_000L)") && act.contains("removeCallbacks(backWaitLine)"))
+        assertTrue("PERF13: a Back picture that waits shows a thin loading line after 0.6 s and NO note box (owner: it pauses with a box that says loading), and the line goes with the picture", act.contains("postDelayed(backWaitLine, 600L)") && act.contains("removeCallbacks(backWaitLine)") && !act.contains("Still loading") && !act.contains("backWaitNote"))
     }
 
     /** PERF10 (owner 2026-11-22, after alpha94: "still chopping off paint ... I can't attach photos to claude.ai ... all files permission ... does not show as an option"). */
