@@ -341,7 +341,9 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Video first (research/VIDEO_AUDIT.md): the engine asks the app whenever a page starts a video by itself. Refusing the MUTED ones (until alpha26) left every player that starts muted
         // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
-        a.sec(tab, "perm-asked", "kind=${permName(perm.permission)} host=${UrlParts.hostOf(perm.uri) ?: "?"}")
+        // PERF16: a page's question for a permission is a security fact; the autoplay questions of video pages are the video gate's business (they come by the dozen) and are not repeated here
+        if (perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE && perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE)
+            a.sec(tab, "perm-asked", "kind=${when (perm.permission) { PermissionDelegate.PERMISSION_GEOLOCATION -> "location"; PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> "drm"; else -> "other" }} host=${UrlParts.hostOf(perm.uri) ?: "?"}")
         when (perm.permission) {
             // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
             PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> {
