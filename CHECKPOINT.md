@@ -1,15 +1,13 @@
-# CHECKPOINT 3088 — read me first, then TASKS.md
+# CHECKPOINT 3089 — read me first, then TASKS.md
 
-**Written:** 2026-11-23T21:30:58Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `6b92a4b3` (this checkpoint is the commit after it)
+**Written:** 2026-11-23T21:31:31Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `665bc7a9` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha98 (gecko code 199) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha98 (gecko code 199) gated by ship.sh and ONE dispatch made on claude/kind-brahmagupta-ae3yl8 (android.yml app=gecko full_build=true); contents: PERF15 tab switch (LiveBudget.afterTrim follows free memory, tabs switch-done line, digest TABS)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/kind-brahmagupta-ae3yl8, inputs {"app":"gecko","full_build":"true","note":"alpha98: switching between tabs no longer reloads them. Your diagnostics show why it did: Android tells apps that they are about to be ended within one second of EVERY time you leave Kestrel on this tablet (even with 400 to 540 MB of memory free and the low-memory limit at 144 MB), and Kestrel answered every such message by closing every tab except the one in front, so the next tab you switched to had to load its page again, which takes many seconds on heavy pages. Of the 30 tabs put to sleep in your logs, 16 were closed this way. Now Kestrel follows the free memory: below 300 MB only the tab in front stays, below 450 MB at most two tabs, otherwise your Tabs kept ready setting stands; so with Few (2 tabs) both tabs stay alive when you leave and come back. The risk, said plainly: Android may still end the whole app while you are away with two tabs open; the tabs then come back with their history as after any kill, and the diagnostics will show if that happens more often. New measurement: how long a tab switch takes until the first picture, for a live tab and for a sleeping one (the diagnostics TABS section), so the lag between two live tabs can be measured next. Not run on the tablet."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha98), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha98 "alpha98: switching between tabs no longer reloads them. Your diagnostics show why it did: Android tells apps that they are about to be ended within one second of EVERY time you leave Kestrel on this tablet (even with 400 to 540 MB of memory free and the low-memory limit at 144 MB), and Kestrel answered every such message by closing every tab except the one in front, so the next tab you switched to had to load its page again, which takes many seconds on heavy pages. Of the 30 tabs put to sleep in your logs, 16 were closed this way. Now Kestrel follows the free memory: below 300 MB only the tab in front stays, below 450 MB at most two tabs, otherwise your Tabs kept ready setting stands; so with Few (2 tabs) both tabs stay alive when you leave and come back. The risk, said plainly: Android may still end the whole app while you are away with two tabs open; the tabs then come back with their history as after any kill, and the diagnostics will show if that happens more often. New measurement: how long a tab switch takes until the first picture, for a live tab and for a sleeping one (the diagnostics TABS section), so the lag between two live tabs can be measured next. Not run on the tablet."
-NEVER ship kestrel-g-v0.3.0-alpha98 twice (check BUILDLOG.md and the Releases first).
+Next: poll the RUN (mcp__github__actions_list list_workflow_runs android.yml branch claude/kind-brahmagupta-ae3yl8) every ~5 min; failure: get_job_logs failed_only; known runner flakes (core PhoneBackendTest, courier ServerTest, core StreamEngineTest) -> rerun_failed_jobs on the SAME run; green: get_release_by_tag kestrel-g-v0.3.0-alpha98, bash tools/record-release.sh kestrel-g-v0.3.0-alpha98 with the identical note (scratchpad note98.txt), tick PERF15b [~], answer the owner. NEVER dispatch alpha98 twice.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha98 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  665bc7a9 ckpt 3088: gated kestrel-g-v0.3.0-alpha98 (gecko code 199) and pushed it: handoff self-
   6b92a4b3 ckpt 3087: pre-ship: alpha98: switching between tabs no longer reloads them. Your diagn
   a5e04498 ckpt 3085: PERF15 coded (not gated): LiveBudget.afterTrim level 60+ follows free memory
   adeb2192 ckpt 3082: owner after alpha97: Back is faster and images attach (CONFIRMED); NEW PERF1
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha98 twice (check BUILDLOG.md and the Releases fi
   80d592db ckpt 3077: gated kestrel-g-v0.3.0-alpha97 (gecko code 198) and pushed it: handoff self-
   fc06903d ckpt 3074: PERF14 coded (not gated): photo attach copy (core PickStore + tests, Browser
   75f112b7 ckpt 3059: PERF14a research written: photo attach root cause (GeckoView 160 FilePrompt.
-  678153fe ckpt 3057: PERF14 written to TASKS.md (owner after alpha96: Back still slow although th
 ```
