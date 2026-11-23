@@ -474,7 +474,7 @@
       if (asked) { drop(); return; }
       asked = true;
       browser.runtime.sendMessage({ k: 'bk', p: location.href }).then(function (r) {
-        var y = parseInt(r, 10), at = [0, 250, 700, 1500, 3000], n = 0;
+        var y = parseInt(r, 10), at = [0, 250, 700, 1500, 3000, 4500, 6500, 9000], n = 0;   // PERF13: was 5 looks in 3 s; the real tablet missed the place in 4 of 7 reloads (a heavy page is not tall enough for 5 to 6 s): 8 looks in 9 s, each acts only when the page is tall enough
         if (!(y > 0) || touched) { drop(); return; }
         (function look() {
           if (touched) return;
@@ -486,6 +486,14 @@
         })();
       }, function () { drop(); });
     }
+    // PERF13 (owner 2026-11-23: "other browsers can immediately go back to the last page"): the engine's OWN verdict when a page is left: `pagehide.persisted` is true only when the page really enters the engine's back/forward
+    // cache. The app joins it with the next Back press to this page (Health `back press ... left=`), so the next upload says whether pages are refused at the moment they are left, and whether they were still loading then.
+    window.addEventListener('pagehide', function (e) {
+      try {
+        var rs = document.readyState;
+        browser.runtime.sendMessage({ k: 'ph', p: location.href, ps: (e && e.persisted) ? 1 : 0, rs: rs === 'complete' ? 2 : (rs === 'interactive' ? 1 : 0) }).catch(function () {});
+      } catch (x) { /* never break the page */ }
+    }, false);
     window.addEventListener('pageshow', function (e) {
       try {
         var kept = !!(e && e.persisted), nt = '', ts = 0;

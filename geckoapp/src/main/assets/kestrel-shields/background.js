@@ -1386,6 +1386,13 @@ onMsg(function (m, sender) {
   return undefined;
 });
 
+// PERF13: the engine's own verdict at the moment a page is left (content.js `pagehide`, top frame): kept by the back/forward cache (ps 1) or refused (0), and how far the page had loaded (rs 0 loading, 1 interactive, 2 complete). Numbers and the address.
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'ph' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  send({ k: 'ph', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, rs: Math.max(0, Math.min(2, m.rs | 0)) }).catch(function () {});
+  return undefined;
+});
+
 // EX-15: the page's content script names an origin the owner is likely to open next (a link the finger touches, a top search result); the app decides (switch, private tab, Data saver, rate) and opens
 // the connection through the engine. Nothing is fetched here. The message names the page so the app can tell a private tab from a normal one.
 onMsg(function (m) {

@@ -98,6 +98,8 @@ class ShieldsBridge(
     private val typingWait: (JSONObject) -> Unit = {},
     /** PERF10c: what a PAGE received when a file input changed (pagetime.js, top frame, checked by background.js): `n` files, up to 3 of `a` = { t type, kb, mg first bytes, dec, w, h, px, enc, ek, ms } and the page of its tab (p). Numbers and fixed words only. Worker thread. */
     private val fileCheck: (JSONObject) -> Unit = {},
+    /** PERF13: the engine's own verdict when a page was left (content.js `pagehide`): the page's address, whether the back/forward cache took it, how far it had loaded (0 loading, 1 interactive, 2 complete). Worker thread. */
+    private val pageLeft: (String, Boolean, Int) -> Unit = { _, _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -167,6 +169,7 @@ class ShieldsBridge(
                     "verr" -> { videoError(m); "" }
                     "typ" -> { typingWait(m); "" }
                     "fc" -> { fileCheck(m); "" }
+                    "ph" -> { pageLeft(m.optString("p"), m.optInt("ps") == 1, m.optInt("rs")); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
