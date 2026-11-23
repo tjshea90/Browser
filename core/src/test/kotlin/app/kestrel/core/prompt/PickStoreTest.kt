@@ -75,7 +75,7 @@ class PickStoreTest {
         val root = tmp.newFolder("picks")
         PickStore.copy(root, "old1", ByteArrayInputStream(ByteArray(5)), "a.txt", null)
         PickStore.copy(root, "new1", ByteArrayInputStream(ByteArray(5)), "b.txt", null)
-        val now = 10_000_000L
+        val now = 100_000_000_000L
         java.io.File(root, "old1").setLastModified(now - 7 * 3_600_000L)
         java.io.File(root, "new1").setLastModified(now - 60_000L)
         assertEquals(1, PickStore.sweep(root, 6 * 3_600_000L, now))
