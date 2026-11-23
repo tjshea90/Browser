@@ -1,21 +1,22 @@
-# CHECKPOINT 3089 — read me first, then TASKS.md
+# CHECKPOINT 3091 — read me first, then TASKS.md
 
-**Written:** 2026-11-23T21:31:31Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `665bc7a9` (this checkpoint is the commit after it)
+**Written:** 2026-11-23T23:18:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `3581dee6` (this checkpoint is the commit after it)
 
 ## Just done
-alpha98 (gecko code 199) gated by ship.sh and ONE dispatch made on claude/kind-brahmagupta-ae3yl8 (android.yml app=gecko full_build=true); contents: PERF15 tab switch (LiveBudget.afterTrim follows free memory, tabs switch-done line, digest TABS)
+alpha98 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha98 (gecko code 199, run 45270482635 green on attempt 1, Release has APK + sha256 + dm, BUILDLOG line pushed). PERF15b shipped, NOT confirmed on the tablet
 
 ## Do this next
-Next: poll the RUN (mcp__github__actions_list list_workflow_runs android.yml branch claude/kind-brahmagupta-ae3yl8) every ~5 min; failure: get_job_logs failed_only; known runner flakes (core PhoneBackendTest, courier ServerTest, core StreamEngineTest) -> rerun_failed_jobs on the SAME run; green: get_release_by_tag kestrel-g-v0.3.0-alpha98, bash tools/record-release.sh kestrel-g-v0.3.0-alpha98 with the identical note (scratchpad note98.txt), tick PERF15b [~], answer the owner. NEVER dispatch alpha98 twice.
+Next: waiting for the owner: install alpha98, switch between tabs after leaving the app and coming back, Settings > Diagnostics > Send now; python3 -B -I tools/diag_digest.py --days 1: TABS section (sleeps by budget, switch-done live vs revive first-frame ms, engine kills); if tabs still reload read the hibernate lines (budget / avail); if the lag is between LIVE tabs read switch-done kind=live and the curtain lines, then fix the session swap (picture of the target during the swap). Still open: FLK1 (harden PhoneBackendTest, ServerTest, StreamEngineTest), PERF14e Calmer redrawing A/B, per-quality fps, claude.ai FPP A/B, second film (PERF9)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  946e2e68 ckpt 3089: alpha98 (gecko code 199) gated by ship.sh and ONE dispatch made on claude/ki
   665bc7a9 ckpt 3088: gated kestrel-g-v0.3.0-alpha98 (gecko code 199) and pushed it: handoff self-
   6b92a4b3 ckpt 3087: pre-ship: alpha98: switching between tabs no longer reloads them. Your diagn
   a5e04498 ckpt 3085: PERF15 coded (not gated): LiveBudget.afterTrim level 60+ follows free memory
@@ -25,5 +26,4 @@ Next: poll the RUN (mcp__github__actions_list list_workflow_runs android.yml bra
   d47330ac ckpt 3078: alpha97 (gecko code 198) gated by ship.sh (core + app + geckoapp suites, han
   80d592db ckpt 3077: gated kestrel-g-v0.3.0-alpha97 (gecko code 198) and pushed it: handoff self-
   fc06903d ckpt 3074: PERF14 coded (not gated): photo attach copy (core PickStore + tests, Browser
-  75f112b7 ckpt 3059: PERF14a research written: photo attach root cause (GeckoView 160 FilePrompt.
 ```
