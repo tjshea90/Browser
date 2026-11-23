@@ -810,10 +810,7 @@ class OwnerRulesTest {
         assertTrue("it writes the engine's CPU-drawing pref only when switched on", gp.contains("if (p.labSoft) append(\"  gfx.webrender.software: true\\n\")"))
         assertTrue("it is in Settings and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Software drawing (slower)\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
         val man = source("geckoapp/src/main/AndroidManifest.xml")
-        assertTrue("the Storage / Photos permission is DECLARED (so Android's Permissions page offers it) but never the all-files one", man.contains("android.permission.READ_EXTERNAL_STORAGE\" android:maxSdkVersion=\"32\"") && man.contains("android.permission.READ_MEDIA_IMAGES") && !man.contains("MANAGE_EXTERNAL_STORAGE\" />"))
-        assertTrue("and never requested at run time by the app", !source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Manifest.permission.READ_EXTERNAL_STORAGE") && !source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("READ_MEDIA_IMAGES"))
-        val st = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
-        assertTrue("Settings has a row that opens Android's page for this app, only where the permission is declared", st.contains("Flavor.hasFilePermission) button(\"Photos and files permission\"") && st.contains("ACTION_APPLICATION_DETAILS_SETTINGS"))
+        assertTrue("PERF14: no storage permission is declared any more: the picked file is COPIED into the app's own cache, so the engine never needs a raw path into shared storage (research/ATTACH_ROOT_CAUSE.md)", !man.contains("READ_EXTERNAL_STORAGE") && !man.contains("READ_MEDIA") && !man.contains("MANAGE_EXTERNAL_STORAGE"))
         val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
         assertTrue("the attach probe runs from the top page script, changes of a file input that has files only, at most 4 per page and 3 files", pt.contains("t.type).toLowerCase() !== 'file'") && pt.contains("FCN >= 4") && pt.contains("Math.min(fl.length, 3)") && pt.contains("k: 'fc'"))
         assertTrue("it never sends a name or a path", !pt.contains("f.name") && !pt.contains("webkitRelativePath") && !pt.contains("getAsFile"))
@@ -822,6 +819,17 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("the app logs it for a normal tab only and never while a private tab exists", act.contains("private fun onFileCheck(") && act.contains("if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return\n        val arr = m.optJSONArray(\"a\")") && act.contains("Health.log(\"filepick\", \"page-got\""))
         assertTrue("the bridge routes it", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"fc\" -> { fileCheck(m); \"\" }"))
+    }
+
+    /** PERF14 (owner 2026-11-23: "Photos still won't attach to claude website"): the engine opens the RAW PATH of a picked content address; Android 10 and later refuse it without the storage permission. The app copies the file into its own cache and gives the engine the copy. */
+    @Test fun perf14APickedFileIsCopiedIntoTheAppsOwnCacheBeforeTheEngineGetsIt() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the result handler copies each picked content address and answers with the copies", act.contains("for (u in given.take(MAX_PICKS)) copyPick(appCtx, u, priv)?.let { copies.add(it) }") && act.contains("Io.main.post { cb.invoke(copies) }") && act.contains("Uri.fromFile(file)"))
+        assertTrue("the copy goes through the core store with the grant of the picker (openInputStream of the content address)", act.contains("cr.openInputStream(u)?.use { app.kestrel.core.prompt.PickStore.copy(root, id, it, name, cr.getType(u)) }"))
+        assertTrue("only content addresses are ever copied (a rogue picker cannot name a file of the app)", act.contains("val given = uris.filter { it.scheme == \"content\" }.distinct()"))
+        assertTrue("private picks live apart and go with the last private tab; every copy goes at the start of the process; old ones after 6 hours", act.contains("\"picks-private\" else \"picks\"") && act.contains("PickStore.wipe(picksRoot(c, true))") && act.contains("if (!picksWiped)") && act.contains("6L * 3_600_000L"))
+        assertTrue("nothing about a file name or a private tab goes into a log line", !Regex("Health\\.log\\(\"filepick\", \"copied\"[^\\n]*(name|display)").containsMatchIn(act))
+        assertTrue("the engine is given file:// answers by TabDelegates unchanged", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("r.complete(prompt.confirm(a, uris.toTypedArray()))"))
     }
 
     /** PERF12 (owner 2026-11-23: "Look at the latest diagnostics and see if anything can be improved"): cut-short loads, loops, the quieter journal, the attach beacon, the extension version. */
