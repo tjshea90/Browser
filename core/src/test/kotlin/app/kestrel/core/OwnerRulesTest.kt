@@ -853,4 +853,15 @@ class OwnerRulesTest {
         assertTrue("the extension version the engine runs is logged against the one wanted", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"ext-version\", \"installed=\${ext.metaData.version} wanted=1.0.\${bridge.salt}\""))
         assertTrue("the attach beacon is sent before the test and logged as page-seen", source("geckoapp/src/main/assets/kestrel-shields/pagetime.js").contains("{ k: 'fc', n: fl.length, a: [] }") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"filepick\", \"page-seen\""))
     }
+
+    /** PERF16 (owner 2026-11-23: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): security decisions are told in `sec` lines, for normal tabs only. */
+    @Test fun perf16SecurityDecisionsAreToldInSecLinesForNormalTabsOnly() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("one helper, nothing for a private tab", act.contains("internal fun sec(tab: Tab?, event: String, detail: String) { if (tab != null && !tab.isPrivateTab) Health.log(\"sec\", event, detail) }"))
+        assertTrue("pop-ups, https fallbacks", act.contains("sec(tab, \"popup-blocked\"") && act.contains("sec(tab, \"https-unavailable\""))
+        val td = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("https upgrades, certificate errors, permission questions (not the autoplay ones)", td.contains("a.sec(tab, \"https-upgraded\"") && td.contains("a.sec(tab, \"cert-error\"") && td.contains("a.sec(tab, \"perm-asked\"") && td.contains("perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE"))
+        assertTrue("the sec layer reaches the live diagnostics and is never thinned", source("core/src/main/kotlin/app/kestrel/core/livediag/DiagScrub.kt").contains("\"win\", \"sec\",") && source("core/src/main/kotlin/app/kestrel/core/livediag/DiagJournal.kt").contains("|^sec |"))
+        assertTrue("the digest starts with the focus report", source("tools/diag_digest.py").contains("def focus_report(batches):") && source("tools/diag_digest.py").contains("    focus_report(batches)\n"))
+    }
 }

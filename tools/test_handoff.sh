@@ -340,7 +340,12 @@ ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 fra
       '+82.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=flat reencode=ok(40kb) 55ms',
       '+83.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=ok reencode=ok(40kb) 60ms',
       '+84.0s back press kind=cache dir=back loc=200 show=3400 paint=1600 y=991/5858 MISSED to=shop.example left=refused-loading',
-      '+85.0s back press kind=other dir=back loc=30 show=-1 paint=-1 y=- to=app.example left=?']
+      '+85.0s back press kind=other dir=back loc=30 show=-1 paint=-1 y=- to=app.example left=?',
+      '+86.0s sec cert-error host=bad.example code=-2147483648',
+      '+87.0s sec https-upgraded host=shop.example',
+      '+88.0s sec popup-blocked kind=window host=shop.example',
+      '+89.0s sec perm-asked kind=location host=map.example',
+      '+90.0s tabs switch-done tab=3 kind=live first-frame=300ms']
 now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha87', 'code': 188, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
      'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics'], 'events': ev}
