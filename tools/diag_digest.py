@@ -439,6 +439,43 @@ def page_got_analysis(batches):
         print('      %s | %s -> %s' % (head.strip(), first, v))
 
 
+def back_analysis(batches):
+    """PERF13: what Back did on the tablet (`back press kind= dir= loc= show= paint= y= to= left=`, normal tabs only): how many were instant, how long the others took, how often the place was missed, and what the engine said when the page was left (`left=`)."""
+    rows = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' back press ' in e:
+                r = dict(re.findall(r'(\w+)=(\S+)', e.split(' back press ', 1)[1]))
+                r['_missed'] = ' MISSED' in e
+                rows.append(r)
+    print('\n== BACK (what Back did on the tablet: %d press(es) in normal tabs) ==' % len(rows))
+    if not rows:
+        print('  (no `back press` lines yet)')
+        return
+    kinds = Counter(r.get('kind', '?') for r in rows)
+    print('  kinds: ' + ', '.join('%s x%d' % kv for kv in kinds.most_common()) + '   (other = Back inside a single-page app: no page load, the site handles it)')
+    loaded = [r for r in rows if r.get('kind') in ('cache', 'network', 'kept')]
+    def num(r, k):
+        try:
+            return int(r.get(k, -1))
+        except ValueError:
+            return -1
+    shows = sorted(num(r, 'show') for r in loaded if num(r, 'show') >= 0)
+    paints = sorted(num(r, 'paint') for r in loaded if num(r, 'paint') >= 0)
+    if loaded:
+        print('  page loads: %d, kept (instant) %d; median pageshow %s ms, median first paint %s ms; place missed %d of %d measured' % (
+            len(loaded), sum(1 for r in loaded if r.get('kind') == 'kept'), shows[len(shows) // 2] if shows else '-', paints[len(paints) // 2] if paints else '-',
+            sum(1 for r in loaded if r['_missed']), sum(1 for r in loaded if '/' in r.get('y', ''))))
+        lefts = Counter(r.get('left', '?') for r in loaded)
+        print('  what the engine said when the page was LEFT: ' + ', '.join('%s x%d' % kv for kv in lefts.most_common()))
+        if lefts.get('refused-loading'):
+            print('      -> pages were left before they finished loading: the engine cannot keep an unfinished page (research/INSTANT_BACK.md section 4 item 1)')
+        if lefts.get('refused-loaded'):
+            print('      -> finished pages were refused: something blocks the cache (open requests, a video player, an opener, no-store): research/INSTANT_BACK.md section 4 item 2')
+        if lefts.get('kept') and not any(r.get('kind') == 'kept' for r in loaded):
+            print('      -> the engine said it KEPT the page when it was left, yet Back loaded it again: the cache was flushed in between (a memory trim of 15 / 80 reaches the engine) or the tab was put to sleep')
+
+
 def filepick_analysis(batches):
     """IMG1: what the files picked for a page looked like to Android (`filepick picked type= kb= size=WxH decodes= ext= freeMb=`): says whether a file or the page is to blame for a refused upload."""
     rows = []
