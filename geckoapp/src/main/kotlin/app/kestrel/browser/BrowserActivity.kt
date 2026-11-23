@@ -512,6 +512,7 @@ open class BrowserActivity : Activity(), DockListener {
     // ================================================================== lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (!picksWiped) { picksWiped = true; val c0 = applicationContext; Io.exec { app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, false)); app.kestrel.core.prompt.PickStore.wipe(picksRoot(c0, true)) } }
         super.onCreate(savedInstanceState)
         // RV8: an activity that is recreated while a full screen had forced an orientation must not start with it (the system keeps the request of the old record)
         if (requestedOrientation != android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -4159,6 +4160,7 @@ open class BrowserActivity : Activity(), DockListener {
     companion object {
         private const val REQ_FILE = 1001
         private const val MAX_PICKS = 30   // PERF14: files copied for one attach
+        @Volatile private var picksWiped = false   // PERF14: the copies of picked files are removed once per process start (an Activity re-created by a turn of the screen must not take away a file the page is about to upload)
         private const val REQ_PERM = 1002
         private const val PULL_ARM_DP = 64f // chip travel at which letting go reloads (about 107 dp of finger travel)
         private const val PULL_MAX_DP = 84f
