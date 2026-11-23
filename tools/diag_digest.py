@@ -439,6 +439,34 @@ def page_got_analysis(batches):
         print('      %s | %s -> %s' % (head.strip(), first, v))
 
 
+def tab_analysis(batches):
+    """PERF15: tab switching. `tabs hibernate tab= live= max= avail=` (a tab was put to sleep: its next switch loads the page again), `tabs switch-done tab= kind=live|revive first-frame=Nms` (how long the switch took to the first frame) and the engine kills."""
+    hib, sw, kills, trims = [], [], 0, 0
+    for b in batches:
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            if ' tabs hibernate ' in e:
+                kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' tabs hibernate ', 1)[1]))
+                hib.append(kv)
+            elif ' tabs switch-done ' in e:
+                kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' tabs switch-done ', 1)[1]))
+                sw.append(kv)
+            elif ' gecko onKill' in e:
+                kills += 1
+    print('\n== TABS (switching: %d switch(es) measured, %d tab(s) put to sleep, %d engine kill(s)) ==' % (len(sw), len(hib), kills))
+    if hib:
+        mx = Counter(r.get('max', '?') for r in hib)
+        av = sorted(int(re.sub(r'\D', '', r.get('avail', '0')) or 0) for r in hib)
+        print('  put to sleep with a budget of: ' + ', '.join('%s tab(s) x%d' % kv for kv in mx.most_common()) + '; free memory then (MB): ' + ', '.join(str(a) for a in av[:12]))
+        if any(r.get('max') == '1' for r in hib):
+            print('      -> a budget of ONE tab means the tablet thought memory was short: each switch to another tab loads its page again (research/TAB_SWITCH.md)')
+    for kind in ('live', 'revive'):
+        ms = sorted(int(re.sub(r'\D', '', r.get('first-frame', '0')) or 0) for r in sw if r.get('kind') == kind)
+        if ms:
+            print('  switch to a %s tab: %d, median first frame %d ms, worst %d ms' % ('LIVE (alive)' if kind == 'live' else 'SLEEPING (loaded again)', len(ms), ms[len(ms) // 2], ms[-1]))
+
+
 def setting_ab(batches):
     """PERF14: the uploads carry the owner's changed settings AND the pages' own load timing, so a setting can be judged by the numbers instead of by feel: for each watched setting, per site with at least 2 timed loads on each side, the median first contentful paint and load time with the setting ON against OFF (a setting that was never changed counts as OFF)."""
     WATCH = ['lab_soft', 'lab_fps30', 'lab_draw', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
@@ -732,6 +760,7 @@ def main(argv):
     filepick_analysis(batches)
     back_analysis(batches)
     setting_ab(batches)
+    tab_analysis(batches)
     typing_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')

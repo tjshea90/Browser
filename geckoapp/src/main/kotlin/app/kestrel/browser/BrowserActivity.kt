@@ -1336,9 +1336,22 @@ open class BrowserActivity : Activity(), DockListener {
         navigateTo(t, url)
     }
 
+    // PERF15 (owner 2026-11-23: "When i go between tabs it is very laggy and has to reload"): how long a tab switch takes until the engine's first frame of the tab in front, and whether the tab was alive ("live"), asleep ("revive": its session
+    // is made again and the page loaded from its history) or new. One `tabs switch-done` line per switch of normal tabs, numbers only.
+    private var switchTab: Tab? = null
+    private var switchAt = 0L
+    private var switchKind = ""
+    internal fun switchComposite(tab: Tab) {
+        if (tab !== switchTab) return
+        val ms = SystemClock.uptimeMillis() - switchAt
+        switchTab = null
+        if (!tab.isPrivateTab) { Health.count("tabs.switch.$switchKind"); Health.log("tabs", "switch-done", "tab=${tab.id} kind=$switchKind first-frame=${ms}ms") }
+    }
+
     private fun show(tab: Tab) {
         if (fullscreenOn && fullscreenTab !== tab) endFullScreenOf(null, "another tab came to the front")
         val prev = current
+        if (prev != null && prev !== tab && !tab.isNewTab) { switchTab = tab; switchAt = SystemClock.uptimeMillis(); switchKind = if (tab.session == null) "revive" else "live" } else if (prev === tab) { /* the same tab again: not a switch */ }
         if (curtainTab != null && curtainTab !== tab) curtainDown("other-tab")
         if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
