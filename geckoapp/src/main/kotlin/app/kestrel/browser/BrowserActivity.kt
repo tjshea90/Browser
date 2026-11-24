@@ -2739,6 +2739,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
+        out.add(EngineTrimGate.line(prefs))
         out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
@@ -3265,6 +3266,7 @@ open class BrowserActivity : Activity(), DockListener {
      * preview instead of a white screen; a second death within 15 s reloads the plain URL (the state itself may be the cause); a third shows the error screen.
      */
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
+        if (!tab.isPrivateTab) prefs.lastEngineKillAt = System.currentTimeMillis()      // PERF20: for 6 hours after an engine kill every memory signal reaches the engine again (core TrimGate)
         endFullScreenOf(tab, if (crashed) "the page's process crashed" else "the page's process was killed")
         if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page's process went")
         val url = tab.url

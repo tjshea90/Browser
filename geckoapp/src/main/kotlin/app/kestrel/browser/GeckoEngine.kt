@@ -145,7 +145,8 @@ object GeckoEngine {
             .preferredColorScheme(colorScheme(prefs))
             .build()
         val createAt = android.os.SystemClock.uptimeMillis()
-        return GeckoRuntime.create(ctx, settings).also { r ->
+        // PERF20: the engine hears Android's memory signals through the gate (core TrimGate): false alarms are held, real shortage passes. A wrapper context only; the engine finds the real Application through it.
+        return GeckoRuntime.create(EngineTrimGate.install(ctx), settings).also { r ->
             app.kestrel.browser.diag.Health.log("engine", "runtime-create-took", "${android.os.SystemClock.uptimeMillis() - createAt}ms") // on the UI thread: the owner's Diagnostics show what it costs on the tablet
             r.settings.setFetchPriorityEnabled(true)                      // fetchpriority=high/low on img/script/link is honoured (GeckoView's Java default is false)
             r.settings.setFingerprintingProtection(true)                  // FPP in normal tabs too (the engine default is private tabs only)
