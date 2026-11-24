@@ -98,7 +98,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         persist()
         ui.say("Restarting Kestrel for a clean start. Your tabs come back afterwards.")
         restarting = true
-        ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true))
+        ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true), act)
     }
 
     fun cont() { val st = state ?: return; state = machine.onResume(st); persist(); engineReady() }
@@ -130,7 +130,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         upload(json, force = true)
     }
 
-    fun restartIntoBrowser() { restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, app.kestrel.browser.MainActivity::class.java)) }
+    fun restartIntoBrowser() { restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, app.kestrel.browser.MainActivity::class.java), act) }
 
     fun close() { generation++; server.stop(); try { view.releaseSession() } catch (e: Exception) { /* none */ }; try { session?.close() } catch (e: Exception) { /* closed */ }; session = null }
 
@@ -223,7 +223,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         val (st1, action) = machine.next(st0, System.currentTimeMillis())
         state = st1; persist(); showStatus(st1, action)
         when (action) {
-            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true)) }
+            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true), act) }
             is Action.ApplySettings -> { OptimizerApply.write(prefs, action.config); applyLive(); loop() }
             is Action.Measure -> { val why = pauseReason(); if (why != null) pause(why) else measure() }
             is Action.Ask -> ask(action)

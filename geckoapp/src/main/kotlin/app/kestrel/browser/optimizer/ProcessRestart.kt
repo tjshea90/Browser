@@ -12,10 +12,12 @@ import android.os.Process
 object ProcessRestart {
     private const val CHANNEL = "optimizer"; const val NOTE_ID = 7301
 
-    fun restartInto(ctx: Context, target: Intent) {
+    fun restartInto(ctx: Context, target: Intent, closing: Activity? = null) {
         postFallback(ctx, target)
         val i = Intent(ctx, RestartActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION).putExtra("target", target).putExtra("pid", Process.myPid())
         ctx.startActivity(i)
+        // the trampoline is on its way: now end every screen of this task, so the system has no old browser screen to bring back in the new process (the emulator lab saw one come back and end the run)
+        try { closing?.finishAffinity() } catch (e: Exception) { /* the kill below ends it anyway */ }
         app.kestrel.browser.Io.main.postDelayed({ Process.killProcess(Process.myPid()) }, 400)
     }
 

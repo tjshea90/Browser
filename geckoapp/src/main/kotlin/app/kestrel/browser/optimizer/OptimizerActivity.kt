@@ -71,10 +71,17 @@ class OptimizerActivity : Activity(), OptimizerRunner.Ui {
         if (intent.getStringExtra("auto") == "quick" && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && app.kestrel.browser.optimizer.OptimizerStore.load(this) == null) runner.startRun(Priority.BALANCED, true, true)
     }
 
-    override fun onStart() { super.onStart(); ProcessLife.uiAlive = true; ProcessLife.cancel() }
+    private var started = false
+    /**
+     * The app ends its own process a moment after the last screen goes away (ProcessLife). After a restart the system may bring back the BROWSER screen of the old task for a moment and destroy it again, which
+     * says "no screen" while this one is in front (found by the emulator lab: the run died 2 s after the restart). So while this screen is on show it says "I am here" again every second.
+     */
+    private val beat = object : Runnable { override fun run() { if (started) { ProcessLife.uiAlive = true; ProcessLife.cancel(); app.kestrel.browser.Io.main.postDelayed(this, 1000) } } }
+    override fun onStart() { super.onStart(); started = true; ProcessLife.uiAlive = true; ProcessLife.cancel(); app.kestrel.browser.Io.main.removeCallbacks(beat); app.kestrel.browser.Io.main.postDelayed(beat, 1000) }
 
     override fun onStop() {
         super.onStop()
+        started = false
         if (running && !isChangingConfigurations) runner.pause("you left the app")
         if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.maybeExit() }
     }
