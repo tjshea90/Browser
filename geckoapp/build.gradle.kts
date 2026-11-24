@@ -85,7 +85,7 @@ androidComponents {
 
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
-    // GeckoView 160 (and, once its POM is read, 161) is built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
+    // GeckoView 160 and 161 are built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
     compileSdk { version = release(37) { minorApiLevel = 0 } }
 
     defaultConfig {
@@ -159,7 +159,7 @@ configurations.all {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
     resolutionStrategy {
-        // androidx.core 1.19.x (what GeckoView 160 declares; 161 to be re-read from its POM) requires AGP 9.1; 1.17.x is API-compatible for GeckoView's use and builds with AGP 8.13.
+        // androidx.core 1.19.x (what GeckoView 160 and 161 declare, read from their module files 2026-11-24) requires AGP 9.1; 1.17.x is API-compatible for GeckoView's use and builds with AGP 8.13.
         force("androidx.core:core:1.17.0")
     }
 }

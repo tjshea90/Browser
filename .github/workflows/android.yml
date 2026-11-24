@@ -284,7 +284,7 @@ jobs:
             { echo "storeFile=$RUNNER_TEMP/release.jks"; echo "storePassword=$STORE_PW"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PW"; } > keystore.properties
           fi
 
-      - name: Build the release APK (GeckoView 160 armeabi-v7a, R8, signed)
+      - name: Build the release APK (GeckoView 161 armeabi-v7a, R8, signed)
         run: ./gradlew :geckoapp:assembleRelease --console=plain
 
       - name: Gate - the baseline profile makes Android compile the whole app at install (LAB7)
