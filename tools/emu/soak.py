@@ -3699,6 +3699,15 @@ class Soak:
             cur = [l for l in st.splitlines() if l.startswith(("cursor|", "status|", "bootMark|"))]
             if cur != last_state:
                 say("opt state: %s" % " ".join(cur)); last_state = cur
+            # nothing at all after 100 s (no state file, no 'opt' line from the app): the run never started - stop waiting and show why
+            if time.time() - t0 > 100 and not st.strip() and not health_events(self.log.since(lm), "opt"):
+                break
+        if '"kind":"kestrel-autotune"' not in result:
+            tail = [ln for ln in self.log.since(lm) if re.search(r"OptimizerActivity|OptimizerRunner|RestartActivity|AndroidRuntime|FATAL EXCEPTION|Permission Denial|Unable to find explicit|ActivityTaskManager.*(START|Displayed|Exception)|KestrelHealth.*(opt|life)", ln)]
+            say("opt: the run did not start or finish; %d relevant log lines, the last 70 follow" % len(tail))
+            for ln in tail[-70:]:
+                say("   " + ln.strip()[:260])
+            say("opt: state file now: %r" % (self.adb.sh("run-as %s ls -la files/optimizer" % pkg, timeout=30)[:400]))
         ev = health_events(self.log.since(lm), "opt")
         kinds = {}
         for e in ev:
