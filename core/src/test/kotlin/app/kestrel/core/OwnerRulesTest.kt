@@ -935,4 +935,19 @@ class OwnerRulesTest {
         assertTrue("the tab remembers what its last load cost", source("app/src/main/kotlin/app/kestrel/browser/web/Tab.kt").contains("var reloadMs = 0L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("if (success && tookMs > 0L) tab.reloadMs = tookMs"))
         assertTrue("a private tab is still never put to sleep", source("core/src/main/kotlin/app/kestrel/core/tabs/LiveBudget.kt").contains("fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate"))
     }
+
+    /** PERF25 (owner 2026-11-24: "When i go to the parlayapi site in brave browser, it is smooth"; research/BRAVE_SMOOTH.md): a hardware drawing TRIAL that can never trap the person in a browser that will not start. */
+    @Test fun perf25TheHardwareDrawingTrialIsOffByDefaultExcludesCpuDrawingAndSwitchesItselfOff() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("the trial is OFF by default and limited to 0..2", prefs.contains("var drawTrial: Int get() = sp.getInt(\"draw_trial\", 0); set(v) = put(\"draw_trial\", v.coerceIn(0, 2))"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("its engine prefs come from the pure rule, and CPU drawing is not written while a trial runs", gp.contains("DrawTrial.lines(p.drawTrial)") && gp.contains("DrawTrial.overrides(p.drawTrial)") && gp.contains("DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)"))
+        assertTrue("the start guard runs before the config is written, once per process", gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") in 1 until gp.indexOf("var yaml = yaml(text, sweep") && gp.contains("if (trialGuarded) return") && gp.contains("DrawTrial.startFailed(trial, p.drawTrialStart)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("a steady start takes the mark away (after the steady time, or when the app is left after its first picture) and an early page-process crash ends the trial", act.contains("DrawTrial.STABLE_MS") && act.contains("drawTrialSteadyNow(\"left after its first picture\")") && act.contains("DrawTrial.crashEndsTrial(prefs.drawTrial"))
+        assertTrue("the first picture of the engine starts the steady timer", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("a.drawTrialComposited()"))
+        assertTrue("it is in Settings (Off first) and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Hardware drawing trial (experiment)\", listOf(\"Off: as now\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"draw_trial\", T.INT, 0, 2)"))
+        assertTrue("the Diagnostics read-back names the trial's prefs", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.use-optimized-shaders") && source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.draw-calls-for-texture-copy"))
+        assertTrue("the digest compares page loads with and without the trial", source("tools/diag_digest.py").contains("'draw_trial'") && source("tools/diag_digest.py").contains("hardware trial"))
+    }
 }
