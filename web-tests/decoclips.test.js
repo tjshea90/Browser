@@ -101,17 +101,19 @@ test('PERF21: a clip with sound, one with controls and one that does not loop ar
   await context.close();
 });
 
-test('PERF21: a clip the page pauses itself is not played again by us', async () => {
+test('PERF21: a clip the page pauses itself stays paused, and the room it leaves goes to a parked clip', async () => {
   const { page, context } = await open(clips(3, 3), { playBefore: true });
   await until(async () => (await playing(page)).length === 2, 'the cap');
-  const parkedId = await page.evaluate(() => [...document.querySelectorAll('video')].find((v) => v.paused).id);
-  await page.evaluate((id) => { const v = document.getElementById(id); v.play(); }, parkedId);   // the page starts it ...
-  await page.waitForTimeout(100);
-  await page.evaluate((id) => { document.getElementById(id).pause(); }, parkedId);                // ... and pauses it again: its own decision
-  const other = await page.evaluate(() => [...document.querySelectorAll('video')].find((v) => !v.paused).id);
-  await page.evaluate((id) => document.getElementById(id).pause(), other);                          // room for one more
-  await page.waitForTimeout(700);
-  assert.ok(!(await playing(page)).includes(parkedId), 'the clip the page paused stays paused');
+  await page.waitForTimeout(300);
+  const state = await page.evaluate(() => ({ playing: [...document.querySelectorAll('video')].filter((v) => !v.paused).map((v) => v.id), parked: [...document.querySelectorAll('video')].filter((v) => v.paused).map((v) => v.id) }));
+  assert.equal(state.playing.length, 2); assert.equal(state.parked.length, 1);
+  const a = state.playing[0], x = state.parked[0];
+  await page.evaluate((id) => document.getElementById(id).pause(), a);                       // the page's own decision about a playing clip
+  await until(async () => (await playing(page)).includes(x), 'the parked clip takes the free room');
+  await page.waitForTimeout(500);
+  const p = await playing(page);
+  assert.ok(!p.includes(a), 'the clip the page paused stays paused: ' + p);
+  assert.ok(p.includes(x), 'and the parked one plays: ' + p);
   await context.close();
 });
 
