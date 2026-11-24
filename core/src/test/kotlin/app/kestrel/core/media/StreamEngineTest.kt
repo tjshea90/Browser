@@ -21,7 +21,8 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** The segment downloader against an in-memory CDN: order, parallelism, AES-128, byte ranges, pause / resume / kill, retries and the things that must be refused. */
+/** FLK1: every real-time wait here is three times what a quiet machine needs: the GitHub runner has two weak cores and runs this class beside the Robolectric tests and the release lint (a 30 s wait ran out there once). A broken engine still fails, only later.
+ * The segment downloader against an in-memory CDN: order, parallelism, AES-128, byte ranges, pause / resume / kill, retries and the things that must be refused. */
 class StreamEngineTest {
     private val harnesses = ArrayList<H>()
     @After fun cleanup() { harnesses.forEach { it.stop() } }
@@ -39,15 +40,15 @@ class StreamEngineTest {
         }
         fun stop() { ticking = false; exec.shutdownNow(); store.cleanup() }
         fun view(id: Long) = engine.view(id)
-        fun await(id: Long, what: String, ms: Long = 30_000, p: (DownloadView?) -> Boolean): DownloadView? {
+        fun await(id: Long, what: String, ms: Long = 90_000, p: (DownloadView?) -> Boolean): DownloadView? {
             val end = System.currentTimeMillis() + ms
             while (System.currentTimeMillis() < end) { val v = view(id); if (p(v)) return v; Thread.sleep(5) }
             throw AssertionError("timeout waiting for $what; last=${view(id)?.state} ${view(id)?.reason} done=${view(id)?.done}/${view(id)?.total}")
         }
         fun completed(id: Long) = await(id, "completion") { it?.state == DlState.COMPLETED }!!
         /** The view reports COMPLETED a moment before the engine's last store writes land: assertions about the store wait for them. */
-        fun eventually(what: String, cond: () -> Boolean) { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { if (cond()) return; Thread.sleep(5) }; throw AssertionError("timeout waiting for $what") }
-        fun awaitStoredState(id: Long): DlState { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { store.rows[id]?.state?.let { if (it == DlState.COMPLETED) return it }; Thread.sleep(5) }; return store.rows[id]?.state ?: DlState.FAILED }
+        fun eventually(what: String, cond: () -> Boolean) { val end = System.currentTimeMillis() + 30_000; while (System.currentTimeMillis() < end) { if (cond()) return; Thread.sleep(5) }; throw AssertionError("timeout waiting for $what") }
+        fun awaitStoredState(id: Long): DlState { val end = System.currentTimeMillis() + 30_000; while (System.currentTimeMillis() < end) { store.rows[id]?.state?.let { if (it == DlState.COMPLETED) return it }; Thread.sleep(5) }; return store.rows[id]?.state ?: DlState.FAILED }
         fun out(v: DownloadView): ByteArray = sinks.sinks[v.destUri]!!.bytes
         fun enqueue(playlist: String, url: String = "https://cdn.test/v/index.m3u8", stem: String = "My clip", est: Long = -1) =
             engine.enqueue(StreamSource(url, playlist, "https://site.test/watch", stem, estimateBytes = est))
@@ -62,7 +63,7 @@ class StreamEngineTest {
         return sb.toString() to all.toByteArray()
     }
 
-    @Test(timeout = 60_000) fun segmentsAreJoinedInOrderAndFetchedInParallel() {
+    @Test(timeout = 180_000) fun segmentsAreJoinedInOrderAndFetchedInParallel() {
         val h = H(); h.cdn.chunkDelayMs = 2
         val (pl, expected) = plainStream(h, 12, 40_000)
         val id = h.enqueue(pl)
@@ -94,7 +95,7 @@ class StreamEngineTest {
         return sb.toString() to film.toByteArray()
     }
 
-    @Test(timeout = 60_000) fun segmentsInsideAMarkedAdvertisingBreakAreNeverRequestedAndTheRowSaysSo() {
+    @Test(timeout = 180_000) fun segmentsInsideAMarkedAdvertisingBreakAreNeverRequestedAndTheRowSaysSo() {
         val h = H()
         val (pl, film) = markedStream(h, 14, 30_000, 5, 8)
         val id = h.enqueue(pl)
@@ -105,7 +106,7 @@ class StreamEngineTest {
         assertTrue("the advertising note comes first (the test bytes are not real MPEG-TS, so the writer adds its own sentence): ${v.note}", v.note!!.startsWith("Left out 0:12 of advertising (1 break)"))
     }
 
-    @Test(timeout = 60_000) fun aRunFromAnotherSiteIsLeftOutBeforeItsFirstSegmentIsFetched() {
+    @Test(timeout = 180_000) fun aRunFromAnotherSiteIsLeftOutBeforeItsFirstSegmentIsFetched() {
         val h = H()
         val film = java.io.ByteArrayOutputStream()
         val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
@@ -121,7 +122,7 @@ class StreamEngineTest {
         assertTrue("the advertising note comes first (the test bytes are not real MPEG-TS, so the writer adds its own sentence): ${v.note}", v.note!!.startsWith("Left out 0:12 of advertising (1 break)"))
     }
 
-    @Test(timeout = 60_000) fun aPlaylistWithoutMarkersOrForeignRunsIsDownloadedWholeWithNoNote() {
+    @Test(timeout = 180_000) fun aPlaylistWithoutMarkersOrForeignRunsIsDownloadedWholeWithNoNote() {
         val h = H()
         val (pl, all) = plainStream(h, 10, 20_000)
         val v = h.completed(h.enqueue(pl))
@@ -135,7 +136,7 @@ class StreamEngineTest {
 
     private fun killAll(h: H, n: Int) { for (i in 0 until n) h.cdn.failFirst["https://cdn.test/v/s$i.ts"] = 1_000_000 }
 
-    @Test(timeout = 60_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
+    @Test(timeout = 180_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
         val h = H(config = cfgOutage()); h.cdn.chunkDelayMs = 2
         val (pl, expected) = plainStream(h, 16, 30_000)
         val id = h.enqueue(pl)
@@ -152,7 +153,7 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aLongOutageEndsAsStalledAndRetryContinuesFromWhatWasKept() {
+    @Test(timeout = 180_000) fun aLongOutageEndsAsStalledAndRetryContinuesFromWhatWasKept() {
         val h = H(config = cfgOutage(giveUpMs = 300)); h.cdn.chunkDelayMs = 2
         val (pl, expected) = plainStream(h, 16, 30_000)
         val id = h.enqueue(pl)
@@ -166,7 +167,7 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aFreshDownloadFromADeadHostStillFailsFast() {
+    @Test(timeout = 180_000) fun aFreshDownloadFromADeadHostStillFailsFast() {
         val h = H(config = cfgOutage())
         val (pl, _) = plainStream(h, 6, 20_000)
         killAll(h, 6)                                                               // nothing ever arrives: a typo in the address, a dead host
@@ -175,7 +176,7 @@ class StreamEngineTest {
         assertEquals(Reason.NETWORK, v.reason)
     }
 
-    @Test(timeout = 60_000) fun anHttpErrorStatusKeepsItsOwnHandlingAndIsNotAnOutage() {
+    @Test(timeout = 180_000) fun anHttpErrorStatusKeepsItsOwnHandlingAndIsNotAnOutage() {
         val h = H(config = cfgOutage())
         val (pl, _) = plainStream(h, 6, 20_000)
         h.cdn.statusFor["https://cdn.test/v/s3.ts"] = 404
@@ -184,7 +185,7 @@ class StreamEngineTest {
         assertEquals(Reason.HTTP, v.reason)
     }
 
-    @Test(timeout = 60_000) fun aes128SegmentsAreDecrypted() {
+    @Test(timeout = 180_000) fun aes128SegmentsAreDecrypted() {
         val h = H()
         val key = testBytes(16, 7)
         h.cdn.files["https://cdn.test/v/key.bin"] = key
@@ -211,7 +212,7 @@ class StreamEngineTest {
     private fun pngChunk(type: String, data: ByteArray) = beInt(data.size) + type.toByteArray(Charsets.ISO_8859_1) + data + byteArrayOf(0, 0, 0, 0)
     private val fakePng: ByteArray get() = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A) + pngChunk("IHDR", ByteArray(13) { if (it == 3) 1 else 0 }) + pngChunk("IDAT", ByteArray(12) { 7 }) + pngChunk("IEND", ByteArray(0))
 
-    @Test(timeout = 60_000) fun partsWithAPictureHeaderInFrontAreJoinedWithoutIt() {
+    @Test(timeout = 180_000) fun partsWithAPictureHeaderInFrontAreJoinedWithoutIt() {
         val h = H()
         val all = java.io.ByteArrayOutputStream()
         val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n")
@@ -221,7 +222,7 @@ class StreamEngineTest {
         assertArrayEquals("no picture header is left in the saved stream", all.toByteArray(), h.out(v))
     }
 
-    @Test(timeout = 60_000) fun encryptedPartsWithAPictureHeaderAreDecryptedFromAfterIt() {
+    @Test(timeout = 180_000) fun encryptedPartsWithAPictureHeaderAreDecryptedFromAfterIt() {
         val h = H()
         val key = testBytes(16, 9)
         h.cdn.files["https://cdn.test/v/key.bin"] = key
@@ -237,7 +238,7 @@ class StreamEngineTest {
         assertArrayEquals(all.toByteArray(), h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aWrongKeyFailsInsteadOfWritingGarbage() {
+    @Test(timeout = 180_000) fun aWrongKeyFailsInsteadOfWritingGarbage() {
         val h = H()
         h.cdn.files["https://cdn.test/v/key.bin"] = testBytes(16, 1)
         val c = Cipher.getInstance("AES/CBC/PKCS5Padding"); c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(testBytes(16, 2), "AES"), IvParameterSpec(Hls.sequenceIv(0)))
@@ -246,7 +247,7 @@ class StreamEngineTest {
         assertEquals(Reason.UNSUPPORTED, v.reason)
     }
 
-    @Test(timeout = 60_000) fun fragmentedMp4FromOneFileUsesByteRanges() {
+    @Test(timeout = 180_000) fun fragmentedMp4FromOneFileUsesByteRanges() {
         val h = H()
         val file = testBytes(5_000, 9)
         h.cdn.files["https://cdn.test/v/main.mp4"] = file
@@ -256,7 +257,7 @@ class StreamEngineTest {
         assertEquals("My clip.mp4", h.sinks.sinks[v.destUri]!!.name); assertEquals("video/mp4", v.mime)
     }
 
-    @Test(timeout = 60_000) fun aServerThatIgnoresRangeStillGivesTheRightBytes() {
+    @Test(timeout = 180_000) fun aServerThatIgnoresRangeStillGivesTheRightBytes() {
         val h = H(); h.cdn.ignoreRange = true
         val file = testBytes(4_000, 11)
         h.cdn.files["https://cdn.test/v/main.mp4"] = file
@@ -265,7 +266,7 @@ class StreamEngineTest {
         assertArrayEquals(file, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun gecko_likeBoundedWindowsAreStitched() {
+    @Test(timeout = 180_000) fun gecko_likeBoundedWindowsAreStitched() {
         val h = H(config = cfg(window = 4096)); h.cdn.windowBytes = 4096
         val (pl, expected) = plainStream(h, 5, 10_000)                                // each segment needs 3 windows
         val v = h.completed(h.enqueue(pl))
@@ -273,7 +274,7 @@ class StreamEngineTest {
         assertTrue(h.cdn.requests.any { it.endsWith(" 4096-8191") })
     }
 
-    @Test(timeout = 60_000) fun pauseKeepsFinishedSegmentsAndResumeFinishesTheJob() {
+    @Test(timeout = 180_000) fun pauseKeepsFinishedSegmentsAndResumeFinishesTheJob() {
         val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
         val (pl, expected) = plainStream(h, 10, 60_000)
         val id = h.enqueue(pl)
@@ -342,7 +343,7 @@ class StreamEngineTest {
         assertEquals(DlState.PAUSED_USER, h4.view(id2)!!.state)
     }
 
-    @Test(timeout = 60_000) fun transientFailuresAreRetried() {
+    @Test(timeout = 180_000) fun transientFailuresAreRetried() {
         val h = H()
         val (pl, expected) = plainStream(h, 4, 20_000)
         h.cdn.failFirst["https://cdn.test/v/s2.ts"] = 2
@@ -353,7 +354,7 @@ class StreamEngineTest {
         assertEquals(3, h.cdn.count("https://cdn.test/v/s2.ts"))
     }
 
-    @Test(timeout = 60_000) fun aWebPageWhereASegmentShouldBeFailsTheJobAndNeverEntersTheVideo() {
+    @Test(timeout = 180_000) fun aWebPageWhereASegmentShouldBeFailsTheJobAndNeverEntersTheVideo() {
         val h = H()
         val (pl, _) = plainStream(h, 4, 5_000)
         h.cdn.files["https://cdn.test/v/s2.ts"] = "<!doctype html><html><body>This link has expired. Please sign in.</body></html>".toByteArray()
@@ -362,7 +363,7 @@ class StreamEngineTest {
         assertTrue("no output was published", h.sinks.sinks.values.none { it.published })
     }
 
-    @Test(timeout = 60_000) fun serverErrorsAndRefusalsAreRetriedAndAMissingFirstPartFailsAtOnce() {
+    @Test(timeout = 180_000) fun serverErrorsAndRefusalsAreRetriedAndAMissingFirstPartFailsAtOnce() {
         val h = H()
         val (pl, _) = plainStream(h, 3, 5_000)
         h.cdn.statusFor["https://cdn.test/v/s1.ts"] = 403
@@ -384,7 +385,7 @@ class StreamEngineTest {
     }
 
     // ---- EY-7 (research/REVIEW-EXTERNAL-2.md section 4.4): a refused part is transient first
-    @Test(timeout = 60_000) fun aPartRefusedOnceIsTriedAgainAndTheJobCompletesWithoutAnExpiredMessage() {
+    @Test(timeout = 180_000) fun aPartRefusedOnceIsTriedAgainAndTheJobCompletesWithoutAnExpiredMessage() {
         val h = H()
         val (pl, expected) = plainStream(h, 6, 20_000)
         h.cdn.denyFirst["https://cdn.test/v/s2.ts"] = 1
@@ -394,7 +395,7 @@ class StreamEngineTest {
         for (i in listOf(0, 1, 3, 4, 5)) assertEquals("a part that was never refused is fetched once", 1, h.cdn.count("https://cdn.test/v/s$i.ts"))
     }
 
-    @Test(timeout = 60_000) fun everyKindOfRefusalGetsThreeMoreTriesThenTheLinkCountsAsExpired() {
+    @Test(timeout = 180_000) fun everyKindOfRefusalGetsThreeMoreTriesThenTheLinkCountsAsExpired() {
         for (status in listOf(401, 403, 410)) {
             val h = H()
             val (pl, _) = plainStream(h, 4, 5_000)
@@ -405,7 +406,7 @@ class StreamEngineTest {
         }
     }
 
-    @Test(timeout = 60_000) fun anySuccessGivesTheTriesBackSoRefusalsAtSeveralPartsAllPassOneByOne() {
+    @Test(timeout = 180_000) fun anySuccessGivesTheTriesBackSoRefusalsAtSeveralPartsAllPassOneByOne() {
         val h = H()
         val (pl, expected) = plainStream(h, 8, 10_000)
         for (i in listOf(1, 3, 5, 7)) h.cdn.denyFirst["https://cdn.test/v/s$i.ts"] = 3    // each of four parts is refused three times and then served
@@ -414,7 +415,7 @@ class StreamEngineTest {
         for (i in listOf(1, 3, 5, 7)) assertEquals(4, h.cdn.count("https://cdn.test/v/s$i.ts"))
     }
 
-    @Test(timeout = 60_000) fun whileOnePartIsBeingTriedAgainTheOtherWorkersStartNothingNew() {
+    @Test(timeout = 180_000) fun whileOnePartIsBeingTriedAgainTheOtherWorkersStartNothingNew() {
         val h = H(config = Config(maxActive = 2, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, denyDelaysMs = listOf(150L, 150L, 150L)))
         h.cdn.chunkDelayMs = 25                                                          // a part takes about 100 ms, so the other workers are busy when the refusal lands
         val (pl, expected) = plainStream(h, 9, 30_000)
@@ -427,7 +428,7 @@ class StreamEngineTest {
         assertTrue("no part beyond the first three workers' own was started before the refused one was served (served: $served)", firstS1Ok in 0 until firstLater)
     }
 
-    @Test(timeout = 60_000) fun aMissingPartIsTriedAgainOnceOtherPartsWereFetchedButAMissingFirstPartFailsAtOnce() {
+    @Test(timeout = 180_000) fun aMissingPartIsTriedAgainOnceOtherPartsWereFetchedButAMissingFirstPartFailsAtOnce() {
         val h = H()
         val (pl, expected) = plainStream(h, 6, 20_000)
         h.cdn.chunkDelayMs = 3
@@ -450,7 +451,7 @@ class StreamEngineTest {
         h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", pl, "https://site.test/watch", "My clip", first, masterUrl = "https://cdn.test/v/master.m3u8",
             frame = "https://player.test/embed/7", headerSets = ladder, madeAt = 1_700_000_000_000L, expiresAt = 1_700_000_600_000L))
 
-    @Test(timeout = 60_000) fun theRecoveryDataIsKeptWhileTheDownloadLivesAndDroppedWhenItIsFinished() {
+    @Test(timeout = 180_000) fun theRecoveryDataIsKeptWhileTheDownloadLivesAndDroppedWhenItIsFinished() {
         val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
         val (pl, expected) = plainStream(h, 8, 60_000)
         val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
@@ -468,7 +469,7 @@ class StreamEngineTest {
         h.eventually("the finished record keeps none of it") { h.store.rows[id]?.let { it.state == DlState.COMPLETED && it.masterUrl == null && it.frame == null && it.headerSets.isEmpty() && it.headers.isEmpty() } == true }
     }
 
-    @Test(timeout = 60_000) fun aServerThatWantsThePlayersAddressGetsTheNextSetOfTheLadderAtOnceAndItStays() {
+    @Test(timeout = 180_000) fun aServerThatWantsThePlayersAddressGetsTheNextSetOfTheLadderAtOnceAndItStays() {
         val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
         val (pl, expected) = plainStream(h, 8, 60_000)
         h.cdn.gate = { r -> if (r.headers["Referer"] == "https://player.test/") null else 403 }
@@ -485,7 +486,7 @@ class StreamEngineTest {
         assertTrue("only the first requests were refused, not four per part ($refused)", refused <= 4)
     }
 
-    @Test(timeout = 60_000) fun refusalsThatStartHalfWayAreAskedAgainBeforeTheLadderIsTried() {
+    @Test(timeout = 180_000) fun refusalsThatStartHalfWayAreAskedAgainBeforeTheLadderIsTried() {
         val h = H()
         val (pl, expected) = plainStream(h, 8, 10_000)
         h.cdn.chunkDelayMs = 2
@@ -499,7 +500,7 @@ class StreamEngineTest {
         assertTrue("and the set that worked was used from then on", h.cdn.seen.any { it.second == player })
     }
 
-    @Test(timeout = 60_000) fun whenNoSetOfTheLadderWorksTheLinkCountsAsExpiredAndTheFirstHeadersStay() {
+    @Test(timeout = 180_000) fun whenNoSetOfTheLadderWorksTheLinkCountsAsExpiredAndTheFirstHeadersStay() {
         val h = H()
         val (pl, _) = plainStream(h, 4, 5_000)
         h.cdn.statusFor["https://cdn.test/v/s1.ts"] = 403                           // refused whatever is sent
@@ -510,7 +511,7 @@ class StreamEngineTest {
         h.eventually("the stored headers are the first set again") { h.store.rows[id]?.headers == site }
     }
 
-    @Test(timeout = 60_000) fun liveDrmAndUnreadablePlaylistsAreRefused() {
+    @Test(timeout = 180_000) fun liveDrmAndUnreadablePlaylistsAreRefused() {
         val h = H()
         val live = h.await(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts\n"), "live") { it?.state == DlState.FAILED }!!
         assertEquals(Reason.LIVE, live.reason)
@@ -521,7 +522,7 @@ class StreamEngineTest {
         assertTrue(h.sinks.sinks.isEmpty())                                           // nothing was created for any of them
     }
 
-    @Test(timeout = 60_000) fun losingTheNetworkWaitsAndTheReturnContinues() {
+    @Test(timeout = 180_000) fun losingTheNetworkWaitsAndTheReturnContinues() {
         val h = H(); h.cdn.chunkDelayMs = 4; h.cdn.chunk = 2048
         val (pl, expected) = plainStream(h, 8, 30_000)
         val id = h.enqueue(pl)
@@ -534,7 +535,7 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun cancelRemovesTheOutputAndTheStaging() {
+    @Test(timeout = 180_000) fun cancelRemovesTheOutputAndTheStaging() {
         val h = H(); h.cdn.chunkDelayMs = 4; h.cdn.chunk = 2048
         val (pl, _) = plainStream(h, 8, 30_000)
         val id = h.enqueue(pl)
@@ -546,7 +547,7 @@ class StreamEngineTest {
         assertTrue(h.store.stagedFiles(id).isEmpty())
     }
 
-    @Test(timeout = 60_000) fun cancelWhilePausedRemovesTheOutputAndTheStaging() {
+    @Test(timeout = 180_000) fun cancelWhilePausedRemovesTheOutputAndTheStaging() {
         val h = H(); h.cdn.chunkDelayMs = 4; h.cdn.chunk = 2048
         val (pl, _) = plainStream(h, 8, 30_000)
         val id = h.enqueue(pl)
@@ -561,7 +562,7 @@ class StreamEngineTest {
         assertTrue(h.store.stagedFiles(id).isEmpty())
     }
 
-    @Test(timeout = 60_000) fun clearingAFailedSaveDeletesItsHalfFileAndItsStaging() {
+    @Test(timeout = 180_000) fun clearingAFailedSaveDeletesItsHalfFileAndItsStaging() {
         val h = H()
         val failed = StreamRec(1L).also { it.state = DlState.FAILED; it.destUri = "mem://9/half.mp4" }
         val done = StreamRec(2L).also { it.state = DlState.COMPLETED; it.destUri = "mem://9/whole.mp4" }
@@ -576,7 +577,7 @@ class StreamEngineTest {
         assertTrue(h.store.stagedFiles(1L).isEmpty())
     }
 
-    @Test(timeout = 60_000) fun aCancelThatWasCutOffIsFinishedAtTheNextStart() {
+    @Test(timeout = 180_000) fun aCancelThatWasCutOffIsFinishedAtTheNextStart() {
         val h = H()
         h.store.rows[1L] = StreamRec(1L).also { it.state = DlState.CANCELED; it.destUri = "mem://9/half.mp4" }
         java.io.File(h.store.dir(1L), "p0.part").writeText("staged")
@@ -607,7 +608,7 @@ class StreamEngineTest {
         }
     }
 
-    @Test(timeout = 60_000) fun aTsStreamIsHandedToTheFinisherAndReplacedByItsResult() {
+    @Test(timeout = 180_000) fun aTsStreamIsHandedToTheFinisherAndReplacedByItsResult() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin)
         val (pl, expected) = plainStream(h, 4, 20_000)
@@ -618,7 +619,7 @@ class StreamEngineTest {
         assertEquals(DlState.COMPLETED, h.awaitStoredState(v.id))
     }
 
-    @Test(timeout = 60_000) fun aRefusingOrFailingFinisherKeepsTheTs() {
+    @Test(timeout = 180_000) fun aRefusingOrFailingFinisherKeepsTheTs() {
         for (mode in listOf("null", "throws")) {
             val sinks = FakeSinks()
             val fin = FakeFinisher(sinks) { if (mode == "throws") throw IllegalStateException("muxer said no") else null }
@@ -632,7 +633,7 @@ class StreamEngineTest {
         }
     }
 
-    @Test(timeout = 60_000) fun fragmentedMp4IsNotHandedToTheFinisher() {
+    @Test(timeout = 180_000) fun fragmentedMp4IsNotHandedToTheFinisher() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin)
         h.cdn.files["https://cdn.test/v/main.mp4"] = testBytes(3_000, 5)
@@ -640,7 +641,7 @@ class StreamEngineTest {
         assertTrue("an fMP4 stream already plays as it is", fin.asked.isEmpty())
     }
 
-    @Test(timeout = 60_000) fun aTsStreamWithDiscontinuitiesIsHandedOverAsPartsWithTheirByteRanges() {
+    @Test(timeout = 180_000) fun aTsStreamWithDiscontinuitiesIsHandedOverAsPartsWithTheirByteRanges() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin)
         val (pl, expected) = plainStream(h, 5, 5_000)
@@ -656,7 +657,7 @@ class StreamEngineTest {
         assertEquals("My clip.mp4", v.name)
     }
 
-    @Test(timeout = 60_000) fun aTsStreamWithoutDiscontinuitiesHasNoParts() {
+    @Test(timeout = 180_000) fun aTsStreamWithoutDiscontinuitiesHasNoParts() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin)
         val (pl, _) = plainStream(h, 3, 5_000)
@@ -677,7 +678,7 @@ class StreamEngineTest {
         assertEquals(listOf(8_000L, 4_000L, 2_000L), p.map { it.durationMs })
     }
 
-    @Test(timeout = 60_000) fun aDashRepresentationIsDownloadedFromItsManifest() {
+    @Test(timeout = 180_000) fun aDashRepresentationIsDownloadedFromItsManifest() {
         val h = H()
         val init = testBytes(700, 1); val segs = (1..4).map { testBytes(20_000 + it * 100, 40L + it) }
         h.cdn.files["https://cdn.test/d/vid/init.mp4"] = init
@@ -714,7 +715,7 @@ class StreamEngineTest {
 
     private fun pairSource(url: String) = StreamSource(url, null, null, "Clip - 360p", repId = "v", companion = StreamSource(url, null, null, "Clip - sound", repId = "a", ext = "m4a"))
 
-    @Test(timeout = 60_000) fun pictureAndSoundAreDownloadedTogetherAndMergedIntoOneFile() {
+    @Test(timeout = 180_000) fun pictureAndSoundAreDownloadedTogetherAndMergedIntoOneFile() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin); h.cdn.chunkDelayMs = 2
         val (url, video, sound) = dashPair(h)
@@ -731,7 +732,7 @@ class StreamEngineTest {
         h.eventually("the hidden sound record is gone too") { h.store.rows.size == 1 && h.store.rows.values.count { it.parentId == 0L && it.id == id } == 1 }
     }
 
-    @Test(timeout = 60_000) fun aMergeThatIsRefusedKeepsBothFiles() {
+    @Test(timeout = 180_000) fun aMergeThatIsRefusedKeepsBothFiles() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks).also { it.mergeResult = { null } }
         val h = H(sinks = sinks, finisher = fin)
         val (url, video, sound) = dashPair(h)
@@ -743,7 +744,7 @@ class StreamEngineTest {
         assertEquals("Clip - sound.m4a", a.name); assertArrayEquals(sound, h.out(a)); assertEquals(DlState.COMPLETED, a.state)
     }
 
-    @Test(timeout = 60_000) fun aFailingSoundFailsThePictureToo() {
+    @Test(timeout = 180_000) fun aFailingSoundFailsThePictureToo() {
         val h = H(); val (url, _, _) = dashPair(h)
         h.cdn.statusFor["https://cdn.test/p/a/s2.m4s"] = 404
         val v = h.await(h.engine.enqueue(pairSource(url)), "failure") { it?.state == DlState.FAILED }!!
@@ -768,7 +769,7 @@ class StreamEngineTest {
         assertEquals(1, fin.merges.size)
     }
 
-    @Test(timeout = 60_000) fun cancelRemovesBothHalves() {
+    @Test(timeout = 180_000) fun cancelRemovesBothHalves() {
         val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
         val (url, _, _) = dashPair(h)
         val id = h.engine.enqueue(pairSource(url))
@@ -780,7 +781,7 @@ class StreamEngineTest {
         assertTrue("no hidden record left", h.store.rows.isEmpty()); assertTrue(h.engine.views().isEmpty())
     }
 
-    @Test(timeout = 60_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
+    @Test(timeout = 180_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
         val h = H(); h.cdn.chunkDelayMs = 5; h.cdn.chunk = 4096
         val (pl, expected) = plainStream(h, 16, 40_000)
         val id = h.enqueue(pl)                                                          // no size guess: it comes from the segments fetched so far
@@ -791,7 +792,7 @@ class StreamEngineTest {
         h.completed(id)
     }
 
-    @Test(timeout = 60_000) fun theSizeIsAnEstimateUntilItIsKnown() {
+    @Test(timeout = 180_000) fun theSizeIsAnEstimateUntilItIsKnown() {
         val h = H(); h.cdn.chunkDelayMs = 3; h.cdn.chunk = 4096
         val (pl, expected) = plainStream(h, 10, 40_000)
         val id = h.enqueue(pl, est = 500_000)
@@ -812,7 +813,7 @@ class StreamEngineTest {
         return sb.toString() to all.toByteArray()
     }
 
-    @Test(timeout = 60_000) fun aPoorFirstGuessGivesWayToWhatTheSegmentsWeigh() {
+    @Test(timeout = 180_000) fun aPoorFirstGuessGivesWayToWhatTheSegmentsWeigh() {
         val h = H(); h.cdn.chunkDelayMs = 5; h.cdn.chunk = 4096
         val (pl, expected) = plainStream(h, 16, 40_000)                                  // 640 000 bytes
         val id = h.enqueue(pl, est = 1_000_000)                                          // a playlist's peak rate: 56 % too high
@@ -822,7 +823,7 @@ class StreamEngineTest {
         h.completed(id)
     }
 
-    @Test(timeout = 60_000) fun theFigureFollowsSecondsOfVideoNotTheNumberOfParts() {
+    @Test(timeout = 180_000) fun theFigureFollowsSecondsOfVideoNotTheNumberOfParts() {
         // 5 short parts then 5 long ones at the same rate: counting parts from the short ones would halve the size
         val h = H(); h.cdn.chunkDelayMs = 25; h.cdn.chunk = 4096
         val (pl, expected) = ratedStream(h, listOf(2, 2, 2, 2, 2, 6, 6, 6, 6, 6), 10_000)     // 40 s, 400 000 bytes
@@ -833,7 +834,7 @@ class StreamEngineTest {
         h.completed(id)
     }
 
-    @Test(timeout = 60_000) fun theFinishedFileIsComparedWithWhatWasShown() {
+    @Test(timeout = 180_000) fun theFinishedFileIsComparedWithWhatWasShown() {
         val h = H(); h.cdn.chunkDelayMs = 1
         val (pl, expected) = plainStream(h, 10, 40_000)
         assertTrue(h.engine.sizeReport().contains("no stream download has finished"))
@@ -846,7 +847,7 @@ class StreamEngineTest {
 
     // ---- RVW1 (research/REVIEW_2026-11-20_DOWNLOAD.md): V1 patience for playlist and key reads, V2 servers that ignore Range, S5 the key answer is bounded
 
-    @Test(timeout = 60_000) fun aResetOnTheFirstReadOfThePlaylistIsTriedAgainInsteadOfFailingTheDownload() {
+    @Test(timeout = 180_000) fun aResetOnTheFirstReadOfThePlaylistIsTriedAgainInsteadOfFailingTheDownload() {
         val h = H()
         val (pl, expected) = plainStream(h, 4, 20_000)
         h.cdn.files["https://cdn.test/v/index.m3u8"] = pl.toByteArray()
@@ -856,7 +857,7 @@ class StreamEngineTest {
         assertEquals(3, h.cdn.count("https://cdn.test/v/index.m3u8"))
     }
 
-    @Test(timeout = 60_000) fun aPlaylistThatStaysUnreachableFailsAsANetworkProblemNotAsAStorageProblem() {
+    @Test(timeout = 180_000) fun aPlaylistThatStaysUnreachableFailsAsANetworkProblemNotAsAStorageProblem() {
         val h = H()
         h.cdn.files["https://cdn.test/v/index.m3u8"] = "#EXTM3U\n#EXTINF:4,\na.ts\n#EXT-X-ENDLIST\n".toByteArray()
         h.cdn.failFirst["https://cdn.test/v/index.m3u8"] = 100
@@ -864,7 +865,7 @@ class StreamEngineTest {
         assertEquals("was 'could not write the file' (STORAGE) before", Reason.NETWORK, v.reason)
     }
 
-    @Test(timeout = 60_000) fun aServerAnsweringTheListWith503ThenTheListIsAskedAgain() {
+    @Test(timeout = 180_000) fun aServerAnsweringTheListWith503ThenTheListIsAskedAgain() {
         val h = H()
         val (pl, expected) = plainStream(h, 3, 10_000)
         h.cdn.files["https://cdn.test/v/index.m3u8"] = pl.toByteArray()
@@ -874,7 +875,7 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aResetOnTheKeyRequestIsTriedAgain() {
+    @Test(timeout = 180_000) fun aResetOnTheKeyRequestIsTriedAgain() {
         val h = H()
         val key = testBytes(16, 7)
         h.cdn.files["https://cdn.test/v/key.bin"] = key
@@ -891,7 +892,7 @@ class StreamEngineTest {
         assertArrayEquals(plain.toByteArray(), h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aPlaylistThatRepeatsTheSameKeyTagBeforeEverySegmentAsksForTheKeyOnce() {
+    @Test(timeout = 180_000) fun aPlaylistThatRepeatsTheSameKeyTagBeforeEverySegmentAsksForTheKeyOnce() {
         val h = H()
         val key = testBytes(16, 8)
         h.cdn.files["https://cdn.test/v/key.bin"] = key
@@ -909,7 +910,7 @@ class StreamEngineTest {
         assertEquals("eight tags, one address, one request (was eight serial requests inside the drain lock)", 1, h.cdn.count("https://cdn.test/v/key.bin"))
     }
 
-    @Test(timeout = 60_000) fun aKeyAnswerLargerThanAKeyIsRefusedWithoutBeingKept() {
+    @Test(timeout = 180_000) fun aKeyAnswerLargerThanAKeyIsRefusedWithoutBeingKept() {
         val h = H()
         h.cdn.files["https://cdn.test/v/key.bin"] = testBytes(5_000_000, 3)       // a licence server's page, or an endless body a hostile playlist points at
         h.cdn.files["https://cdn.test/v/e0.ts"] = testBytes(1000, 4)
@@ -917,7 +918,7 @@ class StreamEngineTest {
         assertEquals(Reason.UNSUPPORTED, v.reason)
     }
 
-    @Test(timeout = 60_000) fun aServerThatIgnoresRangeNoLongerCutsEachSegmentAtTheWindow() {
+    @Test(timeout = 180_000) fun aServerThatIgnoresRangeNoLongerCutsEachSegmentAtTheWindow() {
         // Gecko fetches in 4 MiB windows; a proxy that answers every Range request with a plain 200 sent the whole segment, and the engine stopped reading at the window and called the part complete
         val h = H(config = cfg(window = 4096)); h.cdn.windowBytes = 4096; h.cdn.ignoreRange = true
         val (pl, expected) = plainStream(h, 4, 10_000)                                  // each segment is 2.4 windows
@@ -926,7 +927,7 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aServerThatIgnoresRangeStillGivesTheRightBytesOfByteRangeSegmentsBiggerThanTheWindow() {
+    @Test(timeout = 180_000) fun aServerThatIgnoresRangeStillGivesTheRightBytesOfByteRangeSegmentsBiggerThanTheWindow() {
         val h = H(config = cfg(window = 1024)); h.cdn.windowBytes = 1024; h.cdn.ignoreRange = true
         val file = testBytes(9_000, 21)
         h.cdn.files["https://cdn.test/v/main.mp4"] = file
@@ -935,7 +936,7 @@ class StreamEngineTest {
         assertArrayEquals(file, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aStuckSegmentDoesNotLetTheOtherWorkersStageTheWholeStream() {
+    @Test(timeout = 180_000) fun aStuckSegmentDoesNotLetTheOtherWorkersStageTheWholeStream() {
         // RVW1 V13: segment 1 hangs (segment 0 is read first, alone, to learn the container); the others used to run to the end of the stream, leaving a second copy of the video on disk
         val h = H()
         val (pl, expected) = plainStream(h, 80, 5_000)
@@ -950,7 +951,7 @@ class StreamEngineTest {
         assertArrayEquals("and the stream is whole once the stuck segment comes", expected, h.out(v))
     }
 
-    @Test(timeout = 60_000) fun relativeAddressesInAPlaylistResolveAgainstWhereItCameFromAfterARedirect() {
+    @Test(timeout = 180_000) fun relativeAddressesInAPlaylistResolveAgainstWhereItCameFromAfterARedirect() {
         // RVW1 V10: https://api.site/stream/9/master.m3u8 answers with a 302 to the CDN edge; "s0.ts" inside it means the EDGE's s0.ts (every player resolves against the final address)
         val h = H()
         val (pl, expected) = plainStream(h, 3, 8_000)
@@ -961,7 +962,7 @@ class StreamEngineTest {
         assertEquals("nothing was asked for under the address before the redirect", 0, h.cdn.requests.count { it.startsWith("https://api.site/stream/9/s") })
     }
 
-    @Test(timeout = 60_000) fun anInitSectionThatTheKeyTagEncryptsIsDecryptedBeforeItIsWritten() {
+    @Test(timeout = 180_000) fun anInitSectionThatTheKeyTagEncryptsIsDecryptedBeforeItIsWritten() {
         // RVW2 V11: fMP4 with EXT-X-KEY before EXT-X-MAP (RFC 8216 4.3.2.5): the init section is cipher text too
         val h = H()
         val key = testBytes(16, 31); val iv = byteArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
@@ -976,7 +977,7 @@ class StreamEngineTest {
         assertArrayEquals("the init section and the fragments are plain in the saved file", plain.toByteArray(), h.out(v))
     }
 
-    @Test(timeout = 60_000) fun aBigPartThatDiesInTheMiddleIsContinuedNotStartedOver() {
+    @Test(timeout = 180_000) fun aBigPartThatDiesInTheMiddleIsContinuedNotStartedOver() {
         // RVW2 V4: a single big part of unknown length (a single-file stream): the connection resets after 2 MiB of 3; the retry asks for the rest
         val h = H()
         val big = testBytes(3 shl 20, 61)
