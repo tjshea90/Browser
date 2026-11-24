@@ -153,6 +153,10 @@ class Prefs private constructor(ctx: Context) {
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
     /** EY-1: the browser opens showing a sharp picture of the page that was left, while the live page loads under it. Pictures stay on the tablet; switching this off deletes them. */
     var lastLook: Boolean get() = bool("last_look", true); set(v) = put("last_look", v)
+    /** PERF17b: after a break of 4 hours or more the page that was in front waits for a tap on the Home screen (Firefox for Android does the same); off = it loads at once at every start. */
+    var lazyStart: Boolean get() = bool("lazy_start", true); set(v) = put("lazy_start", v)
+    /** PERF17b: when the app was last left (wall clock, ms; 0 = never). A time only, no page, no address; written whenever the app goes to the background. */
+    var lastLeftAt: Long get() = sp.getLong("last_left_at", 0L); set(v) = put("last_left_at", v)
     /** AR2: the one-hand mini navigation panel at the top right is shown (its toggle remembers the choice). */
     var miniNavOpen: Boolean get() = bool("mini_nav_open", false); set(v) = put("mini_nav_open", v)
     /** AR2: the small toggle for that panel is on screen at all (Settings can remove it from the page's top right corner). */
