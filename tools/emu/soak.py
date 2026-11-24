@@ -3688,7 +3688,7 @@ class Soak:
         self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
         self.adb.sh("run-as %s sh -c 'for f in files/optimizer/*; do rm -f $f; done'" % pkg, timeout=30)
         lm = self.log.size()
-        self.adb.sh("am start -n %s/app.kestrel.browser.optimizer.OptimizerActivity --es auto quick" % pkg, timeout=60)
+        say("opt: am start says: %s" % self.adb.sh("am start -n %s/app.kestrel.browser.MainActivity --es auto_tune quick" % pkg, timeout=60).strip()[:300].replace("\n", " | "))
         t0 = time.time(); result = ""; last_state = ""
         while time.time() - t0 < 17 * 60:
             time.sleep(20)
