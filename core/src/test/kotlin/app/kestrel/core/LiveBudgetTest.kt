@@ -94,4 +94,38 @@ class LiveBudgetTest {
         org.junit.Assert.assertFalse("not after a long absence either while Android only says moderate", b.mayHibernateInBackground(isPrivate = false, awayMs = long, level = 60))
         org.junit.Assert.assertTrue("a regular tab after a long absence when Android is about to end background apps: it may go to sleep (its history and cookies are kept)", b.mayHibernateInBackground(isPrivate = false, awayMs = long, level = 80))
     }
+
+    /** PERF24 (owner 2026-11-24: "Switching between tabs has to reload sites and this is slow"): the alpha103 uploads said "tabs hibernate tab=74 live=3 max=2 avail=534MB": the heavy chat tab slept for two private tabs. */
+    private fun c(id: Long, last: Long, priv: Boolean = false, cur: Boolean = false, ms: Long = 0L, child: Boolean = false) = LiveBudget.SleepCand(id, last, cur, child, priv, ms)
+
+    @Test fun privateTabsDoNotCountAgainstTheOwnersNumberSoTheHeavyRegularTabStaysAwake() {
+        val live = listOf(c(74, 100, ms = 22_000), c(75, 200, priv = true), c(76, 300, priv = true, cur = true))
+        // Few (2): one regular tab and two private tabs: nothing sleeps while the memory allows three
+        assertEquals(emptyList<Long>(), LiveBudget.sleepPlan(live, totalMax = 5, regularMax = LiveBudget.regularCap(2)))
+        // the old rule (all three counted against 2) put tab 74 to sleep
+        assertEquals(listOf(74L), LiveBudget.sleepPlan(live, totalMax = 2, regularMax = 2))
+    }
+
+    @Test fun theMemoryRuleStillLimitsEveryLiveTabAndASettingNoLongerOverridesIt() {
+        assertEquals(5, LiveBudget.memoryLimit(534, true, false))
+        assertEquals(3, LiveBudget.memoryLimit(280, true, false))
+        assertEquals(2, LiveBudget.memoryLimit(100, true, false))
+        assertEquals(2, LiveBudget.memoryLimit(900, true, true))             // the system says low: the floor
+        assertEquals(6, LiveBudget.regularCap(6)); assertEquals(2, LiveBudget.regularCap(2)); assertEquals(Int.MAX_VALUE, LiveBudget.regularCap(0))
+        val live = (1L..5L).map { c(it, it * 10) }
+        assertEquals("Many (6) with 5 regular tabs and little memory: the memory rule wins", listOf(1L, 2L), LiveBudget.sleepPlan(live, totalMax = LiveBudget.memoryLimit(280, true, false), regularMax = LiveBudget.regularCap(6)))
+    }
+
+    @Test fun theCheapestTabToBringBackSleepsFirstAndAHeavyPageIsALastResort() {
+        val live = listOf(c(1, 10, ms = 22_000), c(2, 20, ms = 3_000), c(3, 30, ms = 1_000), c(4, 40, ms = 9_000), c(5, 50, cur = true))
+        assertEquals("cheap tabs first, oldest of them first, heavy ones last", listOf(2L, 3L, 1L), LiveBudget.sleepPlan(live, totalMax = 2, regularMax = 9))
+        assertEquals(listOf(2L), LiveBudget.sleepPlan(live, totalMax = 4, regularMax = 9))
+        assertEquals("an unknown cost counts as cheap", listOf(7L), LiveBudget.sleepPlan(listOf(c(7, 1, ms = 0), c(8, 2, ms = 20_000), c(9, 3, cur = true)), totalMax = 2, regularMax = 9))
+    }
+
+    @Test fun theTabInFrontAPrivateTabAndAnOpenerNeverSleepAndThePlanStopsWhenNobodyIsLeft() {
+        val live = listOf(c(1, 10, cur = true), c(2, 20, priv = true), c(3, 30, child = true), c(4, 40, priv = true))
+        assertEquals(emptyList<Long>(), LiveBudget.sleepPlan(live, totalMax = 1, regularMax = 1))
+        assertEquals(emptyList<Long>(), LiveBudget.sleepPlan(emptyList(), totalMax = 1, regularMax = 1))
+    }
 }
