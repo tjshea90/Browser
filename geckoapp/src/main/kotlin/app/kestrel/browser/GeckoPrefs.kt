@@ -52,7 +52,7 @@ object GeckoPrefs {
 
     /**
      * PERF22 (research/LOW_END_PLAYBOOK.md): the engine experiments of the Network lab, in the `name=value` grammar of [yaml]'s overrides (a value that is also in gecko-prefs.txt REPLACES it: a duplicate YAML key would
-     * be an error). Off = nothing here: the engine's own value or the one in gecko-prefs.txt. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh reads these strings too).
+     * be an error). Off = nothing here: the engine's own value or the one in gecko-prefs.txt. Every name exists in the pinned GeckoView (tools/check-gecko-prefs.sh reads these strings too).
      */
     internal fun labOverrides(p: app.kestrel.browser.data.Prefs): List<String> = buildList {
         if (p.labDither) add("gfx.webrender.dithering=false")                              // no dithering of gradients: less per-pixel work in CPU drawing, a little banding in smooth gradients
@@ -64,7 +64,7 @@ object GeckoPrefs {
     /**
      * PERF7c (owner 2026-11-22, two screenshots: horizontal bands of text missing on claude.ai, the pornhub loading circle cut at the bottom; research/PAINT_GLITCH.md): the shortcuts of the engine's graphics
      * renderer (WebRender) that redraw or upload only PART of a frame or a texture. A driver that gets one of them wrong leaves exactly such bands undrawn. "Safe drawing" turns them off: whole clears, one
-     * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh).
+     * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in the pinned GeckoView (tools/check-gecko-prefs.sh).
      */
     internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = buildString {
         if (p.labDraw) {

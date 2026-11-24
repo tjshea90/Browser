@@ -209,7 +209,8 @@ object GeckoEngine {
     /** PERF8c: the engine's own values of the graphics prefs "Safe drawing" sets (and the ones to try next), as ONE Health line, so the live diagnostics prove whether the setting reached the engine. */
     private val drawPrefs = listOf("gfx.webrender.scissored-cache-clears.enabled", "gfx.webrender.batched-texture-uploads", "gfx.webrender.max-partial-present-rects", "gfx.webrender.allow-partial-present-buffer-age",
         "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "gfx.webrender.software", "layers.gpu-process.enabled",
-        "gfx.webrender.use-optimized-shaders", "gfx.webrender.draw-calls-for-texture-copy", "gfx.webrender.program-binary-disk", "gfx.webrender.precache-shaders", "gfx.webrender.software.opengl")   // PERF25: the trial's names + the CPU path's own present mode
+        "gfx.webrender.use-optimized-shaders", "gfx.webrender.draw-calls-for-texture-copy", "gfx.webrender.program-binary-disk", "gfx.webrender.precache-shaders", "gfx.webrender.software.opengl",
+        "gfx.webrender.paths", "gfx.webrender.paths.swgl", "gfx.webrender.path-aa.samples", "gfx.font_rendering.fontations.enabled", "image.decode.defer_if_not_visible")   // PERF25: the trial's names + the CPU path's own present mode; FF1: five names that are new in GeckoView 161, read so the next upload shows their defaults on this tablet
     fun logDrawPrefs() {
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(drawPrefs).accept({ list ->
