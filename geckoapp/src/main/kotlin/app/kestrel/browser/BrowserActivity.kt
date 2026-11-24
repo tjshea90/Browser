@@ -572,7 +572,7 @@ open class BrowserActivity : Activity(), DockListener {
         show(firstTab)
         val launch = urlFromIntent(intent)
         if (prefs.preconnect && launch != null) GeckoEngine.warmOrigin(launch)?.let { GeckoEngine.warmAtStart(it) } // the link that launched the app: its handshakes overlap with the engine starting (EX-2 B)
-        if (launch == null) earlyCover() // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
+        if (launch == null) earlyCover(savedInstanceState == null) // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
         if (openDownloadsAsked(intent, savedInstanceState != null)) Io.main.post { showDownloads() }
         handleUpdateIntent(intent)
         Io.fast {
@@ -704,6 +704,7 @@ open class BrowserActivity : Activity(), DockListener {
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
         pausedAt = SystemClock.uptimeMillis()
+        prefs.lastLeftAt = System.currentTimeMillis()   // PERF17b: only a time; the next start decides from it whether the page in front waits for a tap (core LazyStart)
         flushCounters()
         saveSessionNow()
         // EX-18 (research/REVIEW-EXTERNAL-1.md 9 row 8): ask the front tab for its newest history + scroll state now (GeckoView 144+). The answer arrives on onSessionStateChange and is written at once,
@@ -1096,6 +1097,7 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         home = HomeView(this, pal, "KESTREL", this)
+        home.onContinue = { continueLazy() }   // PERF17b
         dock.urlField.addTextChangedListener(typingWatcher); home.field.addTextChangedListener(typingWatcher)   // PERF3c: how long a typed character waits for its frame
         errorView = ErrorView(this, pal, errorListener)
         content.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -1206,12 +1208,13 @@ open class BrowserActivity : Activity(), DockListener {
     // ================================================================== tabs
 
     /** The saved session is a few KB: read it here (no thread hop) to know which page the app was on. The tab's preview joins the cover when the restore runs a moment later. */
-    private fun earlyCover() {
+    private fun earlyCover(freshStart: Boolean) {
         val sel = try {
             sessionFile().takeIf { it.isFile && it.length() < 262_144 }?.readText()?.let { SessionCodec.decode(it) }?.let { s -> s.tabs.firstOrNull { it.id == s.selectedId } ?: s.tabs.lastOrNull() }
         } catch (e: Exception) { null } ?: return
         if (sel.homeOverPage) { Health.log("tabs", "early-cover-skipped", "left on Home"); return } // AQ1: the Home screen is the page that was in front: no picture of the site, no "Opening ..."
         if (!sel.url.startsWith("http")) return
+        if (LazyStart.applies(prefs.lazyStart, LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis()), sel.url, false, freshStart, sel.homeOverPage)) { Health.log("tabs", "early-cover-skipped", "lazy start"); return } // PERF17b: the page waits on Home: no picture of it, no "Opening ..."
         Health.log("tabs", "early-cover", UrlParts.hostOf(sel.url) ?: "")
         // EY-1: the page as it was left, sharp, in this very first frame (the read and decode are about 20 ms on this CPU; the start-up timeline's "look" mark says so)
         val look = savedLook(sel.id, sel.url, sel.desktopSite)
@@ -1243,6 +1246,15 @@ open class BrowserActivity : Activity(), DockListener {
     /** The tab id the early cover's look belongs to until [restore] has made the tab (then it becomes [lookTab]). */
     private var lookPending = 0L
 
+    /** PERF17b: the tap on "Continue: <page>" on the Home screen of a tab that waited after a long break: the page loads now, like Back from Home does. */
+    internal fun continueLazy() {
+        val t = current ?: return
+        if (!t.lazyStart) return
+        t.lazyStart = false; t.showHome = false
+        Health.count("lazy.wake"); Health.log("tabs", "lazy-wake", "tab=${t.id}")
+        attachContent(t); updateUi(); scheduleSave()
+    }
+
     private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap(), selThumb: android.graphics.Bitmap? = null) {
         sessionRestored = true // from now on saving cannot clobber the saved session
         if (session != null && session.tabs.isNotEmpty()) {
@@ -1266,6 +1278,12 @@ open class BrowserActivity : Activity(), DockListener {
             val sel = tabs.firstOrNull { it.id == session.selectedId } ?: tabs.last()
             // Started by a link from another app: the link's page is what the owner wants NOW. Loading the saved page as well would compete with it for the slow link and the one content process
             // (the saved tab stays in the grid and loads when it is opened). The placeholder tab is gone, so nothing may still point at it.
+            // PERF17b (owner 2026-11-24, research/LAZY_RESTORE.md): after a break of 4 hours or more (Firefox for Android's rule) the page in front is not loaded: its tab comes back on Home with a Continue line (the AQ1 way)
+            val away = LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())
+            if (LazyStart.applies(prefs.lazyStart, away, sel.url, launch != null, saved == null, sel.showHome)) {
+                sel.showHome = true; sel.lazyStart = true
+                Health.count("lazy.start"); Health.log("tabs", "lazy-start", "tab=${sel.id} away=${LazyStart.describe(away)}")
+            }
             if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
@@ -2718,6 +2736,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
+        out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
         out.add(previewLine())
@@ -3002,6 +3021,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun applyUi() {
         val t = current
+        if (t != null && t.lazyStart && !t.showHome) t.lazyStart = false                                    // PERF17b: the page is showing (Continue, Back, a new address): nothing waits any more
+        if (::home.isInitialized) home.bindContinue(if (t != null && t.lazyStart && t.showHome) LazyStart.label(t.title, t.url) else null)
         val canBack = t?.canGoBack == true || (t != null && t.parentId != 0L && tabs.any { it.id == t.parentId })
         val priv = t?.isPrivateTab == true
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
