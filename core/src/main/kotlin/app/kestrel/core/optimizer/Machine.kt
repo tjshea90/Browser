@@ -54,12 +54,17 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     // ---------------------------------------------------------------------------------------------------------------- events
 
     /**
-     * A NEW app process started while the run is active (the guard calls this before the engine exists). A start the run asked for is normal the first time; a second process start while the mark is
-     * still set means the previous one never produced a sample: the step it was for FAILED, and the next start uses the base configuration. Two such failures in a row stop the run.
+     * A NEW app process started (the guard calls this before the engine exists) and the answer's [RunState.bootConfig] is what the engine must start with.
+     *  - a start the run asked for (the mark is set) is normal the first time;
+     *  - a second process start while the mark is still set means the previous one never produced a sample: the step it was for FAILED and the next start uses the base configuration; two such
+     *    failures in a row stop the run;
+     *  - a start with NO restart asked for means the app was closed or died in the middle of a run: the run PAUSES and the browser starts with the person's own settings (never left in a test setting);
+     *  - a paused or aborted run always boots with the base configuration; a finished one leaves the settings as the run applied them.
      */
     fun onProcessStart(s: RunState): RunState {
-        if (s.status != Status.RUNNING) return s
-        if (s.bootMark == 0L) return s.copy(bootConfig = s.bootConfig ?: s.base)
+        if (s.status == Status.DONE) return s
+        if (s.status != Status.RUNNING) return s.copy(bootConfig = s.base, running = null)
+        if (s.bootMark == 0L) return s.copy(status = Status.PAUSED, note = "the app was closed in the middle of the run", bootConfig = s.base, running = null, taken = 0, extra = 0)
         if (s.bootStarts == 0) return s.copy(bootStarts = 1)
         val f = s.failures + 1
         var t = s
@@ -111,7 +116,8 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
                 s = redecideAll(s)
                 if (s.accepted.isEmpty()) { s = skipStep(s, "nothing was accepted, so there is nothing to combine"); continue }
             }
-            val want = wanted(s, step, e) ?: run { s = failStep(s, "the engine's own value of that setting could not be read"); null } ?: continue
+            val want = wanted(s, step, e)
+            if (want == null) { s = failStep(s, "the engine's own value of that setting could not be read"); continue }
             val running = s.running ?: return s.copy(bootConfig = want, bootMark = now, bootStarts = 0) to Action.Restart(want, "the engine must start with: " + want.enginePart().ifEmpty { "its own settings" })
             if (want.enginePart() != running.enginePart()) return s.copy(bootConfig = want, running = null, bootMark = now, bootStarts = 0) to Action.Restart(want, "the next test needs the engine to start with: " + want.enginePart().ifEmpty { "its own settings" })
             if (want.settings != running.settings) return s.copy(running = Config(running.engine, want.settings)) to Action.ApplySettings(want)
@@ -179,9 +185,8 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
             if (step.kind != StepKind.EXPERIMENT) continue
             val id = step.experimentId ?: continue
             val cand = s.samples[i].orEmpty()
-            if (cand.isEmpty() || dec[id]?.why?.startsWith("skipped") == true) continue
+            if (cand.isEmpty() || dec[id]?.why?.startsWith("skipped") == true) continue    // skipped, or failed before any sample (died, setting not reached): nothing to re-judge
             val e = exp(id) ?: continue
-            if (dec[id]?.verdict == Verdict.FAILED && (dec[id]?.why ?: "").let { it.contains("died") || it.contains("read") || it.contains("reach") }) continue
             dec = dec + (id to Decider.decide(pool, cand, s.metrics, Guards(maxMemMb = e.memLimitMb.toDouble()), s.answers[id]))
         }
         val ranked = dec.entries.filter { it.value.verdict == Verdict.ACCEPT }.sortedByDescending { it.value.gain }.mapNotNull { exp(it.key) }
