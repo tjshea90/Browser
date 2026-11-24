@@ -66,6 +66,8 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     private var firstPaintAt = 0L
     @Volatile private var pageDied = false
     private var engineUp = false
+    /** True from the moment a restart is asked for: the screen going away is then part of the restart, and must not be saved as "the person left" (the new process would find a paused run). */
+    @Volatile private var restarting = false
 
     // ---------------------------------------------------------------------------------------------------- entry points
 
@@ -95,6 +97,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         state = state!!.copy(bootMark = System.currentTimeMillis(), bootStarts = 0, running = null, bootConfig = base)
         persist()
         ui.say("Restarting Kestrel for a clean start. Your tabs come back afterwards.")
+        restarting = true
         ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true))
     }
 
@@ -103,7 +106,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     /** The person left the app or pressed pause: nothing is lost, the run waits. */
     fun pause(reason: String) {
         val st = state ?: return
-        if (st.status != Status.RUNNING) return
+        if (restarting || st.status != Status.RUNNING) return
         generation++
         state = machine.onPause(st, reason); persist(); Health.log("opt", "pause", reason)
         ui.paused(reason)
@@ -127,7 +130,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         upload(json, force = true)
     }
 
-    fun restartIntoBrowser() { ProcessRestart.restartInto(ctx, Intent(ctx, app.kestrel.browser.MainActivity::class.java)) }
+    fun restartIntoBrowser() { restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, app.kestrel.browser.MainActivity::class.java)) }
 
     fun close() { generation++; server.stop(); try { view.releaseSession() } catch (e: Exception) { /* none */ }; try { session?.close() } catch (e: Exception) { /* closed */ }; session = null }
 
@@ -220,7 +223,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         val (st1, action) = machine.next(st0, System.currentTimeMillis())
         state = st1; persist(); showStatus(st1, action)
         when (action) {
-            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true)) }
+            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true)) }
             is Action.ApplySettings -> { OptimizerApply.write(prefs, action.config); applyLive(); loop() }
             is Action.Measure -> { val why = pauseReason(); if (why != null) pause(why) else measure() }
             is Action.Ask -> ask(action)
