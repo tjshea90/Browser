@@ -30,9 +30,10 @@ before(async () => {
 });
 after(async () => { await browser.close(); server.close(); });
 
-async function runPage(name, extra) {
+async function runPage(name, extra, init) {
   const context = await browser.newContext({ viewport: { width: 400, height: 700 } });
   const page = await context.newPage();
+  if (init) await page.addInitScript(init);
   page.on('request', (r) => { const h = new URL(r.url()).hostname; if (h !== '127.0.0.1') outside.push(r.url()); });
   const before = results.length;
   await page.goto(`http://127.0.0.1:${port}/${TOKEN}/${name}.html?n=7&fast=1${extra || ''}`);
@@ -64,6 +65,17 @@ test('anim page reports three arms and the late-frame share', async () => {
   assert.equal(r.err, ''); finite(r.m, ['fps_css', 'fps_blur', 'fps_clips', 'late_pct', 'late_a', 'late_b', 'late_c', 'clips_playing']);
   for (const k of ['fps_css', 'fps_blur', 'fps_clips']) assert.ok(r.m[k] > 3, k + ' ran: ' + r.m[k]);
   assert.ok(r.m.late_pct >= 0 && r.m.late_pct <= 100);
+});
+
+test('anim page says at once when the engine draws no frames, and in lab mode a timer stands in and the note says so', async () => {
+  const dead = () => { window.requestAnimationFrame = function () { return 0; }; };       // an engine that never draws: callbacks never come
+  const t0 = Date.now();
+  const bad = await runPage('anim', '', dead);
+  assert.ok(/no animation frames/.test(bad.r.err), 'the page names the problem: ' + bad.r.err);
+  assert.ok(Date.now() - t0 < 15000, 'it does not run into the 20 s page limit');
+  const lab = await runPage('anim', '&lab=1', dead);
+  assert.equal(lab.r.err, ''); finite(lab.r.m, ['fps_css', 'fps_blur', 'fps_clips', 'late_pct']);
+  assert.ok(/timer frames/.test(lab.r.note), 'the note says these are timer numbers: ' + lab.r.note);
 });
 
 test('scroll page scrolls itself when the app does not, and says so', async () => {
