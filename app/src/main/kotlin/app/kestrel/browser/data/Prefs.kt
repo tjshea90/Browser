@@ -95,6 +95,14 @@ class Prefs private constructor(ctx: Context) {
     var labDraw: Boolean get() = bool("lab_draw", true); set(v) = put("lab_draw", v)
     /** PERF10b (owner 2026-11-22: still bands of text undrawn with Safe drawing on): "Software drawing" (default OFF): the engine draws the page with the processor instead of the graphics chip (gfx.webrender.software); no graphics driver can corrupt it, it costs speed on four slow cores. Read when the engine starts. */
     var labSoft: Boolean get() = bool("lab_soft", false); set(v) = put("lab_soft", v)
+    /**
+     * PERF25 (research/BRAVE_SMOOTH.md): "Hardware drawing trial" of the Network lab. 0 = off (what runs now: the processor draws, or the engine's own default when Software drawing is off), 1 = the graphics chip draws
+     * with the Mali fixes (core DrawTrial), 2 = the same without the renderer's helper process. Applies at the next start. [drawTrialStart] is the time a trial start began and is taken away once the engine has drawn
+     * for a minute: if it is still there at the next start, that start never steadied and the trial switches itself off ([drawTrialWhy] keeps the reason for the Diagnostics).
+     */
+    var drawTrial: Int get() = sp.getInt("draw_trial", 0); set(v) = put("draw_trial", v.coerceIn(0, 2))
+    var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
+    var drawTrialWhy: String get() = sp.getString("draw_trial_why", "") ?: ""; set(v) = put("draw_trial_why", v)
     /** PERF14 (owner 2026-11-23: "is there a way to speed up page loading"): "Calmer redrawing" (default OFF): the engine redraws a page at most 30 times a second (layout.frame_rate) instead of 60, which halves the drawing work of pages that animate while they load; read when the engine starts. */
     var labFps30: Boolean get() = bool("lab_fps30", false); set(v) = put("lab_fps30", v)
     /** PERF22 (research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF; applied at the next start; every upload carries them, the digest's SETTING A/B compares page loads with and without. */
