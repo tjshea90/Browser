@@ -725,6 +725,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onStop() {
         super.onStop()
         Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
+        if (drawTrialSteady != null) drawTrialSteadyNow("left after its first picture")      // PERF25
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         silenceStraysSoon() // SND1
         Io.fast { NetworkMonitor.stop() }
@@ -3268,7 +3269,27 @@ open class BrowserActivity : Activity(), DockListener {
      * Recovery: the FIRST death in a quiet period brings the page back where it was (the last session state keeps its history AND scroll position) behind a dimmed
      * preview instead of a white screen; a second death within 15 s reloads the plain URL (the state itself may be the cause); a third shows the error screen.
      */
+    // PERF25 (core DrawTrial): a hardware drawing trial start is "steady" after the engine has drawn for DrawTrial.STABLE_MS, or when the app is left after its first picture; then its start mark is taken away.
+    private var drawTrialSteady: Runnable? = null
+    internal fun drawTrialComposited() {
+        if (prefs.drawTrialStart == 0L || drawTrialSteady != null) return
+        val r = Runnable { drawTrialSteadyNow("drew for ${app.kestrel.core.gfx.DrawTrial.STABLE_MS / 1000} s") }
+        drawTrialSteady = r
+        Io.main.postDelayed(r, app.kestrel.core.gfx.DrawTrial.STABLE_MS)
+    }
+    private fun drawTrialSteadyNow(why: String) {
+        drawTrialSteady?.let { Io.main.removeCallbacks(it) }
+        drawTrialSteady = null
+        if (prefs.drawTrialStart != 0L) { prefs.drawTrialStart = 0L; Health.log("engine", "draw-trial", "steady: " + app.kestrel.core.gfx.DrawTrial.label(prefs.drawTrial) + " " + why) }
+    }
+
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
+        // PERF25: a page process that dies soon after the app started, while a hardware drawing trial runs, ends the trial (at the next start): the drawing path is the first suspect.
+        if (crashed && app.kestrel.core.gfx.DrawTrial.crashEndsTrial(prefs.drawTrial, SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime())) {
+            prefs.drawTrialWhy = "the page process crashed within 3 minutes of the start with '" + app.kestrel.core.gfx.DrawTrial.label(prefs.drawTrial) + "', so it is switched off"
+            prefs.drawTrial = 0; prefs.drawTrialStart = 0L
+            Health.log("engine", "draw-trial", "reverted: " + prefs.drawTrialWhy)
+        }
         if (!tab.isPrivateTab) prefs.lastEngineKillAt = System.currentTimeMillis()      // PERF20: for 6 hours after an engine kill every memory signal reaches the engine again (core TrimGate)
         endFullScreenOf(tab, if (crashed) "the page's process crashed" else "the page's process was killed")
         if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page's process went")
