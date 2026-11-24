@@ -285,14 +285,8 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     /** Pages that may fail without spoiling the sample: WebGL on its own page (a machine whose drawing path is broken wedges the page process there). */
     private val optionalPages = setOf("gl")
 
-    /** A page that never answers has wedged the engine's page process: end every helper process of the engine (page, graphics) so the next load starts on fresh ones; GeckoView reports it and the session is opened again. */
-    private fun recoverEngine() {
-        val me = Process.myPid()
-        val victims = appPids().filter { it != me }
-        Health.log("opt", "recover", "ending ${victims.size} engine helper process(es) of a page that never answered")
-        for (pid in victims) try { Process.killProcess(pid) } catch (e: Exception) { /* gone already */ }
-        SystemClock.sleep(4000)
-    }
+    // A page that never answers has wedged the engine's page process (lab v8: ending the helper processes by hand did NOT bring it back, loads never started again). The only recovery that is proved is the whole-process restart the run already
+    // uses between experiments: a sample that saw a wedged page tells the machine "the engine is not running" and the next step starts in a fresh process.
 
     private fun measure() {
         val gen = generation
@@ -305,7 +299,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             if (why != null) { Io.main.post { if (gen == generation) pause(why) }; return@Thread }
             val cpu0 = cpuTicks(); val t0 = SystemClock.elapsedRealtime()
             Health.log("opt", "view", "${view.width}x${view.height} shown=${view.isShown} attached=${view.isAttachedToWindow} windowFocus=${act.hasWindowFocus()}")
-            val metrics = HashMap<String, Double>(); val notes = StringBuilder(); var ok = true
+            val metrics = HashMap<String, Double>(); val notes = StringBuilder(); var ok = true; var wedged = false
             for (p in (if (withGl) pages + "gl" else pages)) {
                 if (gen != generation) return@Thread
                 val my = synchronized(this) { ++seq }
@@ -317,7 +311,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
                 if (gen != generation) return@Thread
                 val optional = p in optionalPages
                 when {
-                    r == null -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl hung; ") } else { ok = false; notes.append("$p timed out; ") }; if (gen == generation) recoverEngine() }
+                    r == null -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl hung; ") } else { ok = false; notes.append("$p timed out; ") }; wedged = true; Health.log("opt", "wedged", "$p never answered: the engine restarts before the next sample") }
                     r.err.isNotEmpty() -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl: ${r.err.take(40)}; ") } else { ok = false; notes.append("$p: ${r.err}; ") } }
                     else -> { metrics.putAll(r.m); if (r.note.isNotEmpty()) notes.append(r.note).append("; ") }
                 }
@@ -325,11 +319,11 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             }
             val cpuMs = ((cpuTicks() - cpu0) * 1000.0 / ticksPerSecond())
             if (ok) { metrics[Metrics.CPU] = cpuMs; if (startMs > 0) metrics[Metrics.START] = startMs; metrics[Metrics.MEM] = pssMb(); metrics["suite_s"] = (SystemClock.elapsedRealtime() - t0) / 1000.0 }
-            val sample = Sample(metrics, ok, notes.toString().trim().take(200))
+            val sample = Sample(metrics, ok, notes.toString().trim().take(200)); val wedgedNow = wedged
             Io.main.post {
                 if (gen != generation) return@post
                 val st = state ?: return@post
-                state = machine.onSample(st, sample); persist()
+                state = machine.onSample(st, sample).let { if (wedgedNow) it.copy(running = null) else it }; persist()
                 Health.log("opt", "sample", "ok=$ok step=${st.cursor} ${metrics.entries.take(6).joinToString(" ") { it.key + "=" + String.format(Locale.US, "%.1f", it.value) }} ${sample.note}")
                 loop()
             }
