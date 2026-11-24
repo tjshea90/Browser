@@ -57,6 +57,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     private val machine = RunMachine()
     private val server = BenchServer(ctx)
     private var session: GeckoSession? = null
+    @Volatile private var lastTitle = ""      // the benchmark pages put what they are doing into their title: when one never answers, this says where it stopped
     private var state: RunState? = null
     private var generation = 0                     // a stop or a pause bumps it: a suite thread that sees another number throws its sample away
     private var seq = 0
@@ -140,6 +141,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         val s = GeckoSession(org.mozilla.geckoview.GeckoSessionSettings.Builder().usePrivateMode(false).useTrackingProtection(true).build())
         s.contentDelegate = object : GeckoSession.ContentDelegate {
             override fun onTitleChange(session: GeckoSession, title: String?) {
+                lastTitle = title ?: ""
                 if (title == "bench-ready scroll" && currentPage == "scroll") startScroll()
                 if (title != null && title.startsWith("bench-done")) scrollPulses = 0
             }
@@ -298,7 +300,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
                 val pageT0 = SystemClock.elapsedRealtime()
                 val r = server.await(p, my, limits.getValue(p))
                 if (gen != generation) return@Thread
-                Health.log("opt", "page", "$p ${if (r == null) "timed out" else if (r.err.isNotEmpty()) "error " + r.err.take(60) else "ok"} in ${(SystemClock.elapsedRealtime() - pageT0) / 1000}s")
+                Health.log("opt", "page", "$p ${if (r == null) "timed out (last title: ${lastTitle.take(40)})" else if (r.err.isNotEmpty()) "error " + r.err.take(80) else "ok"} in ${(SystemClock.elapsedRealtime() - pageT0) / 1000}s")
                 if (gen != generation) return@Thread
                 when {
                     r == null -> { ok = false; notes.append("$p timed out; ") }

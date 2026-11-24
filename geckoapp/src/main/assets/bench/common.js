@@ -8,16 +8,16 @@
   K.n = (/[?&]n=(\d+)/.exec(qs) || [0, '0'])[1];
   K.fast = /[?&]fast=1/.test(qs);
   K.now = function () { return performance.now(); };
-  // the emulator lab only (`&lab=1`, debuggable builds): if the engine draws no animation frames at all, a 40 ms timer stands in for them so the run's machinery (restart, resume, decisions, upload) can still be proved end to end. The numbers then say so
+  // the emulator lab only (`&lab=1`, debuggable builds): when the engine draws a frame slower than 40 ms (software drawing on the emulator can take seconds for the blur arm), a 40 ms timer stands in for it so the run's machinery (restart, resume, decisions, upload) can still be proved end to end. The numbers then say so
   // in the note and are timer numbers, never real frame rates; the app never asks for this on a real device.
   K.lab = /[?&]lab=1/.test(qs); K.timerFrames = 0;
   if (K.lab && window.requestAnimationFrame) {
-    var realRaf = window.requestAnimationFrame.bind(window), live = false;
+    var realRaf = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = function (cb) {
       var done = false;
       function run(t) { if (done) return; done = true; cb(t === undefined ? performance.now() : t); }
-      realRaf(function (t) { live = true; run(t); });
-      if (!live) setTimeout(function () { if (!done) { K.timerFrames++; run(); } }, 40);
+      realRaf(function (t) { run(t); });
+      setTimeout(function () { if (!done) { K.timerFrames++; run(); } }, 40);
       return 0;
     };
   }

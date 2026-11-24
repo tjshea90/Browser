@@ -77,7 +77,7 @@ class OptimizerActivity : Activity(), OptimizerRunner.Ui {
      * says "no screen" while this one is in front (found by the emulator lab: the run died 2 s after the restart). So while this screen is on show it says "I am here" again every second.
      */
     private val beat = object : Runnable { override fun run() { if (started) { ProcessLife.uiAlive = true; ProcessLife.cancel(); app.kestrel.browser.Io.main.postDelayed(this, 1000) } } }
-    override fun onStart() { super.onStart(); runner.activate(); started = true; ProcessLife.uiAlive = true; ProcessLife.cancel(); app.kestrel.browser.Io.main.removeCallbacks(beat); app.kestrel.browser.Io.main.postDelayed(beat, 1000) }
+    override fun onStart() { super.onStart(); runner.activate(); try { app.kestrel.browser.diag.Health.startWatchdog() } catch (e: Throwable) { /* a help, never a risk */ }; started = true; ProcessLife.uiAlive = true; ProcessLife.cancel(); app.kestrel.browser.Io.main.removeCallbacks(beat); app.kestrel.browser.Io.main.postDelayed(beat, 1000) }
 
     override fun onStop() {
         super.onStop()

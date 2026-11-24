@@ -32,7 +32,16 @@ K.run('compat', function () {
   t('websocket', function () { return typeof WebSocket === 'function'; });
   t('pointer-events', function () { return typeof PointerEvent === 'function'; });
   t('custom-elements', function () { return typeof customElements === 'object' && typeof customElements.define === 'function'; });
-  var pass = 0, jobs = tests.map(function (x) { return Promise.resolve().then(x[1]).then(function (ok) { if (ok) pass++; else failed.push(x[0]); }, function () { failed.push(x[0]); }); });
-  return Promise.all(jobs).then(function () { K.note = failed.length ? 'failed: ' + failed.sort().join(',') : ''; return { compat_pass: pass, compat_total: tests.length }; });
+  // one at a time, each with its name in the title (the app logs where a page that never answers stopped) and 4 s to answer: one probe that hangs is a failed probe, not a lost page
+  var pass = 0, i = 0;
+  function step() {
+    if (i >= tests.length) return Promise.resolve();
+    var x = tests[i++];
+    document.title = 'bench-at ' + x[0];
+    return K.sleep(25).then(function () {
+      return Promise.race([Promise.resolve().then(x[1]), K.sleep(4000).then(function () { throw new Error('timeout'); })]);
+    }).then(function (ok) { if (ok) pass++; else failed.push(x[0]); }, function (e) { failed.push(x[0] + (String(e && e.message) === 'timeout' ? '(timeout)' : '')); }).then(step);
+  }
+  return step().then(function () { K.note = failed.length ? 'failed: ' + failed.sort().join(',') : ''; return { compat_pass: pass, compat_total: tests.length }; });
 });
 </script></body></html>
