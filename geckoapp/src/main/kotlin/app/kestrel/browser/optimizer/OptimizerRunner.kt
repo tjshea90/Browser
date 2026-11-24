@@ -91,7 +91,11 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         val runId = (if (quick) "q-" else "") + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         state = machine.start(runId, System.currentTimeMillis(), priority, 75, base, skip, Flavor.engineVersion, appVersion(), if (quick) setOf("scroll0", "gcpar", "fps30") else emptySet())
         persist(); Health.log("opt", "start", "run=$runId priority=$priority skip=${skip.size}")
-        engineReady()
+        // a CLEAN process for the run: the browser's own tabs and pages must not share the tablet's 2 GB with the benchmarks, so the first step is a planned restart into this screen alone
+        state = state!!.copy(bootMark = System.currentTimeMillis(), bootStarts = 0, running = null, bootConfig = base)
+        persist()
+        ui.say("Restarting Kestrel for a clean start. Your tabs come back afterwards.")
+        ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true))
     }
 
     fun cont() { val st = state ?: return; state = machine.onResume(st); persist(); engineReady() }
