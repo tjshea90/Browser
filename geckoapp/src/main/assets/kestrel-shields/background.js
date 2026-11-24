@@ -361,7 +361,7 @@ function vcxText() {
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
   // gt (ANS53, flag 1024: videos start only when pressed): an app that did not answer (not ready, a bridge error) leaves the gate CLOSED: the person's rule is the default (review of the gate, finding 6: that used to open everything)
-  function answer(f, told) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: !told || (f & 1024) !== 0, ho: told && (f & 2048) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
+  function answer(f, told) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: !told || (f & 1024) !== 0, ho: told && (f & 2048) !== 0, dc: told && (f & 4096) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f, true));
   return askCfg(host).then(function () { var g = cfgFlags.get(host); return answer(g || 0, g !== undefined); });
@@ -1354,8 +1354,8 @@ onMsg(function (m, sender) {
 onMsg(function (m, sender) {
   if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
-  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' ? m.e : '';
-  var a = /^(play|pause|seek|mute|full|played|skipped|none)$/.test(String(m.a || '')) ? String(m.a) : '';
+  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' || m.e === 'deco' ? m.e : '';
+  var a = /^(play|pause|seek|mute|full|played|skipped|none|bar|cap|off|back)$/.test(String(m.a || '')) ? String(m.a) : '';
   var n = Math.max(0, Math.min(99, m.n | 0));                    // (turn.js: how many videos a turn of the screen paused)
   if (e) send({ k: 'vbk', e: e, a: a, n: n, p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;

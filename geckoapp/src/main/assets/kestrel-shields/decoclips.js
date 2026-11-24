@@ -20,10 +20,10 @@
     var on = null;                       // null = not asked yet, true / false = the app's answer
     var active = [];                     // decorative clips playing now (oldest first)
     var parked = [];                     // clips WE paused, in the order they should come back
-    var ours = null;                     // the clip we are pausing right now: its pause event is ours, not the page's
+    var mine = new WeakMap();            // clip -> when WE paused it (its pause event comes a moment later and is ours, not the page's)
     var tries = new WeakMap();           // clip -> [times of our parkings]
     var free = new WeakMap();            // clips we gave up on (the page keeps starting them)
-    var timer = 0, sent = 0, askedAt = 0;
+    var timer = 0, sent = 0, waiting = [], asking = false;
 
     function deco(v) { try { return !!(v && v.nodeName === 'VIDEO' && v.loop && (v.muted || v.defaultMuted) && !v.controls); } catch (e) { return false; } }
     function idx(a, v) { for (var i = 0; i < a.length; i++) if (a[i] === v) return i; return -1; }
@@ -38,9 +38,13 @@
       } catch (e) { return 0; }
     }
     function ask(cb) {
-      if (on !== null) { cb(); return; }
-      var now = Date.now(); if (now - askedAt < 3000) return; askedAt = now;
-      try { browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { if (r) { on = (r.dc === true); if (on) cb(); } }, function () { /* ask again at the next clip */ }); } catch (e) { /* no background page: nothing is limited */ }
+      if (on === true) { cb(); return; }
+      if (on === false) return;
+      waiting.push(cb);
+      if (asking) return;
+      asking = true;
+      function done(r) { asking = false; var w = waiting; waiting = []; if (r) { on = (r.dc === true); if (on) for (var i = 0; i < w.length; i++) { try { w[i](); } catch (e) { /* never break the page */ } } } }   // no answer: ask again at the next clip
+      try { browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(done, function () { done(null); }); } catch (e) { done(null); }       // no background page: nothing is limited
     }
 
     function park(v, why) {
@@ -49,10 +53,10 @@
         while (list.length && t - list[0] > T.wait) list.shift();
         list.push(t); tries.set(v, list);
         if (list.length > T.tries) { free.set(v, 1); drop(active, v); drop(parked, v); return; }      // the page keeps starting it: not ours to manage
-        ours = v; try { v.pause(); } finally { ours = null; }
+        mine.set(v, t); v.pause();
         drop(active, v); if (idx(parked, v) < 0) parked.push(v);
         report(why);
-      } catch (e) { ours = null; }
+      } catch (e) { /* the clip is gone */ }
     }
     function unpark(v) {
       try {
@@ -96,8 +100,12 @@
       });
     }, true);
     // the page paused it, or it is gone: ours no more (a pause WE made is not the page's)
-    function released(ev) { var v = ev && ev.target; if (!v || v === ours) return; drop(active, v); drop(parked, v); }
-    window.addEventListener('pause', released, true);
+    function released(ev) { var v = ev && ev.target; if (!v) return; drop(active, v); drop(parked, v); }
+    window.addEventListener('pause', function (ev) {
+      var v = ev && ev.target, t = v && mine.get(v);
+      if (t && Date.now() - t < 1500) { mine.delete(v); return; }          // our own pause: the clip stays parked
+      released(ev);
+    }, true);
     window.addEventListener('emptied', released, true);
     window.addEventListener('abort', released, true);
     window.addEventListener('ended', released, true);
@@ -105,7 +113,11 @@
     try { window.addEventListener('scroll', soon, { passive: true, capture: true }); } catch (e2) { /* optional */ }
 
     // clips the page started before this script ran
-    try { var all = document.getElementsByTagName('video'); for (var j = 0; j < all.length && j < 200; j++) if (!all[j].paused && deco(all[j])) { var vv = all[j]; ask(function () { if (idx(active, vv) < 0) active.push(vv); soon(); }); break; } } catch (e3) { /* optional */ }
+    try {
+      var pre = [], all = document.getElementsByTagName('video');
+      for (var j = 0; j < all.length && j < 200; j++) if (!all[j].paused && deco(all[j])) pre.push(all[j]);
+      if (pre.length) ask(function () { for (var q = 0; q < pre.length; q++) if (idx(active, pre[q]) < 0) active.push(pre[q]); soon(); });
+    } catch (e3) { /* optional */ }
     window.KestrelDeco = { dbg: function () { return { active: active.length, parked: parked.length, on: on }; } };   // for the tests
   } catch (e) { /* a page must never feel this script */ }
 })();

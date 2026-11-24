@@ -169,5 +169,8 @@ window.KestrelVF = window.KestrelVF || (function () {
   // to the element itself (gate-main.js listens there, also inside a shadow tree); a play() of ours does not pass through the page's replacement of play(), so it has to be told.
   function gate(el) { try { el.dispatchEvent(new CustomEvent('__kst_gate_v1')); } catch (e) { /* never break the page */ } }
 
-  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, srcOf: srcOf, bare: bare, probe: probe, gate: gate, pressedAt: 0 };
+  // PERF21 (owner 2026-11-24: "They also each have a play button, which is incorrect for in site animations"): a clip the PAGE plays as an animation is silent, loops and has no controls of its own. It is not a film: no bar of ours.
+  function decorative(v) { try { return !!(v && v.loop && (v.muted || v.defaultMuted) && !v.controls); } catch (e) { return false; } }
+
+  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, srcOf: srcOf, bare: bare, probe: probe, gate: gate, decorative: decorative, pressedAt: 0 };
 })();
