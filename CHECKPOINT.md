@@ -1,21 +1,22 @@
-# CHECKPOINT 3171 — read me first, then TASKS.md
+# CHECKPOINT 3173 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T04:47:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `c990e83f` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T05:05:23Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `84df6b2e` (this checkpoint is the commit after it)
 
 ## Just done
-alpha102 run 45326840944 attempt 1: test-jvm FAILED on the known flaky StreamEngineTest.refusalsThatStartHalfWayAreAskedAgainBeforeTheLadderIsTried (2061 of 2062 passed; same race family as FLK1); rerun_failed_jobs queued on the SAME run (attempt 2), no new dispatch
+alpha102 SHIPPED and recorded: run 45326840944 green on attempt 2 (attempt 1: the known flaky StreamEngineTest), Release has kestrel-g-0.3.0-alpha102.apk 96.7 MB, certificate verified, BUILDLOG.md updated; PERF21 closed
 
 ## Do this next
-Poll RUN 45326840944 until completed (attempt 2: test-jvm then build-gecko); if it fails again read get_job_logs job_id of the failing job; when green get_release_by_tag kestrel-g-v0.3.0-alpha102, bash tools/record-release.sh kestrel-g-v0.3.0-alpha102 with the identical note from docs/handoff/ALPHA102_RELEASE_NOTE.txt, answer the owner for PERF21. THEN FLK1 (harden StreamEngineTest line ~495 perPart>=4 race, PhoneBackendTest, courier ServerTest), THEN PERF22 playbook (web research already collected in the conversation: MT8168 = 4x A53 2 GHz, Mali-G52 MC2/MP1, LPDDR4x; hardware file says armeabi-v7a, thermal 0, no sustained-performance mode; Mozilla Mali WebRender bugs 1676474/1689947/1874848; Chromium low-end mode; Android Go docs; SpiderMonkey thresholds 100/1500; Android cpusets top-app)
+NEXT in this order: (1) FLK1: harden core/src/test/kotlin/app/kestrel/core/media/StreamEngineTest.kt refusalsThatStartHalfWayAreAskedAgainBeforeTheLadderIsTried (the perPart>=4 assertion depends on worker interleaving; make it deterministic or assert the real property), then PhoneBackendTest and courier ServerTest; run the test 30x locally to prove (gradle --tests with --rerun-tasks in a loop, one gradle at a time); (2) PERF22 deep low-end research: write research/LOW_END_PLAYBOOK.md from the web findings already collected plus new targeted searches (Android 10 Go specifics: lmkd/zram, cached process limit, PiP disabled on low-RAM, dex2oat/baseline profile, WebView-less quirks; GeckoView/Mozilla low-end: processPrelaunch, GC, JIT thresholds 100/1500, WebRender software fallback bugs on Mali; Chromium low-end mode: RGB565/4444 textures, discardable memory, idle-timeouts; web.dev JS cost on weak CPUs), table with have/do/skip verdicts, then implement the safe ones (PERF22c), ship alpha103 / versionCode 204; (3) after alpha103: wait for the owner's uploads (python3 -B -I tools/diag_digest.py --days 2): PAGE ANIMATION, bot checks, lazy start, TrimGate held/sent, Decorative page clips. Never ship alpha102 again
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  b1b76738 ckpt 3171: alpha102 run 45326840944 attempt 1: test-jvm FAILED on the known flaky Strea
   997968a3 ckpt 3169: alpha102 (code 203) gated (ckpt 3168, head 0a423ffb) and dispatched ONCE: ru
   0a423ffb ckpt 3168: gated kestrel-g-v0.3.0-alpha102 (gecko code 203) and pushed it: handoff self
   c251ca3b ckpt 3167: pre-ship: alpha102: the animations on that page. (1) NO PLAY BAR OVER ANIMAT
@@ -25,8 +26,4 @@ Poll RUN 45326840944 until completed (attempt 2: test-jvm then build-gecko); if 
   2057b01b ckpt 3152: alpha101 SHIPPED and recorded: run 45312620908 green on attempt 1 (check, te
   1e465904 ckpt 3150: alpha101 (code 202) gated (ckpt 3148, head 94c20d92 + the corrected note fil
   94c20d92 ckpt 3148: gated kestrel-g-v0.3.0-alpha101 (gecko code 202) and pushed it: handoff self
-  9d6056a5 ckpt 3146: PERF20 coded and green: TrimGate (core) + TrimGateContext (app, Robolectric-
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
