@@ -114,6 +114,8 @@ object Decider {
         val ref = reference(baselines); val cand = reference(candidate)
         val compatBase = ref[Metrics.COMPAT]; val compatCand = cand[Metrics.COMPAT]
         if (compatBase != null && compatCand != null && compatCand < compatBase) return Decision(Verdict.REJECT, g, thr, noise, "a feature test that passed before fails (${compatCand.toInt()} of ${compatBase.toInt()})")
+        val glBase = ref[Metrics.GL]; val glCand = cand[Metrics.GL]
+        if (glBase != null && glCand != null && glCand < glBase) return Decision(Verdict.REJECT, g, thr, noise, "WebGL worked before and does not with this setting")
         val memBase = ref[Metrics.MEM]; val memCand = cand[Metrics.MEM]
         if (memBase != null && memCand != null && memCand - memBase > guards.maxMemMb) return Decision(Verdict.REJECT, g, thr, noise, "it uses ${(memCand - memBase).toInt()} MB more memory (limit ${guards.maxMemMb.toInt()})")
         val w = worst(baselines, candidate, metrics)

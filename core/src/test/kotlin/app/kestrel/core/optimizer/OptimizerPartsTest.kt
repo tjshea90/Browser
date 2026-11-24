@@ -13,6 +13,7 @@ class OptimizerPartsTest {
         m[Metrics.COMPAT] = compat; m[Metrics.MEM] = mem
         return Sample(m, ok)
     }
+    private fun Sample.withGl(v: Double) = Sample(values + (Metrics.GL to v), ok)
     private val noisy = listOf(sample(1.00), sample(1.01), sample(0.99), sample(1.02), sample(0.98), sample(1.0))
     private val metrics = Metrics.balanced
 
@@ -36,6 +37,7 @@ class OptimizerPartsTest {
 
     @Test fun theGuardsHoldWhateverTheScore() {
         assertEquals("a feature test that stopped passing", Verdict.REJECT, Decider.decide(noisy, listOf(sample(1.2, compat = 24.0), sample(1.2, compat = 24.0)), metrics, Guards()).verdict)
+        assertEquals("WebGL that stopped working", Verdict.REJECT, Decider.decide(listOf(sample(1.00).withGl(1.0), sample(1.01).withGl(1.0), sample(0.99).withGl(1.0)), listOf(sample(1.2).withGl(0.0), sample(1.2).withGl(0.0)), metrics, Guards()).verdict)
         assertEquals("memory over the limit", Verdict.REJECT, Decider.decide(noisy, listOf(sample(1.2, mem = 700.0), sample(1.2, mem = 700.0)), metrics, Guards(maxMemMb = 60.0)).verdict)
         assertEquals("memory under a higher limit", Verdict.ACCEPT, Decider.decide(noisy, listOf(sample(1.2, mem = 700.0), sample(1.2, mem = 700.0)), metrics, Guards(maxMemMb = 140.0)).verdict)
         assertEquals("a failed page", Verdict.FAILED, Decider.decide(noisy, listOf(sample(1.2), sample(1.2, ok = false)), metrics, Guards()).verdict)

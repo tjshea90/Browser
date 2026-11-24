@@ -20,7 +20,7 @@ object Metrics {
     const val SCRIPT = "script_ms"; const val LAYOUT = "layout_ms"; const val FPS_CSS = "fps_css"; const val FPS_BLUR = "fps_blur"; const val FPS_CLIPS = "fps_clips"
     const val LATE = "late_pct"; const val SCROLL = "scroll_gap_p95"; const val INPUT = "input_p95"; const val START = "start_ms"; const val CPU = "cpu_ms"
     /** Guards: never scored, only compared. */
-    const val COMPAT = "compat_pass"; const val MEM = "mem_mb"
+    const val COMPAT = "compat_pass"; const val MEM = "mem_mb"; const val GL = "gl_ok"
 
     private fun m(id: String, label: String, unit: String, higher: Boolean, w: Double) = Metric(id, label, unit, higher, w)
 

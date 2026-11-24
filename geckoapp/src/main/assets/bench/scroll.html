@@ -23,8 +23,8 @@ K.run('scroll', function () {
       if (started || finished) return;
       mode = 1; var steps = K.fast ? 20 : 60, i = 0;
       (function step() { window.scrollBy(0, 400); if (++i < steps) setTimeout(step, 16); })();
-    }, K.fast ? 600 : 6000);
-    setTimeout(finish, K.fast ? 8000 : 40000);
+    }, K.fast ? 3000 : 6000);
+    setTimeout(finish, K.fast ? 14000 : 40000);
   });
 });
 </script></body></html>

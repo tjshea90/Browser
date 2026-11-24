@@ -281,11 +281,24 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     private fun fastPages() = state?.runId?.startsWith("q-") == true
 
     private val pages = listOf("js", "layout", "anim", "scroll", "input", "compat")
-    private val limits = mapOf("js" to 150_000L, "layout" to 90_000L, "anim" to 90_000L, "scroll" to 120_000L, "input" to 90_000L, "compat" to 40_000L)
+    private val limits = mapOf("js" to 150_000L, "layout" to 90_000L, "anim" to 90_000L, "scroll" to 120_000L, "input" to 90_000L, "compat" to 60_000L, "gl" to 25_000L)
+    /** Pages that may fail without spoiling the sample: WebGL on its own page (a machine whose drawing path is broken wedges the page process there). */
+    private val optionalPages = setOf("gl")
+
+    /** A page that never answers has wedged the engine's page process: end every helper process of the engine (page, graphics) so the next load starts on fresh ones; GeckoView reports it and the session is opened again. */
+    private fun recoverEngine() {
+        val me = Process.myPid()
+        val victims = appPids().filter { it != me }
+        Health.log("opt", "recover", "ending ${victims.size} engine helper process(es) of a page that never answered")
+        for (pid in victims) try { Process.killProcess(pid) } catch (e: Exception) { /* gone already */ }
+        SystemClock.sleep(4000)
+    }
 
     private fun measure() {
         val gen = generation
         pageDied = false
+        // the emulator's quick run: the WebGL page only in the very first sample (it hangs the lab's software drawing; once is enough to prove the recovery, every sample would only cost time)
+        val withGl = !fastPages() || state?.let { it.cursor == 0 && it.taken == 0 } == true
         Thread({
             // binder calls (battery, process list) stay OFF the screen thread: a system service that answers late must never freeze the run (lab v5: the screen thread went silent right after the second sample)
             val why = pauseReason()
@@ -293,18 +306,19 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             val cpu0 = cpuTicks(); val t0 = SystemClock.elapsedRealtime()
             Health.log("opt", "view", "${view.width}x${view.height} shown=${view.isShown} attached=${view.isAttachedToWindow} windowFocus=${act.hasWindowFocus()}")
             val metrics = HashMap<String, Double>(); val notes = StringBuilder(); var ok = true
-            for (p in pages) {
+            for (p in (if (withGl) pages + "gl" else pages)) {
                 if (gen != generation) return@Thread
                 val my = synchronized(this) { ++seq }
                 Io.main.post { currentPage = p; scrollPulses = 0; session?.loadUri(server.url(p, my, if (fastPages()) "&fast=1&lab=1" else "")) }
                 val pageT0 = SystemClock.elapsedRealtime()
-                val r = server.await(p, my, limits.getValue(p))
+                val r = server.await(p, my, if (fastPages()) minOf(limits.getValue(p), 40_000L) else limits.getValue(p))
                 if (gen != generation) return@Thread
                 Health.log("opt", "page", "$p ${if (r == null) "timed out (last title: ${lastTitle.take(40)})" else if (r.err.isNotEmpty()) "error " + r.err.take(80) else "ok"} in ${(SystemClock.elapsedRealtime() - pageT0) / 1000}s")
                 if (gen != generation) return@Thread
+                val optional = p in optionalPages
                 when {
-                    r == null -> { ok = false; notes.append("$p timed out; ") }
-                    r.err.isNotEmpty() -> { ok = false; notes.append("$p: ${r.err}; ") }
+                    r == null -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl hung; ") } else { ok = false; notes.append("$p timed out; ") }; if (gen == generation) recoverEngine() }
+                    r.err.isNotEmpty() -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl: ${r.err.take(40)}; ") } else { ok = false; notes.append("$p: ${r.err}; ") } }
                     else -> { metrics.putAll(r.m); if (r.note.isNotEmpty()) notes.append(r.note).append("; ") }
                 }
                 if (!ok) break

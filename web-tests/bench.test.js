@@ -99,6 +99,11 @@ test('compat page counts the features that work and notes the ones that do not',
   if (r.m.compat_pass < r.m.compat_total) assert.ok(/^failed: /.test(r.note), 'the failed names are in the note: ' + r.note);
 });
 
+test('gl page makes a WebGL context on its own page and says whether it drew', async () => {
+  const { r } = await runPage('gl');
+  assert.equal(r.err, ''); finite(r.m, ['gl_ok']); assert.ok(r.m.gl_ok === 0 || r.m.gl_ok === 1);
+});
+
 test('text page is ready for the owner and measures nothing', async () => {
   const context = await browser.newContext({ viewport: { width: 400, height: 700 } });
   const page = await context.newPage();
