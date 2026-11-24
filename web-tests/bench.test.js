@@ -82,7 +82,7 @@ test('input page measures the wait from an input event to the next frame', async
 test('compat page counts the features that work and notes the ones that do not', async () => {
   const { r } = await runPage('compat');
   assert.equal(r.err, ''); finite(r.m, ['compat_pass', 'compat_total']);
-  assert.equal(r.m.compat_total, 26);
+  assert.equal(r.m.compat_total, (fs.readFileSync(path.join(DIR, "compat.html"), "utf8").match(/^  t\('/gm) || []).length);
   assert.ok(r.m.compat_pass >= 20, 'most work in Chromium: ' + r.m.compat_pass + ' ' + r.note);
   if (r.m.compat_pass < r.m.compat_total) assert.ok(/^failed: /.test(r.note), 'the failed names are in the note: ' + r.note);
 });

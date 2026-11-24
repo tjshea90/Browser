@@ -41,7 +41,7 @@ NEVER in the catalog (enforced by a unit test on name patterns): Shields, tracki
 | `anim.html` | 3 arms of 3 s: (A) 40 CSS-transform boxes, (B) gradient + blur layers, (C) a strip of 8 small looping muted clips like the sports-odds page | `fps_css`, `fps_blur`, `fps_clips` (higher), `late_pct` (frames over 50 ms; lower) |
 | `scroll.html` | a long page scrolled by the app's own animated scroll | `scroll_gap_p95` (ms), `scroll_fps` |
 | `input.html` | synthetic input events during a busy page: time from the event to the next frame | `input_p50`, `input_p95` (ms) |
-| `compat.html` | 25 feature probes (fetch, observers, CSS features, canvas, WebGL, WebAudio, MSE, IndexedDB, WebAssembly, Intl, service worker ...) | `compat_pass` (count; must not drop) |
+| `compat.html` | 27 feature probes (fetch, observers, CSS features, canvas, WebGL, WebAudio, MSE, IndexedDB, WebAssembly, Intl, service worker ...) | `compat_pass` (count; must not drop) |
 | `text.html` | big text, wrapped table headers (the page that showed the missing-bands fault) | the owner's glitch answer |
 The runner adds `engine_ready_ms`, `first_paint_ms` (first bench page, cold) and `mem_mb` (PSS of all app processes after the suite) and the time the whole suite took. Score weights default: script .20, layout .10, fps_css .10, fps_blur .10, fps_clips .15, late_pct .05, scroll .10, input .15, startup .05; the question "what matters most to you" shifts them (loading / smoothness / battery).
 

@@ -1,7 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench compat</title><script src="common.js"></script></head>
 <body><canvas id="cv" width="64" height="32"></canvas><video id="v" muted></video>
 <script>
-// Compatibility guard: 26 things pages rely on. A setting that breaks one of them can never be kept, however fast it is. compat_pass counts the ones that work; the names of the ones that do not go in the error text.
+// Compatibility guard: 27 things pages rely on. A setting that breaks one of them can never be kept, however fast it is. compat_pass counts the ones that work; the names of the ones that do not go in the error text.
 K.run('compat', function () {
   var tests = [], failed = [];
   function t(name, fn) { tests.push([name, fn]); }
