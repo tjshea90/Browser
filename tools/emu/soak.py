@@ -3680,6 +3680,26 @@ class Soak:
         self.record({"kind": "tb", "name": "previews-copy-tabs", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("tb scene")
 
+    def opt_stacks(self, pkg):
+        """Asks the app's main process for the stack of every thread (kill -3 writes them to the log) and prints the main thread and the benchmark thread: where a silent run sits."""
+        pids = self.adb.sh("pidof %s" % pkg, timeout=20).split()
+        if not pids:
+            say("opt: stacks: the app has no process at all")
+            return
+        mark = self.log.size()
+        say("opt: stacks of pid %s (silent run)" % pids[0])
+        self.adb.sh("kill -3 %s" % pids[0], timeout=20)
+        time.sleep(6)
+        lines = [ln.rstrip() for ln in self.log.since(mark)]
+        shown = 0
+        for i, ln in enumerate(lines):
+            if re.search(r'"(main|bench-suite|GeckoThread|Binder:[^"]*)" prio=', ln) and shown < 4:
+                shown += 1
+                for l2 in lines[i:i + 26]:
+                    say("   stack: " + l2[l2.find(":", 30) + 1:][:200] if ":" in l2[30:] else "   stack: " + l2[:200])
+        if not shown:
+            say("opt: stacks: no thread dump reached the log (%d new lines)" % len(lines))
+
     def opt_round(self):
         """OPT1 (research/OPTIMIZER.md): Auto-tune END TO END on the real engine, the short plan (debug builds only: three experiments, fast pages). It proves what no unit test can: the loopback server and the benchmark
         pages through the real engine and the real extension, an engine restart that comes back by itself (the trampoline), the guard that writes the start configuration, a restart-needing setting that REACHES the
@@ -3689,7 +3709,7 @@ class Soak:
         self.adb.sh("run-as %s sh -c 'for f in files/optimizer/*; do rm -f $f; done'" % pkg, timeout=30)
         lm = self.log.size()
         say("opt: am start says: %s" % self.adb.sh("am start -n %s/app.kestrel.browser.MainActivity --es auto_tune quick" % pkg, timeout=60).strip()[:300].replace("\n", " | "))
-        t0 = time.time(); result = ""; last_state = ""; seen_lines = 0
+        t0 = time.time(); result = ""; last_state = ""; seen_lines = 0; last_change = time.time(); dumps = 0
         while time.time() - t0 < 17 * 60:
             time.sleep(20)
             result = self.adb.sh("run-as %s cat files/optimizer/last.json" % pkg, timeout=30)
@@ -3697,17 +3717,26 @@ class Soak:
                 break
             st = self.adb.sh("run-as %s cat files/optimizer/state.txt" % pkg, timeout=30)
             # a live timeline in the console (its text is the only thing that survives a failed job): every opt line, stalls and crashes, as they arrive
-            seen = seen_lines
             allx = [ln for ln in self.log.since(lm) if re.search(r"KestrelHealth.*(opt|stall|STALL|crash|anr)|FATAL EXCEPTION|ANR in|am_anr|am_proc_died.*kestrel", ln)]
-            for ln in allx[seen:seen + 40]:
+            for ln in allx[seen_lines:seen_lines + 40]:
                 say("   live: " + ln.strip()[:240])
-            seen_lines = min(len(allx), seen + 40)
-            cur = [l for l in st.splitlines() if l.startswith(("cursor|", "status|", "bootMark|"))]
+            if len(allx) > seen_lines:
+                last_change = time.time()
+            seen_lines = min(len(allx), seen_lines + 40)
+            cur = [l for l in st.splitlines() if l.startswith(("cursor|", "status|", "bootMark|", "taken|"))]
             if cur != last_state:
-                say("opt state: %s" % " ".join(cur)); last_state = cur
+                say("opt state: %s" % " ".join(cur)); last_state = cur; last_change = time.time()
             # nothing at all after 100 s (no state file, no 'opt' line from the app): the run never started - stop waiting and show why
             if time.time() - t0 > 100 and not st.strip() and not health_events(self.log.since(lm), "opt"):
                 break
+            # silent for 3 minutes: the app's own threads say where it sits (SIGQUIT = every thread's stack into the log); a second silence of 3 more minutes ends the wait instead of burning the full 17
+            if time.time() - last_change > 180:
+                self.opt_stacks(pkg)
+                dumps += 1
+                last_change = time.time()
+                if dumps >= 2:
+                    say("opt: silent for 6 minutes, two stack dumps taken: stopping the wait")
+                    break
         if '"kind":"kestrel-autotune"' not in result:
             tail = [ln for ln in self.log.since(lm) if re.search(r"OptimizerActivity|OptimizerRunner|RestartActivity|AndroidRuntime|FATAL EXCEPTION|Permission Denial|Unable to find explicit|ActivityTaskManager.*(START|Displayed|Exception)|KestrelHealth.*(opt|life)", ln)]
             say("opt: the run did not start or finish; %d relevant log lines, the last 70 follow" % len(tail))
