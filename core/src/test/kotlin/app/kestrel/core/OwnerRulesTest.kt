@@ -864,4 +864,22 @@ class OwnerRulesTest {
         assertTrue("the sec layer reaches the live diagnostics and is never thinned", source("core/src/main/kotlin/app/kestrel/core/livediag/DiagScrub.kt").contains("\"win\", \"sec\",") && source("core/src/main/kotlin/app/kestrel/core/livediag/DiagJournal.kt").contains("|^sec |"))
         assertTrue("the digest starts with the focus report", source("tools/diag_digest.py").contains("def focus_report(batches):") && source("tools/diag_digest.py").contains("    focus_report(batches)\n"))
     }
+
+    /** PERF17 (owner 2026-11-24: "Do the lazy restore fix if it is logical and what major browsers do. ... Animations on websites are laggy ... Cloudflare tests for anti bots are extremely slow"). */
+    @Test fun perf17LazyStartAfterALongBreakAndTheMeasuresForAnimationsAndBotChecks() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the time the app was left is stamped when it pauses (a time only)", act.contains("prefs.lastLeftAt = System.currentTimeMillis()"))
+        val restore = body(act, "    private fun restore(session: Session?, saved: Bundle?,")
+        assertTrue("restore asks the rule with: the switch, the break, the address, started-by-link, fresh start, left-on-Home", restore.contains("LazyStart.applies(prefs.lazyStart, away, sel.url, launch != null, saved == null, sel.showHome)"))
+        assertTrue("a waiting tab uses the Home path (AQ1): no engine session, nothing loads", restore.contains("sel.showHome = true; sel.lazyStart = true"))
+        assertTrue("the start-up cover is skipped for it", act.contains("LazyStart.applies(prefs.lazyStart, LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis()), sel.url, false, freshStart, sel.homeOverPage)") && act.contains("\"early-cover-skipped\", \"lazy start\""))
+        assertTrue("the Continue line is bound from the UI refresh and the flag is cleared once the page shows", act.contains("home.bindContinue(if (t != null && t.lazyStart && t.showHome) LazyStart.label(t.title, t.url) else null)") && act.contains("if (t != null && t.lazyStart && !t.showHome) t.lazyStart = false"))
+        assertTrue("the tap loads the page like Back from Home does", body(act, "    internal fun continueLazy() {").contains("t.lazyStart = false; t.showHome = false") && act.contains("home.onContinue = { continueLazy() }"))
+        assertTrue("Settings can turn it off", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.lazyStart) { prefs.lazyStart = it }"))
+        assertTrue("on by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var lazyStart: Boolean get() = bool(\"lazy_start\", true)"))
+        val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
+        assertTrue("the frame window is one 2.5 s sample after the load and skipped for a hidden page", pt.contains("document.hidden) return;") && pt.contains(">= 2500") && pt.contains("setTimeout(cadence, 100)"))
+        assertTrue("the bot-check marker looks at the title and the check's own elements, never at the jsd script every protected site loads", pt.contains("just a moment|attention required") && pt.contains("challenge-stage") && !pt.contains("script[src*=\"/cdn-cgi/challenge-platform"))
+        assertTrue("the numbers reach the live diagnostics line", act.contains("PageTimingLine.build(host, v, lag, sl, ctx, fm, m.optInt(\"ch\", 0), m.optLong(\"chs\", -1L))") && source("core/src/main/kotlin/app/kestrel/core/livediag/PageTimingLine.kt").contains("\" fm=\""))
+    }
 }
