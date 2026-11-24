@@ -895,4 +895,19 @@ class OwnerRulesTest {
         assertTrue("an engine kill is stamped so signals pass for 6 hours", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("prefs.lastEngineKillAt = System.currentTimeMillis()"))
         assertTrue("on by default, with a Settings switch", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var holdFalseTrims: Boolean get() = bool(\"hold_false_trims\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.holdFalseTrims) { prefs.holdFalseTrims = it }"))
     }
+
+    /** PERF21 (owner 2026-11-24: "The animations on this page are very laggy and make the entire site laggy. They also each have a play button, which is incorrect for in site animations"). */
+    @Test fun perf21DecorativeClipsGetNoBarAndPlayOnlyOnScreenTwoAtATime() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val vf = source(dir + "vfind.js")
+        assertTrue("one definition of a decorative clip: silent, looping, no controls of its own", vf.contains("v.loop && (v.muted || v.defaultMuted) && !v.controls") && vf.contains("decorative: decorative"))
+        assertTrue("the bar is never drawn over one", source(dir + "videobar.js").contains("if (VF.decorative && VF.decorative(v)) { if (!late) report('deco', 'bar'); return; }"))
+        val dc = source(dir + "decoclips.js")
+        assertTrue("two at a time", dc.contains("max: 2"))
+        assertTrue("only clips that already play are governed, and only after the app said so", dc.contains("r.dc === true") && dc.contains("window.addEventListener('playing'"))
+        assertTrue("a page that fights it is left alone", dc.contains("list.length > T.tries") && dc.contains("free.set(v, 1)"))
+        assertTrue("it is declared in the manifest like the other video scripts", source(dir + "manifest.json").contains("\"decoclips.js\""))
+        assertTrue("the flag reaches the page and the Settings row turns it off", source(dir + "background.js").contains("dc: told && (f & 4096) !== 0") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("or (if (prefs().limitClips) 4096 else 0)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.limitClips) { prefs.limitClips = it }"))
+        assertTrue("on by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var limitClips: Boolean get() = bool(\"limit_clips\", true)"))
+    }
 }
