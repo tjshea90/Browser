@@ -58,6 +58,7 @@ object GeckoPrefs {
         if (p.labDither) add("gfx.webrender.dithering=false")                              // no dithering of gradients: less per-pixel work in CPU drawing, a little banding in smooth gradients
         if (p.labBytecode) add("dom.script_loader.bytecode_cache.strategy=-1")              // the compiled form of a script is saved the first time it is seen, not after the second load
         if (p.labGcPar) add("javascript.options.mem.gc_parallel_marking=true")              // the script engine's clean-up marks on more than one thread
+        for ((name, value) in app.kestrel.browser.optimizer.OptimizerApply.parseEngine(p.optPrefs)) add("$name=$value")   // OPT1: what an Auto-tune run asked for (only names of its catalog)
         for ((name, value) in app.kestrel.core.gfx.DrawTrial.overrides(p.drawTrial)) add("$name=$value")   // PERF25: names gecko-prefs.txt already sets (the shader precompile at start)
     }
 
@@ -110,6 +111,7 @@ object GeckoPrefs {
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
+        app.kestrel.browser.optimizer.OptimizerGuard.beforeEngine(ctx)      // OPT1: a run that is active decides the start configuration (and puts the person's own back after a failed start or a closed app)
         guardTrial(app.kestrel.browser.data.Prefs.get(ctx))     // PERF25: before anything reads the trial number
         var yaml = yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx))) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log

@@ -103,6 +103,26 @@ class Prefs private constructor(ctx: Context) {
     var drawTrial: Int get() = sp.getInt("draw_trial", 0); set(v) = put("draw_trial", v.coerceIn(0, 2))
     var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
     var drawTrialWhy: String get() = sp.getString("draw_trial_why", "") ?: ""; set(v) = put("draw_trial_why", v)
+    /**
+     * OPT1 (research/OPTIMIZER.md, Auto-tune): the engine preferences a run asked for, `name=value` per line (only names of core Catalog; written into the engine's start-up config by GeckoPrefs.labOverrides),
+     * and typed access to the app settings the catalog can change, by key. Nothing outside the catalog's keys can be read or written through [optGet] / [optSet].
+     */
+    var optPrefs: String get() = sp.getString("opt_prefs", "") ?: ""; set(v) = put("opt_prefs", v)
+    fun optGet(key: String): Int? = when (key) {
+        "draw_trial" -> drawTrial; "scroll_feel" -> scrollFeel
+        "lab_fps30" -> if (labFps30) 1 else 0; "lab_dither" -> if (labDither) 1 else 0; "lab_bytecode" -> if (labBytecode) 1 else 0; "lab_gcpar" -> if (labGcPar) 1 else 0
+        "limit_clips" -> if (limitClips) 1 else 0
+        else -> null
+    }
+    fun optSet(key: String, v: Int): Boolean {
+        when (key) {
+            "draw_trial" -> drawTrial = v; "scroll_feel" -> scrollFeel = v
+            "lab_fps30" -> labFps30 = v != 0; "lab_dither" -> labDither = v != 0; "lab_bytecode" -> labBytecode = v != 0; "lab_gcpar" -> labGcPar = v != 0
+            "limit_clips" -> limitClips = v != 0
+            else -> return false
+        }
+        return true
+    }
     /** PERF14 (owner 2026-11-23: "is there a way to speed up page loading"): "Calmer redrawing" (default OFF): the engine redraws a page at most 30 times a second (layout.frame_rate) instead of 60, which halves the drawing work of pages that animate while they load; read when the engine starts. */
     var labFps30: Boolean get() = bool("lab_fps30", false); set(v) = put("lab_fps30", v)
     /** PERF22 (research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF; applied at the next start; every upload carries them, the digest's SETTING A/B compares page loads with and without. */

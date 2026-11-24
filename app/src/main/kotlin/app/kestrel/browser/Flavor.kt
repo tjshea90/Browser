@@ -50,4 +50,6 @@ object Flavor {
 
     /** The engine's network switches (DNS over HTTPS, HTTP/3) can be changed live (Gecko build): Settings shows the "Network lab" rows. */
     @JvmField var hasNetworkLab = false
+    /** OPT1: the Auto-tune screen exists (Kestrel G only: it drives the Firefox engine). */
+    @JvmField var hasAutoTune = false
 }

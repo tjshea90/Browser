@@ -48,8 +48,8 @@ object PlanBuilder {
 class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     private fun exp(id: String?) = catalog.firstOrNull { it.id == id }
 
-    fun start(runId: String, now: Long, priority: Priority, budgetMin: Int, base: Config, skip: Set<String>, engineVersion: String, appVersion: String): RunState =
-        RunState(runId, now, priority, budgetMin, PlanBuilder.build(catalog, skip), base, bootConfig = base, running = base, engineVersion = engineVersion, appVersion = appVersion)
+    fun start(runId: String, now: Long, priority: Priority, budgetMin: Int, base: Config, skip: Set<String>, engineVersion: String, appVersion: String, only: Set<String> = emptySet()): RunState =
+        RunState(runId, now, priority, budgetMin, PlanBuilder.build(catalog.filter { only.isEmpty() || it.id in only }, skip), base, bootConfig = base, running = base, engineVersion = engineVersion, appVersion = appVersion)
 
     // ---------------------------------------------------------------------------------------------------------------- events
 
@@ -80,7 +80,7 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     }
 
     /** The engine is up with [actual] (the app read the preferences back) and [defaults] are the engine's own values of the names the catalog can flip. */
-    fun onEngineUp(s: RunState, actual: Config, defaults: Map<String, String>): RunState = s.copy(running = actual, defaults = s.defaults + defaults)
+    fun onEngineUp(s: RunState, actual: Config, defaults: Map<String, String>): RunState = s.copy(running = actual, defaults = defaults + s.defaults)
 
     fun onSample(s: RunState, sample: Sample): RunState {
         if (s.cursor >= s.steps.size) return s

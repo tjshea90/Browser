@@ -950,4 +950,27 @@ class OwnerRulesTest {
         assertTrue("the Diagnostics read-back names the trial's prefs", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.use-optimized-shaders") && source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.draw-calls-for-texture-copy"))
         assertTrue("the digest compares page loads with and without the trial", source("tools/diag_digest.py").contains("'draw_trial'") && source("tools/diag_digest.py").contains("hardware trial"))
     }
+
+    /** OPT1 (owner 2026-11-24: "an automated system ... that tries all different experiments and settings ... finds the best speed"; research/OPTIMIZER.md): the wiring that makes Auto-tune safe. */
+    @Test fun opt1AutoTuneIsWiredSoThatNoRunCanLeaveTheOwnerInABrokenOrTestSetting() {
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
+        val guard = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerGuard.kt")
+        assertTrue("the guard asks the pure machine and writes the configuration it returns", guard.contains("RunMachine().onProcessStart(st)") && guard.contains("OptimizerApply.write(Prefs.get(ctx), cfg)") && guard.contains("if (st.status == Status.DONE) return"))
+        val apply = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerApply.kt")
+        assertTrue("only catalog names and keys can be written", apply.contains("it in Catalog.engineNames()") && apply.contains("k in Catalog.settingKeys()") && apply.contains("n in allowed"))
+        val machine = source("core/src/main/kotlin/app/kestrel/core/optimizer/Machine.kt")
+        assertTrue("a closed app pauses the run and boots with the person's own settings; a start that never produced a sample fails the step", machine.contains("the app was closed in the middle of the run") && machine.contains("the app died or hung while starting with this setting") && machine.contains("two starts in a row failed"))
+        val runner = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerRunner.kt")
+        assertTrue("the run never starts with a private tab open and never uploads while one is", runner.contains("PrivateGuard.active()") && runner.contains("LiveDiag.isEnabled() && LiveDiag.hasToken()"))
+        assertTrue("it stops for a low battery, heat and Battery Saver instead of measuring badly", runner.contains("isPowerSaveMode") && runner.contains("THERMAL_STATUS_SEVERE") && runner.contains("the battery is at"))
+        assertTrue("the benchmark server is loopback only and takes the token first", source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/BenchServer.kt").contains("InetAddress.getByName(\"127.0.0.1\")") && source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/BenchServer.kt").contains("parts[0] != token"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("the screen and the restart trampoline are declared, the trampoline in its own process and not exported", man.contains(".optimizer.OptimizerActivity") && man.contains(".optimizer.RestartActivity") && man.contains("android:process=\":restart\""))
+        assertTrue("Settings has the row (Kestrel G only) and the activity opens it", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Flavor.hasAutoTune") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("override fun openAutoTune()"))
+        val gate = source("geckoapp/src/main/assets/kestrel-shields/gate-main.js")
+        assertTrue("pages on the loopback address (the benchmark pages) are not gated: they cost no mobile data", gate.contains("location.hostname === '127.0.0.1'") && gate.contains("if (LOCAL) d = '0';"))
+        assertTrue("the digest for Claude exists", source("tools/optimizer_digest.py").contains("kestrel-autotune"))
+        assertTrue("the optimizer's engine names are checked against the pinned engine", source("tools/check-gecko-prefs.sh").contains("Auto-tune experiment names it"))
+    }
 }

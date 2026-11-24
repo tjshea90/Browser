@@ -13,6 +13,8 @@ import app.kestrel.core.shield.DataSaver
 import app.kestrel.core.url.HttpsPolicy
 
 interface SettingsListener {
+    /** OPT1: Settings > Auto-tune (Kestrel G): open the automatic optimizer screen. */
+    fun openAutoTune() {}
     fun closeSettings()
     fun prefsChanged()
     fun clearBrowsingData()
@@ -187,6 +189,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         toggle("Extra tracker lists", "Adds AdGuard Tracking Protection and HaGeZi Light to the blocking lists: more cookie-sync and tracker requests are stopped (about 3 MB more to download the first time, a little more memory). A page that stops working: turn Shields off for that site. Switching it starts the update now.", prefs.extraTrackerLists) { prefs.extraTrackerLists = it; l.updateFiltersNow() }
         choice("Ad-blocking lists: update", listOf("Every day (recommended)", "Every week", "Only when I tap Update"), prefs.updatePolicy) { prefs.updatePolicy = it }
         toggle("Only on unmetered networks", "A hotspot counts as metered, so leave this off if you want updates over it", prefs.updateUnmeteredOnly) { prefs.updateUnmeteredOnly = it }
+
+        if (app.kestrel.browser.Flavor.hasAutoTune) {
+            section("Auto-tune")
+            button("Auto-tune: find the best settings for this tablet", "Tries each speed setting one by one with fixed test pages, keeps only what is proven better and tells you what it kept. About an hour; plug the tablet in. You can pause or stop, and your own settings come back. The results can go to Claude if diagnostics sending is on.") { l.openAutoTune() }
+        }
 
         if (app.kestrel.browser.Flavor.hasNetworkLab) {
             section("Network lab (for slow pages)")

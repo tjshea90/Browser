@@ -2865,6 +2865,7 @@ open class BrowserActivity : Activity(), DockListener {
     private val keyboardFlow by lazy { app.kestrel.browser.ui.KeyboardFlow(this, keyboardHost) }
 
     private val settingsListener = object : SettingsListener {
+        override fun openAutoTune() { startActivity(Intent(this@BrowserActivity, app.kestrel.browser.optimizer.OptimizerActivity::class.java)) }
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
