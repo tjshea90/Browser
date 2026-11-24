@@ -93,14 +93,47 @@
     try { document.addEventListener('change', fileChanged, true); document.addEventListener('input', fileChanged, true); } catch (e0) { /* optional */ }
 
     // ---- the page's lateness
-    var lagMax = 0, lagTot = 0, lagTicks = 0, expected = perf.now() + TICK, timer = 0, sampling = true;
+    var lagMax = 0, lagTot = 0, lagTicks = 0, expected = perf.now() + TICK, timer = 0, sampling = true, tickN = 0;
+
+    // ---- PERF17d (owner 2026-11-24: "Cloudflare tests for anti bots are extremely slow"): is this page a bot check, and for how long? 1 = the full-page interstitial (title or its own page elements), 2 = a check widget inside a normal
+    // page (a Turnstile box). Looked at once a second from the lateness tick; the first time it is seen is kept. Nothing but a number leaves the page. (The jsd script every protected site loads is NOT a check: not looked at.)
+    var chKind = 0, chAt = -1;
+    function checkKind() {
+      try {
+        var t = String(document.title || '').toLowerCase();
+        if (/^(just a moment|attention required|checking your browser|verifying you are human|one more step|performing security verification)/.test(t)) return 1;
+        if (document.getElementById('challenge-form') || document.getElementById('challenge-running') || document.getElementById('challenge-stage') || document.getElementById('cf-challenge-running')) return 1;
+        if (document.querySelector('.cf-turnstile, iframe[src*="challenges.cloudflare.com"]')) return 2;
+      } catch (e) { /* a page must never feel this script */ }
+      return 0;
+    }
     function tick() {
       if (!sampling) return;
       var now = perf.now(), late = now - expected;
       if (late > 50) { lagTicks++; lagTot += late; }
       if (late > lagMax) lagMax = late;
       expected = now + TICK;                                 // from now: one long block counts once, not once per missed tick
+      tickN++;
+      if (chKind !== 1 && (tickN % 10) === 0) { var ck = checkKind(); if (ck && (chKind === 0 || ck === 1)) { if (chKind === 0) chAt = now; chKind = ck; } }
       timer = setTimeout(tick, TICK);
+    }
+
+    // ---- PERF17c (owner 2026-11-24: "Animations on websites are laggy"): the page's own frame cadence right after the load: how many frame callbacks came in 2.5 s, how many gaps over 50 ms and over 100 ms, the longest gap.
+    // A page that animates shows its drawing rate; an idle page shows the engine's rate. One window, started 100 ms after the load event (so it ends before the report GRACE later), skipped when the page is hidden.
+    var fmRes = null;
+    function cadence() {
+      try {
+        if (typeof requestAnimationFrame !== 'function' || document.hidden) return;
+        var t0 = perf.now(), last = 0, n = 0, a = 0, b = 0, mx = 0;
+        var f = function (t) {
+          if (document.hidden || sent) return;
+          if (last) { var d = t - last; n++; if (d > 50) a++; if (d > 100) b++; if (d > mx) mx = d; }
+          last = t;
+          if (perf.now() - t0 >= 2500) { fmRes = [n, a, b, Math.round(mx)]; return; }
+          requestAnimationFrame(f);
+        };
+        requestAnimationFrame(f);
+      } catch (e) { /* optional */ }
     }
     timer = setTimeout(tick, TICK);
 
@@ -182,13 +215,14 @@
         lm: [Math.round(lagMax), Math.round(lagTot), lagTicks],
         nodes: count('*'), scr: count('script'), fr: count('iframe'),
         hid: hid, pt: partial ? 1 : 0, sl: sl, at: Math.round(perf.now()),
+        fm: fmRes, ch: chKind || checkKind(), chs: chAt >= 0 ? Math.round(perf.now() - chAt) : -1,
         rd: n ? (+n.redirectCount || 0) : 0
       };
       try { browser.runtime.sendMessage(m).catch(function () { /* the background page is not there: nothing to do */ }); } catch (e) { /* same */ }
     }
 
     // when to tell: GRACE after the load event, never later than CAP after the start, and at once if the page is left
-    function afterLoad() { setTimeout(function () { report(false); }, GRACE); }
+    function afterLoad() { setTimeout(cadence, 100); setTimeout(function () { report(false); }, GRACE); }
     if (document.readyState === 'complete') afterLoad(); else window.addEventListener('load', afterLoad, false);
     setTimeout(function () { report(true); }, CAP);
     try { window.addEventListener('pagehide', function () { report(true); }, false); } catch (e6) { /* optional */ }

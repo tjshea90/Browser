@@ -388,7 +388,8 @@ onMsg(function (m, sender) {
     send({ k: 'pt', p: tabTop.get(tabId) || '', nt: ptC(m.nt) % 4, dns: ptN(m.dns, 6e5), con: ptN(m.con, 6e5), tls: ptN(m.tls, 6e5), fb: ptN(m.fb, 6e5), ttfb: ptN(m.ttfb, 6e5),
       dcl: ptN(m.dcl, 6e5), load: ptN(m.load, 6e5), fcp: ptN(m.fcp, 6e5), lcp: ptN(m.lcp, 6e5), rn: ptC(m.rn), rc: ptC(m.rc), kb: ptC(m.kb), r1: ptC(m.r1), r3: ptC(m.r3), rsum: ptN(m.rsum, 1e7),
       h2: ptC(m.h2), h1: ptC(m.h1), h3: ptC(m.h3), js: ptC(m.js), css: ptC(m.css), img: ptC(m.img), xhr: ptC(m.xhr), oth: ptC(m.oth),
-      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl }).catch(function () {});
+      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl,
+      fm: (m.fm && m.fm.length === 4) ? [ptC(m.fm[0]), ptC(m.fm[1]), ptC(m.fm[2]), ptN(m.fm[3], 6e5)] : null, ch: (+m.ch === 1 || +m.ch === 2) ? +m.ch : 0, chs: ptN(m.chs, 6e5) }).catch(function () {});
     return undefined;
   }
   if (m.k === 'fc') { // PERF10c: pagetime.js (top frame) says what the page received when a file input changed: a few numbers and fixed words, all checked here, never a name
