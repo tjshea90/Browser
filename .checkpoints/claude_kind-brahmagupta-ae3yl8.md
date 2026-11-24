@@ -1,22 +1,24 @@
-# CHECKPOINT 3217 — read me first, then TASKS.md
+# CHECKPOINT 3218 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T07:50:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `425da5ec` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T08:03:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `c45aae47` (this checkpoint is the commit after it)
 
 ## Just done
-PERF25: app unit tests green; bumped to alpha105 / code 206, release note docs/handoff/ALPHA105_RELEASE_NOTE.txt written
+gated kestrel-g-v0.3.0-alpha105 (gecko code 206) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-Run bash ship.sh gecko with the note from docs/handoff/ALPHA105_RELEASE_NOTE.txt (background; it gates and pushes), then ONE dispatch of android.yml (app=gecko full_build=true note), poll the RUN, get_release_by_tag kestrel-g-v0.3.0-alpha105, tools/record-release.sh with the identical note, tick PERF25c in TASKS, answer the owner and ask which device Brave ran on
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/kind-brahmagupta-ae3yl8, inputs {"app":"gecko","full_build":"true","note":"alpha105: a test for drawing pages on the graphics chip again. You said the parlay site is smooth in Brave. The likely reason is how it draws: since 2026-11-23 Kestrel G draws every page with the processor, because drawing on the graphics chip lost bands of text on this tablet. That is what your uploads show: right after a page loads it draws about 6 pictures a second (60 is smooth), a heavy page shows its first picture after 15 seconds instead of 2, and typing, scrolling and page animations all wait for the same four weak cores. Brave and Chrome draw on the graphics chip. NEW: Settings, Network lab, Hardware drawing trial (experiment). Off is the default and is exactly what you have now. 1 = the graphics chip draws, with the engine paths that Mozilla's own bug reports blame on Mali chips switched off (the faster shader variants, the way the engine copies its picture memory, and the driver's saved programs). 2 = the same, without the engine's separate drawing helper and without compiling every program at start. It applies at the next start (close Kestrel from the recent apps list and open it again). It cannot trap you: if a start with the trial on never gets a steady picture, or the page process crashes within 3 minutes of the start, the trial switches itself off and Settings tells you why. While a trial runs, Software drawing is not used. TO TRY (3 minutes): set 1, restart, open claude.ai (a chat with a table) and YouTube, scroll for a minute. Bands of missing text, or blocks that vanish when you scroll: try 2; bands again: set it Off. No bands: leave it on for a day, use the parlay site, then send diagnostics: the report compares page animation, first paint and typing with and without it. Not run on the tablet: there is no graphics chip in the build machine, so the trial is tested as rules and compiled, not drawn. Said plainly: Mozilla's reports name other Mali chips, none this one, so this is a test, not a promise; if both settings show bands, the graphics chip stays closed and the work goes to making processor drawing cheaper."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha105), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha105 "alpha105: a test for drawing pages on the graphics chip again. You said the parlay site is smooth in Brave. The likely reason is how it draws: since 2026-11-23 Kestrel G draws every page with the processor, because drawing on the graphics chip lost bands of text on this tablet. That is what your uploads show: right after a page loads it draws about 6 pictures a second (60 is smooth), a heavy page shows its first picture after 15 seconds instead of 2, and typing, scrolling and page animations all wait for the same four weak cores. Brave and Chrome draw on the graphics chip. NEW: Settings, Network lab, Hardware drawing trial (experiment). Off is the default and is exactly what you have now. 1 = the graphics chip draws, with the engine paths that Mozilla's own bug reports blame on Mali chips switched off (the faster shader variants, the way the engine copies its picture memory, and the driver's saved programs). 2 = the same, without the engine's separate drawing helper and without compiling every program at start. It applies at the next start (close Kestrel from the recent apps list and open it again). It cannot trap you: if a start with the trial on never gets a steady picture, or the page process crashes within 3 minutes of the start, the trial switches itself off and Settings tells you why. While a trial runs, Software drawing is not used. TO TRY (3 minutes): set 1, restart, open claude.ai (a chat with a table) and YouTube, scroll for a minute. Bands of missing text, or blocks that vanish when you scroll: try 2; bands again: set it Off. No bands: leave it on for a day, use the parlay site, then send diagnostics: the report compares page animation, first paint and typing with and without it. Not run on the tablet: there is no graphics chip in the build machine, so the trial is tested as rules and compiled, not drawn. Said plainly: Mozilla's reports name other Mali chips, none this one, so this is a test, not a promise; if both settings show bands, the graphics chip stays closed and the work goes to making processor drawing cheaper."
+NEVER ship kestrel-g-v0.3.0-alpha105 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/build.gradle.kts
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  c45aae47 ckpt 3217: PERF25: app unit tests green; bumped to alpha105 / code 206, release note do
   512c9e18 ckpt 3215: PERF25c: built the hardware drawing trial (core DrawTrial + DrawTrialTest + 
   6d20d18a ckpt 3203: wrote PERF25 (owner: Brave is smooth on the parlayapi site) into TASKS.md, n
   f3c4d330 ckpt 3202: alpha104 (code 205) SHIPPED: run 45346018174 green, Release kestrel-g-v0.3.0
@@ -26,8 +28,4 @@ Run bash ship.sh gecko with the note from docs/handoff/ALPHA105_RELEASE_NOTE.txt
   b46f56e2 ckpt 3193: PERF24 coded: tab sleep plan (core LiveBudget.sleepPlan + Tab.reloadMs + Pag
   64c28c57 ckpt 3188: owner request PERF24 (laggy typing in text boxes, the sports-odds page and i
   5a4fdea9 ckpt 3187: TEST1: the owner's step-by-step test guide written (research/TEST_PLAN_alpha
-  2775495b ckpt 3186: alpha103 SHIPPED and recorded: run 45333801406 green on attempt 1, Release h
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
