@@ -58,6 +58,7 @@ object GeckoPrefs {
         if (p.labDither) add("gfx.webrender.dithering=false")                              // no dithering of gradients: less per-pixel work in CPU drawing, a little banding in smooth gradients
         if (p.labBytecode) add("dom.script_loader.bytecode_cache.strategy=-1")              // the compiled form of a script is saved the first time it is seen, not after the second load
         if (p.labGcPar) add("javascript.options.mem.gc_parallel_marking=true")              // the script engine's clean-up marks on more than one thread
+        for ((name, value) in app.kestrel.core.gfx.DrawTrial.overrides(p.drawTrial)) add("$name=$value")   // PERF25: names gecko-prefs.txt already sets (the shader precompile at start)
     }
 
     /**
@@ -75,8 +76,31 @@ object GeckoPrefs {
             // leave some rows of a glyph or tile not yet written when the page is busy: plain uploads instead (research/PAINT_GLITCH.md, 2026-11-22).
             append("  gfx.webrender.pbo-uploads: false\n")
         }
+        // PERF25: the hardware drawing TRIAL (core DrawTrial): the graphics chip draws with the Mali paths Mozilla's own bugs name switched off. A trial and CPU drawing exclude each other: while a trial runs, Software drawing is not written.
+        for ((name, value) in app.kestrel.core.gfx.DrawTrial.lines(p.drawTrial)) append("  ").append(name).append(": ").append(value).append('\n')
         // PERF10b: CPU drawing (software WebRender). Mozilla's own text-band bug threads name it as the one switch that always removes this fault family; slower, so OFF unless the person turns it on.
-        if (p.labSoft) append("  gfx.webrender.software: true\n")
+        if (app.kestrel.core.gfx.DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)) append("  gfx.webrender.software: true\n")
+    }
+
+    @Volatile private var trialGuarded = false
+
+    /**
+     * PERF25: once per process, BEFORE the config file is written. A trial start leaves a mark ([app.kestrel.browser.data.Prefs.drawTrialStart]) that the engine's first steady picture takes away; a mark that is still
+     * there means the last start with the trial never steadied (the graphics driver killed the app or hung it): the trial switches itself off now, so the person never meets a browser that will not open.
+     */
+    private fun guardTrial(p: app.kestrel.browser.data.Prefs) {
+        if (trialGuarded) return
+        trialGuarded = true
+        val trial = p.drawTrial
+        if (trial == 0) { if (p.drawTrialStart != 0L) p.drawTrialStart = 0L; return }
+        if (app.kestrel.core.gfx.DrawTrial.startFailed(trial, p.drawTrialStart)) {
+            p.drawTrialWhy = "the last start with '" + app.kestrel.core.gfx.DrawTrial.label(trial) + "' never steadied, so it was switched off"
+            p.drawTrial = 0; p.drawTrialStart = 0L
+            app.kestrel.browser.diag.Health.log("engine", "draw-trial", "reverted: " + p.drawTrialWhy)
+        } else {
+            p.drawTrialStart = System.currentTimeMillis()
+            app.kestrel.browser.diag.Health.log("engine", "draw-trial", "start: " + app.kestrel.core.gfx.DrawTrial.label(trial))
+        }
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
@@ -86,6 +110,7 @@ object GeckoPrefs {
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
+        guardTrial(app.kestrel.browser.data.Prefs.get(ctx))     // PERF25: before anything reads the trial number
         var yaml = yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx))) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.

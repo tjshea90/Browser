@@ -23,7 +23,7 @@ object DrawTrial {
     const val MAX = 2
 
     /** A start counts as good once the engine has drawn this long without dying; the mark of the start is taken away then. */
-    const val STABLE_MS = 60_000L
+    const val STABLE_MS = 15_000L
 
     private val base = listOf(
         "gfx.webrender.use-optimized-shaders" to "false",

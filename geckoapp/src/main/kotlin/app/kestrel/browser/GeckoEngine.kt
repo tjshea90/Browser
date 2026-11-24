@@ -208,7 +208,8 @@ object GeckoEngine {
         "network.dnsCacheExpiration", "layout.css.scroll-anchoring.enabled", "dom.lazy-loading.margin.top", "image.cache.size")
     /** PERF8c: the engine's own values of the graphics prefs "Safe drawing" sets (and the ones to try next), as ONE Health line, so the live diagnostics prove whether the setting reached the engine. */
     private val drawPrefs = listOf("gfx.webrender.scissored-cache-clears.enabled", "gfx.webrender.batched-texture-uploads", "gfx.webrender.max-partial-present-rects", "gfx.webrender.allow-partial-present-buffer-age",
-        "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "gfx.webrender.software", "layers.gpu-process.enabled")
+        "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "gfx.webrender.software", "layers.gpu-process.enabled",
+        "gfx.webrender.use-optimized-shaders", "gfx.webrender.draw-calls-for-texture-copy", "gfx.webrender.program-binary-disk", "gfx.webrender.precache-shaders", "gfx.webrender.software.opengl")   // PERF25: the trial's names + the CPU path's own present mode
     fun logDrawPrefs() {
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(drawPrefs).accept({ list ->

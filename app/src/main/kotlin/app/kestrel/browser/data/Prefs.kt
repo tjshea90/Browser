@@ -98,7 +98,7 @@ class Prefs private constructor(ctx: Context) {
     /**
      * PERF25 (research/BRAVE_SMOOTH.md): "Hardware drawing trial" of the Network lab. 0 = off (what runs now: the processor draws, or the engine's own default when Software drawing is off), 1 = the graphics chip draws
      * with the Mali fixes (core DrawTrial), 2 = the same without the renderer's helper process. Applies at the next start. [drawTrialStart] is the time a trial start began and is taken away once the engine has drawn
-     * for a minute: if it is still there at the next start, that start never steadied and the trial switches itself off ([drawTrialWhy] keeps the reason for the Diagnostics).
+     * for 15 seconds (or the app is left after its first picture): if it is still there at the next start, that start never steadied and the trial switches itself off ([drawTrialWhy] keeps the reason for the Diagnostics).
      */
     var drawTrial: Int get() = sp.getInt("draw_trial", 0); set(v) = put("draw_trial", v.coerceIn(0, 2))
     var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
