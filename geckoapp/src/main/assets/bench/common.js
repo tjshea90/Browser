@@ -27,8 +27,9 @@
     });
   };
   /** Tells the app (and the tests) that the page finished. [m] = numbers, [err] = what went wrong, if anything. */
+  K.note = '';
   K.report = function (page, m, err) {
-    var body = JSON.stringify({ page: page, n: K.n, m: m || {}, err: err || '' });
+    var body = JSON.stringify({ page: page, n: K.n, m: m || {}, err: err || '', note: K.note || '' });
     document.title = 'bench-done ' + page;
     try { fetch('/' + K.token + '/r', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body, keepalive: true }).catch(function () {}); } catch (e) { /* the app also reads the title */ }
   };

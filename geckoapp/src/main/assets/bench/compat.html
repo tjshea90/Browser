@@ -33,6 +33,6 @@ K.run('compat', function () {
   t('pointer-events', function () { return typeof PointerEvent === 'function'; });
   t('custom-elements', function () { return typeof customElements === 'object' && typeof customElements.define === 'function'; });
   var pass = 0, jobs = tests.map(function (x) { return Promise.resolve().then(x[1]).then(function (ok) { if (ok) pass++; else failed.push(x[0]); }, function () { failed.push(x[0]); }); });
-  return Promise.all(jobs).then(function () { return { compat_pass: pass, compat_total: tests.length, compat_failed: failed.length ? failed.sort().join(',') : '' }; }).then(function (m) { if (m.compat_failed) { var o = {}; for (var k in m) if (k !== 'compat_failed') o[k] = m[k]; K.failedNames = m.compat_failed; return o; } return m; });
+  return Promise.all(jobs).then(function () { K.note = failed.length ? 'failed: ' + failed.sort().join(',') : ''; return { compat_pass: pass, compat_total: tests.length }; });
 });
 </script></body></html>
