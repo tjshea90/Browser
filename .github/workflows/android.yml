@@ -187,10 +187,15 @@ jobs:
           echo x > probe.txt
           t gh release create "$P-h" probe.txt --prerelease --target "$SHA" --title probe --notes probe
           t gh release create "$P-i" --draft --target "$SHA" --title probe --notes probe
+          # the real tags look like kestrel-g-v0.3.0-alpha106 and match the workflow's own tag trigger: try that shape (and the real notes file shape), then remove
+          Q="kestrel-g-v0.0.0-probe$GITHUB_RUN_ID"
+          printf '%s\n\n**probe** (versionCode 1). text with `backticks` and a link https://example.com\n' "alpha probe note" > notes.md
+          t gh release create "$Q" probe.txt --prerelease --target "$SHA" --title "Kestrel G probe" --notes-file notes.md
+          t gh release create "$Q-b" --draft --target "$SHA" --title "Kestrel G probe b" --notes probe
           echo; echo "== clean up"
-          for id in $(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name | startswith(\"$P\")) | .id"); do gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id"; done
-          for ref in $(gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'); do gh api -X DELETE "repos/$REPO/git/$ref" && echo "deleted $ref"; done
-          echo "tags left:"; gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'
+          for id in $(gh api "repos/$REPO/releases" --paginate --jq ".[] | select((.tag_name | startswith(\"$P\")) or (.tag_name | startswith(\"$Q\"))) | .id"); do gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id"; done
+          for pre in "$P" "$Q"; do for ref in $(gh api "repos/$REPO/git/matching-refs/tags/$pre" --jq '.[].ref'); do gh api -X DELETE "repos/$REPO/git/$ref" && echo "deleted $ref"; done; done
+          echo "tags left:"; gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'; gh api "repos/$REPO/git/matching-refs/tags/$Q" --jq '.[].ref'
 
   # ------------------------------------------------------------------ minutes: the JVM suites + lint (once, shared by both apps)
   test-jvm:
