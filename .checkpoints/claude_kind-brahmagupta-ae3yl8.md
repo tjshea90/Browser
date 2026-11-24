@@ -1,34 +1,22 @@
-# CHECKPOINT 3266 — read me first, then TASKS.md
+# CHECKPOINT 3268 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T20:23:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `72ceed92` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T20:41:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `4bddd81e` (this checkpoint is the commit after it)
 
 ## Just done
-OPT1: Auto-tune integrated (BenchServer, Store, Apply, Guard, restart trampoline, Runner, Activity, Settings row, gate exemption for 127.0.0.1, lab suite opt); core 2103 + app 508 tests green, web gate 29 + bench 8 green, :geckoapp compiles; staging folder removed. alpha106 release job failed ONLY at 'Publish the Release' with HTTP 403 (workflow permissions unchanged): rerun_failed_jobs asked once on run 45474823903
+alpha106 release publish fails with HTTP 403 twice (token has contents: write, GitHub status clean, earlier releases after workflow edits succeeded): added a one-minute probe job to android.yml (app=lab, lab_suite=probe) that reads the repo's Actions permissions / rulesets / tag protection and tries draft + real release and tag creation, then removes them
 
 ## Do this next
-(1) Check run 45474823903 build-gecko after the rerun: if Publish the Release is green -> get_release_by_tag kestrel-g-v0.3.0-alpha106 -> bash tools/record-release.sh kestrel-g-v0.3.0-alpha106 <note from docs/handoff/ALPHA106_RELEASE_NOTE.txt, tr -d newline> -> tick FF1c. If it fails with 403 again: read GitHub repo Settings > Actions > General > Workflow permissions (the owner must allow Read and write) and tell the owner; do NOT dispatch a second run for the same tag. (2) dispatch the emulator lab: android.yml app=lab lab_suite=opt lab_profile=standard lab_net=full lab_minutes=5; read its result (soak report: auto-tune-quick row; opt_events); fix what it finds. (3) write docs/handoff/ALPHA107_RELEASE_NOTE.txt, bump 0.3.0-alpha107 / code 208, bash ship.sh gecko, ONE dispatch, record-release; (4) answer the owner (FF1 + OPT1).
+Dispatch android.yml app=lab lab_suite=probe full_build=false on this branch; read the probe job log (get_job_logs, tail 200): the lines '== gh release create ...' with exit codes say which variant works (target sha vs branch, draft vs real) and the 'actions/permissions/workflow' line says default_workflow_permissions. Then fix: either change publish-release.sh to the variant that works, or tell the owner the exact setting (Settings > Actions > General > Workflow permissions = Read and write; Settings > Rules; Settings > Tags protection). Then redo alpha106: bash ship.sh is NOT needed again for the same commit content but the release run must be re-dispatched ONCE (run 45474823903 cannot publish): check BUILDLOG.md has no alpha106 line first (record-release was never run). Also the lab run 45480427478 (suite opt) is in flight: read its report when done.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-    D  docs/handoff/opt1-staging/apply_opt.py
-    D  docs/handoff/opt1-staging/apply_opt2.py
-    D  docs/handoff/opt1-staging/apply_opt3.py
-    D  docs/handoff/opt1-staging/core/Report.kt
-    D  docs/handoff/opt1-staging/gecko/BenchServer.kt
-    D  docs/handoff/opt1-staging/gecko/OptimizerActivity.kt
-    D  docs/handoff/opt1-staging/gecko/OptimizerApply.kt
-    D  docs/handoff/opt1-staging/gecko/OptimizerGuard.kt
-    D  docs/handoff/opt1-staging/gecko/OptimizerRunner.kt
-    D  docs/handoff/opt1-staging/gecko/OptimizerStore.kt
-    D  docs/handoff/opt1-staging/gecko/ProcessRestart.kt
-    D  docs/handoff/opt1-staging/gecko/RestartActivity.kt
-    D  docs/handoff/opt1-staging/tests/OptimizerPrefsTest.kt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  8caaa5ba ckpt 3266: OPT1: Auto-tune integrated (BenchServer, Store, Apply, Guard, restart trampo
   59502d88 ckpt 3259: alpha106 (code 207) gated (ckpt 3257, head 0f14013b) and dispatched ONCE: ru
   0f14013b ckpt 3257: gated kestrel-g-v0.3.0-alpha106 (gecko code 207) and pushed it: handoff self
   c510bc41 ckpt 3256: OPT1: the Android-side sources and patch scripts are now saved IN the repo (
@@ -38,8 +26,7 @@ OPT1: Auto-tune integrated (BenchServer, Store, Apply, Guard, restart trampoline
   e7367846 ckpt 3222: wrote FF1 (new Firefox version into Kestrel, optimised for the hardware) and
   2e56492f ckpt 3221: alpha105 (code 206) SHIPPED: run 45352897624 green, Release kestrel-g-v0.3.0
   6fb30f29 ckpt 3219: alpha105 (code 206) gated (ckpt 3218, head 8b6eebf7) and dispatched ONCE: ru
-  8b6eebf7 ckpt 3218: gated kestrel-g-v0.3.0-alpha105 (gecko code 206) and pushed it: handoff self
 ```
 
-(6 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
