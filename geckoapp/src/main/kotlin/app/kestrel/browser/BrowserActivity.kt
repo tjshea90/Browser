@@ -1679,11 +1679,12 @@ open class BrowserActivity : Activity(), DockListener {
         when (e) {
             "shown" -> Health.count("videobar.shown")
             "own" -> Health.count("videobar.pageHasControls")
+            "deco" -> if (a.isNotEmpty()) Health.count("videoclips.deco.$a")      // PERF21: bar = a tap on a decorative clip got no bar; cap / off = a clip parked (too many / out of sight); back = it was played again
             "act" -> if (a.isNotEmpty()) Health.count("videobar.act.$a")
             "turn" -> { Health.count("turn.page.turns"); if (a.isNotEmpty()) Health.count("turn.page.$a") } // FB2: the page paused its videos for a turn of the screen and played them again (or left them: the person touched, or the page started them itself)
             else -> return
         }
-        Health.log("videobar", e, if (e == "turn") "$a n=${m.optInt("n")}" else a)
+        if (e != "deco") Health.log("videobar", e, if (e == "turn") "$a n=${m.optInt("n")}" else a)   // (the decorative-clip numbers are counters only: a page can send a few of them every second)
     }
     // ---- FB4 (owner message 47; lab run 43760546128 on the real engine): GeckoView sizes a page that goes full screen to the DISPLAY (1024 px) at the moment it enters, while the view between the system bars is 947 px, and
     // keeps that size until the view changes size again (a race between the engine's own full-screen resize and the app's relayout: some entries were right, the first one of a run was wrong): the page's own bottom controls were cut
@@ -2740,6 +2741,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(EngineTrimGate.line(prefs))
+        out.add("Decorative page clips (PERF21): " + (if (prefs.limitClips) "limited to 2 playing, on screen only" else "off: the page plays them as it wants") + "; no bar on a tapped clip ${Health.counter("videoclips.deco.bar")}, parked for being too many ${Health.counter("videoclips.deco.cap")}, parked out of sight ${Health.counter("videoclips.deco.off")}, played again ${Health.counter("videoclips.deco.back")}")
         out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
