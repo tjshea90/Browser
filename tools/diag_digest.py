@@ -516,6 +516,30 @@ def focus_report(batches):
     worst = sorted(((med([num(k.get('fcp')) for k in v]), h, len(v)) for h, v in per.items() if len(v) >= 2 and med([num(k.get('fcp')) for k in v]) is not None), reverse=True)[:4]
     for f, h, n in worst:
         print('  info  slowest first paint: %-26s %s ms (%d loads)' % (h[:26], f, n))
+    # PERF17c (owner 2026-11-24: "Animations on websites are laggy"): the page's own frame callbacks in the 2.5 s after the load (fm=frames/gaps>50ms/gaps>100ms/longest gap); the share of LATE frames is the lag, frames a second is the rate the engine
+    # really draws at. Split by the drawing settings of the upload, so Software drawing against Hardware and Calmer redrawing (30) against 60 are judged on numbers.
+    def fm_vals(lines_):
+        out_ = []
+        for t in lines_:
+            p = str(t.get('fm', '')).split('/')
+            if len(p) == 4 and all(x.lstrip('-').isdigit() for x in p) and int(p[0]) > 0:
+                out_.append(tuple(int(x) for x in p))
+        return out_
+    fmv = fm_vals(timing)
+    if fmv:
+        print(verdict(round(med([100.0 * v[1] / v[0] for v in fmv]), 1), 10, 30, ' %', what='PAGE ANIMATION: late frames (over 50 ms) after the load, %d pages' % len(fmv)))
+        print('  info  frame callbacks a second after the load: median %s (60 = the engine keeps up, 30 = the Calmer redrawing rate or a busy page); longest gap median %s ms' % (round(med([v[0] / 2.5 for v in fmv]), 1), med([v[3] for v in fmv])))
+        groups = {}
+        for b in batches:
+            s = b.get('settings') or {}
+            vals = fm_vals([parse_timing(e) or {} for e in b.get('events', []) if isinstance(e, str) and ' page timing ' in e and ' fm=' in e])
+            key = 'drawing=%s redraw=%s' % ('software' if s.get('lab_soft') == 'true' else 'hardware/default', '30/s' if s.get('lab_fps30') == 'true' else '60/s')
+            groups.setdefault(key, []).extend(vals)
+        for key, vals in sorted(groups.items()):
+            if len(vals) >= 3:
+                print('  info    %-36s %3d pages: late frames median %s %%, %s frames a second' % (key, len(vals), round(med([100.0 * v[1] / v[0] for v in vals]), 1), round(med([v[0] / 2.5 for v in vals]), 1)))
+    else:
+        print('  info  PAGE ANIMATION: no frame-cadence numbers yet (fm= appears in uploads from alpha100)')
     backs = kvs('back press')
     loaded_back = [k for k in backs if k.get('kind') in ('kept', 'cache', 'network')]
     if loaded_back:
@@ -545,6 +569,18 @@ def focus_report(batches):
     shields_off.pop('?', None); shields_off.pop('private', None)
     if shields_off:
         print('  info  sites the owner runs with Shields DOWN (a sign Shields broke them or slowed them): ' + ', '.join('%s x%d' % kv for kv in shields_off.most_common(6)))
+    # PERF17d (owner 2026-11-24: "Cloudflare tests for anti bots are extremely slow"): pages that were a bot check (ch=1 full page, ch=2 a widget inside a page). A full-page check that was LEFT (pt=1, before the 45 s cap) took `at` ms on the page.
+    chk1 = [t for t in timing if str(t.get('ch')) == '1']
+    chk2 = [t for t in timing if str(t.get('ch')) == '2']
+    if chk1 or chk2:
+        cleared = [num(t.get('at')) for t in chk1 if str(t.get('pt')) == '1' and 0 < (num(t.get('at')) or 0) < 44000]
+        stuck = [t for t in chk1 if str(t.get('pt')) == '1' and (num(t.get('at')) or 0) >= 44000]
+        print('  info  bot checks: %d full-page (left after a median %s s on the page; %d still showing after 45 s), %d check widgets inside pages; sites: %s' % (
+            len(chk1), round(med(cleared) / 1000.0, 1) if cleared else '-', len(stuck), len(chk2), ', '.join(sorted(set(str(t.get('host', '?')) for t in chk1 + chk2))[:5])))
+        if cleared:
+            print(verdict(round(med(cleared) / 1000.0, 1), 8, 20, ' s', what='full-page bot check: time on the page (median of %d)' % len(cleared)))
+    else:
+        print('  info  bot checks: none seen in these uploads (a marker for them is in alpha100 and later)')
     pops = len(lines('sec popup-blocked'))
     print('  info  pop-ups and forced redirects blocked: %d; file attaches: %d (page-got ok %d, failed %d)' % (pops, len(lines('filepick copied')),
           sum(1 for t in lines('filepick page-got') if 'decode=ok' in t), sum(1 for t in lines('filepick page-got') if 'decode=failed' in t)))
