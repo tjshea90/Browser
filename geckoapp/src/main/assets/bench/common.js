@@ -8,6 +8,19 @@
   K.n = (/[?&]n=(\d+)/.exec(qs) || [0, '0'])[1];
   K.fast = /[?&]fast=1/.test(qs);
   K.now = function () { return performance.now(); };
+  // the emulator lab only (`&lab=1`, debuggable builds): if the engine draws no animation frames at all, a 40 ms timer stands in for them so the run's machinery (restart, resume, decisions, upload) can still be proved end to end. The numbers then say so
+  // in the note and are timer numbers, never real frame rates; the app never asks for this on a real device.
+  K.lab = /[?&]lab=1/.test(qs); K.timerFrames = 0;
+  if (K.lab && window.requestAnimationFrame) {
+    var realRaf = window.requestAnimationFrame.bind(window), live = false;
+    window.requestAnimationFrame = function (cb) {
+      var done = false;
+      function run(t) { if (done) return; done = true; cb(t === undefined ? performance.now() : t); }
+      realRaf(function (t) { live = true; run(t); });
+      if (!live) setTimeout(function () { if (!done) { K.timerFrames++; run(); } }, 40);
+      return 0;
+    };
+  }
   K.sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   K.median = function (a) { if (!a.length) return 0; var s = a.slice().sort(function (x, y) { return x - y; }), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   K.pct = function (a, p) { if (!a.length) return 0; var s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
@@ -33,6 +46,7 @@
   /** Tells the app (and the tests) that the page finished. [m] = numbers, [err] = what went wrong, if anything. */
   K.note = '';
   K.report = function (page, m, err) {
+    if (K.timerFrames) K.note += (K.note ? ' ' : '') + 'lab: ' + K.timerFrames + ' timer frames (the engine drew none)';
     var body = JSON.stringify({ page: page, n: K.n, m: m || {}, err: err || '', note: K.note || '' });
     document.title = 'bench-done ' + page;
     try { fetch('/' + K.token + '/r', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body, keepalive: true }).catch(function () {}); } catch (e) { /* the app also reads the title */ }

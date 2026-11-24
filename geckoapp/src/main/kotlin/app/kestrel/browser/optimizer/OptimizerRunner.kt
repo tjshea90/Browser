@@ -294,7 +294,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             for (p in pages) {
                 if (gen != generation) return@Thread
                 val my = synchronized(this) { ++seq }
-                Io.main.post { currentPage = p; scrollPulses = 0; session?.loadUri(server.url(p, my, if (fastPages()) "&fast=1" else "")) }
+                Io.main.post { currentPage = p; scrollPulses = 0; session?.loadUri(server.url(p, my, if (fastPages()) "&fast=1&lab=1" else "")) }
                 val pageT0 = SystemClock.elapsedRealtime()
                 val r = server.await(p, my, limits.getValue(p))
                 if (gen != generation) return@Thread
