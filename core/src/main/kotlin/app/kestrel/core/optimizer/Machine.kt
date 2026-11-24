@@ -120,7 +120,7 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
             if (want == null) { s = failStep(s, "the engine's own value of that setting could not be read"); continue }
             val running = s.running ?: return s.copy(bootConfig = want, bootMark = now, bootStarts = 0) to Action.Restart(want, "the engine must start with: " + want.enginePart().ifEmpty { "its own settings" })
             if (want.enginePart() != running.enginePart()) return s.copy(bootConfig = want, running = null, bootMark = now, bootStarts = 0) to Action.Restart(want, "the next test needs the engine to start with: " + want.enginePart().ifEmpty { "its own settings" })
-            if (want.settings != running.settings) return s.copy(running = Config(running.engine, want.settings)) to Action.ApplySettings(want)
+            if (want.livePart() != running.livePart()) return s.copy(running = Config(running.engine, running.settings.filterKeys { it !in want.settings } + want.settings)) to Action.ApplySettings(want)
             val needed = step.samples + s.extra
             if (s.taken < needed) return s to Action.Measure
             when (step.kind) {

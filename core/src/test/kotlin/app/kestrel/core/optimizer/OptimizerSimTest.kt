@@ -184,12 +184,14 @@ class OptimizerSimTest {
         var s = m.onEngineUp(m.start("r", 0L, Priority.BALANCED, 75, base, emptySet(), "161.0", "x"), base, World(effects = emptyMap()).defaults)
         // run until the first Restart is asked
         var n = 0
-        while (true) {
+        var restartAsked = false
+        for (i in 0 until 2000) {
             val (s2, a) = m.next(s, 1000L); s = s2
-            if (a is Action.Restart) break
+            if (a is Action.Restart) { restartAsked = true; break }
             if (a is Action.Measure) s = m.onSample(s, World().measure(s.running!!, n++))
             if (a is Action.Finish) throw AssertionError("no restart came")
         }
+        assertTrue("a restart was asked for", restartAsked)
         assertTrue(s.bootMark != 0L)
         s = m.onProcessStart(s)                              // the requested start
         assertEquals(1, s.bootStarts)

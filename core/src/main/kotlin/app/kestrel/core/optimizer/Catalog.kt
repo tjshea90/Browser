@@ -63,6 +63,9 @@ object Catalog {
 
     fun byId(id: String): Experiment? = all.firstOrNull { it.id == id }
 
+    /** App settings that the engine reads only when it starts (the experiment says `restart`): changing one needs a new engine process, like an engine preference does. */
+    fun restartSettingKeys(): Set<String> = all.filter { it.restart }.flatMap { it.settingChanges() }.map { it.prefKey }.toSet()
+
     /** Every app setting key the catalog can change, with whether it is stored as a boolean (the runner needs the type to write it). */
     fun settingKeys(): Map<String, Boolean> = all.flatMap { it.settingChanges() }.associate { it.prefKey to it.bool }
 

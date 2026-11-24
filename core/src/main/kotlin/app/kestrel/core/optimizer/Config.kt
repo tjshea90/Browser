@@ -6,8 +6,10 @@ package app.kestrel.core.optimizer
  */
 class Config(val engine: Map<String, String> = emptyMap(), val settings: Map<String, Int> = emptyMap()) {
     fun canonical(): String = (engine.toSortedMap().map { "p:${it.key}=${it.value}" } + settings.toSortedMap().map { "s:${it.key}=${it.value}" }).joinToString(";")
-    /** Only the part that needs an engine restart to change. */
-    fun enginePart(): String = engine.toSortedMap().map { "p:${it.key}=${it.value}" }.joinToString(";")
+    /** Only the part that needs an engine restart to change: engine preferences and the app settings the engine reads at its start. */
+    fun enginePart(): String = (engine.toSortedMap().map { "p:${it.key}=${it.value}" } + settings.toSortedMap().filterKeys { it in BOOT_SETTINGS }.map { "s:${it.key}=${it.value}" }).joinToString(";")
+    /** The settings that apply at once. */
+    fun livePart(): String = settings.toSortedMap().filterKeys { it !in BOOT_SETTINGS }.map { "s:${it.key}=${it.value}" }.joinToString(";")
     override fun equals(other: Any?) = other is Config && other.canonical() == canonical()
     override fun hashCode() = canonical().hashCode()
     override fun toString() = canonical().ifEmpty { "(no changes)" }
@@ -27,6 +29,7 @@ class Config(val engine: Map<String, String> = emptyMap(), val settings: Map<Str
     }
 
     companion object {
+        private val BOOT_SETTINGS: Set<String> by lazy { Catalog.restartSettingKeys() }
         fun parse(text: String): Config {
             val e = HashMap<String, String>(); val s = HashMap<String, Int>()
             for (part in text.split(';')) {
