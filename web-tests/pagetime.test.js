@@ -180,3 +180,42 @@ test('PERF10c: only files of an input count, at most 3 files per report, and an 
   await context.close();
 });
 
+
+test('PERF17c: the page reports its own frame cadence for 2.5 s after the load: frames, gaps over 50 and 100 ms, the longest gap', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 3600, cap: 9000 });
+  await page.goto('https://site.example/');
+  await until(() => reports(got).length === 1, 'the report', 9000);
+  const m = reports(got)[0];
+  assert.ok(Array.isArray(m.fm) && m.fm.length === 4, JSON.stringify(m.fm));
+  assert.ok(m.fm[0] >= 15 && m.fm[0] <= 400, 'frames in 2.5 s: ' + m.fm[0]);
+  assert.ok(m.fm[1] <= m.fm[0] && m.fm[2] <= m.fm[1] && m.fm[3] >= 0, JSON.stringify(m.fm));
+  assert.equal(m.ch, 0, 'an ordinary page is no bot check');
+  await context.close();
+});
+
+test('PERF17c: a report that comes before the window is over carries no cadence (nothing half-measured is sent)', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 250 });
+  await page.goto('https://site.example/');
+  await until(() => reports(got).length === 1, 'the report');
+  assert.equal(reports(got)[0].fm, null);
+  await context.close();
+});
+
+test('PERF17d: a full-page bot check ("Just a moment") is marked ch=1 with the time since it was first seen; a check widget in a normal page is ch=2; the jsd script alone is nothing', async () => {
+  const doc = (title, body) => async (u, r) => { if (u.pathname === '/') { await r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>' + title + '</title><body>' + body + '</body>' }); return true; } if (u.pathname.endsWith('.js')) { await r.fulfill({ contentType: 'application/javascript', body: 'window.j=1' }); return true; } return false; };
+  const run = async (title, body) => {
+    const { page, got, context } = await open(doc(title, body), { tick: 20, grace: 1200, cap: 9000 });
+    await page.goto('https://site.example/');
+    await until(() => reports(got).length === 1, 'the report', 9000);
+    const m = reports(got)[0]; await context.close(); return m;
+  };
+  const a = await run('Just a moment...', '<div id="challenge-stage"></div>');
+  assert.equal(a.ch, 1); assert.ok(a.chs >= 0 && a.chs < 5000, 'chs ' + a.chs);
+  const b = await run('Login', '<form><div class="cf-turnstile" data-sitekey="x"></div></form>');
+  assert.equal(b.ch, 2);
+  const c = await run('Shop', '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script><p>hello</p>');
+  assert.equal(c.ch, 0, 'the detection script every protected site loads is not a check');
+  assert.equal(c.chs, -1);
+  const d = await run('Attention Required! | Cloudflare', '<p>blocked</p>');
+  assert.equal(d.ch, 1);
+});
