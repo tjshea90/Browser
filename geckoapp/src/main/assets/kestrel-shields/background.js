@@ -1355,7 +1355,7 @@ onMsg(function (m, sender) {
   if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' || m.e === 'deco' ? m.e : '';
-  var a = /^(play|pause|seek|mute|full|played|skipped|none|bar|cap|off|back)$/.test(String(m.a || '')) ? String(m.a) : '';
+  var a = /^(play|pause|seek|mute|full|played|skipped|none|bar|cap|off|back|scroll)$/.test(String(m.a || '')) ? String(m.a) : '';
   var n = Math.max(0, Math.min(99, m.n | 0));                    // (turn.js: how many videos a turn of the screen paused)
   if (e) send({ k: 'vbk', e: e, a: a, n: n, p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
