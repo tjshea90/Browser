@@ -5,7 +5,9 @@
 #   bash tools/check-gecko-prefs.sh            exit 0 = all names found
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 1
-AAR="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1/org.mozilla.geckoview" -name 'geckoview-armeabi-v7a-*.aar' 2>/dev/null | head -1)"
+# the engine the build PINS (geckoapp/build.gradle.kts geckoVersion), not whichever version the Gradle cache happens to hold first (a bump leaves the old AAR there too)
+PIN="$(sed -n 's/^val geckoVersion = "\([^"]*\)".*/\1/p' geckoapp/build.gradle.kts | head -1)"
+AAR="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1/org.mozilla.geckoview" -name "geckoview-armeabi-v7a-${PIN:-*}.aar" 2>/dev/null | head -1)"
 [ -n "$AAR" ] || { echo "  note  no GeckoView AAR in the Gradle cache yet - build :geckoapp first"; exit 2; }
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 unzip -q -o "$AAR" 'jni/armeabi-v7a/libxul.so' 'assets/omni.ja' -d "$W/aar" || { echo "  FAIL  could not unpack $AAR"; exit 1; }
