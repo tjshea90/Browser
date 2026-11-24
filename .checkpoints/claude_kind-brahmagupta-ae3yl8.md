@@ -1,21 +1,22 @@
-# CHECKPOINT 3219 — read me first, then TASKS.md
+# CHECKPOINT 3221 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T08:04:24Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `8b6eebf7` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T08:23:05Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `cdad18e9` (this checkpoint is the commit after it)
 
 ## Just done
-alpha105 (code 206) gated (ckpt 3218, head 8b6eebf7) and dispatched ONCE: run 45352897624 (run 287, 08:03Z)
+alpha105 (code 206) SHIPPED: run 45352897624 green, Release kestrel-g-v0.3.0-alpha105 has the APK, recorded in BUILDLOG; PERF25b/c ticked, PERF25a waits for the owner's answer (which device Brave ran on) and the tablet result of the hardware drawing trial
 
 ## Do this next
-Poll RUN 45352897624 (mcp__github__actions_list list_workflow_jobs resource_id 45352897624; known flaky tests StreamEngineTest/PhoneBackendTest/ServerTest -> rerun_failed_jobs on the SAME run, never a new dispatch); when green get_release_by_tag kestrel-g-v0.3.0-alpha105, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha105 with the identical note from docs/handoff/ALPHA105_RELEASE_NOTE.txt (tr -d newline); tick PERF25c in TASKS; answer the owner (PERF25) in plain words with the Release link, NOT run on the tablet, ask which device Brave ran on, the 3-minute test; re-list open items (PERF17c/d, PERF19, PERF23, PERF14e, PERF9, Back MISSED false positive, owner test plan Days 2-5). Never ship alpha105 again; next is alpha106 / code 207
+Waiting for the owner's tablet test of the hardware drawing trial (Settings > Network lab > Hardware drawing trial 1 then 2, restart, claude.ai table + YouTube, look for bands). Then: (1) python3 -B -I tools/diag_digest.py --days 2: read engine draw-trial lines (start / steady / reverted), engine draw-prefs read-back (do the 5 trial prefs show the new values?), SETTING A/B drawing=hardware trial N vs software (fm= frames/s, first paint, typing); (2) trial good: bisect to the smallest set, then consider making it the default for Kestrel G; trial bands/crash: record in research/BRAVE_SMOOTH.md section 5 and move to cheaper CPU drawing; (3) open: PERF17c/d (animations + Cloudflare checks), PERF19 cheaper blocker, PERF23 (Cache2 I/O, Classifier updater, HeapTaskDaemon), PERF14e Calmer redrawing A/B, PERF9 second film, Back MISSED false positive. Next version alpha106 / code 207. No heartbeat trigger exists.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  6fb30f29 ckpt 3219: alpha105 (code 206) gated (ckpt 3218, head 8b6eebf7) and dispatched ONCE: ru
   8b6eebf7 ckpt 3218: gated kestrel-g-v0.3.0-alpha105 (gecko code 206) and pushed it: handoff self
   c45aae47 ckpt 3217: PERF25: app unit tests green; bumped to alpha105 / code 206, release note do
   512c9e18 ckpt 3215: PERF25c: built the hardware drawing trial (core DrawTrial + DrawTrialTest + 
@@ -25,5 +26,4 @@ Poll RUN 45352897624 (mcp__github__actions_list list_workflow_jobs resource_id 4
   96feacef ckpt 3198: gated kestrel-g-v0.3.0-alpha104 (gecko code 205) and pushed it: handoff self
   c6ef6bb0 ckpt 3197: pre-ship: alpha104: tab reloads, and the clip page. I read your two alpha103
   b46f56e2 ckpt 3193: PERF24 coded: tab sleep plan (core LiveBudget.sleepPlan + Tab.reloadMs + Pag
-  64c28c57 ckpt 3188: owner request PERF24 (laggy typing in text boxes, the sports-odds page and i
 ```
