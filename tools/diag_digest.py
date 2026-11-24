@@ -572,6 +572,19 @@ def focus_report(batches):
     ho = [k for k in kvs('video hand-over')]; hd = [e for e in ev if ' video hand-declined' in e]
     print('  info  hand-overs to Kestrel\'s own player: %d taken, %d declined; format policy said no %d time(s)' % (len(ho), len(hd), sum(1 for e in ev if ' video codec-no ' in e)))
 
+    # PERF21 (owner 2026-11-24: laggy page animations, a play bar over in-site clips): what the clip limiter and the no-bar rule did (counters of the newest uploads)
+    cnt = {}
+    for b in batches[-4:]:
+        for l in b.get('snapshot', []):
+            if isinstance(l, str) and l.startswith('Counters:'):
+                for k, v in re.findall(r'([\w.]+)=(\d+)', l):
+                    cnt[k] = max(cnt.get(k, 0), int(v))
+    if any(k.startswith('videoclips.deco.') for k in cnt):
+        print('  info  decorative page clips (alpha102+): no bar on %d taps, %d parked for being too many, %d parked out of sight, %d played again' % (
+            cnt.get('videoclips.deco.bar', 0), cnt.get('videoclips.deco.cap', 0), cnt.get('videoclips.deco.off', 0), cnt.get('videoclips.deco.back', 0)))
+    else:
+        print('  info  decorative page clips (alpha102+): no numbers yet')
+
     # ---- 4. page compatibility
     print('\n-- 4. PAGE COMPATIBILITY --')
     errs = [e for e in ev if ' page error ' in e]
