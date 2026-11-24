@@ -807,7 +807,7 @@ class OwnerRulesTest {
         val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
         assertTrue("Software drawing is a switch that defaults to OFF", prefs.contains("var labSoft: Boolean get() = bool(\"lab_soft\", false)"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
-        assertTrue("it writes the engine's CPU-drawing pref only when switched on", gp.contains("if (p.labSoft) append(\"  gfx.webrender.software: true\\n\")"))
+        assertTrue("it writes the engine's CPU-drawing pref only when switched on and no hardware trial runs (PERF25)", gp.contains("if (app.kestrel.core.gfx.DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)) append(\"  gfx.webrender.software: true\\n\")"))
         assertTrue("it is in Settings and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Software drawing (slower)\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
         val man = source("geckoapp/src/main/AndroidManifest.xml")
         assertTrue("PERF14: no storage permission is declared any more: the picked file is COPIED into the app's own cache, so the engine never needs a raw path into shared storage (research/ATTACH_ROOT_CAUSE.md)", !man.contains("READ_EXTERNAL_STORAGE") && !man.contains("READ_MEDIA") && !man.contains("MANAGE_EXTERNAL_STORAGE"))
