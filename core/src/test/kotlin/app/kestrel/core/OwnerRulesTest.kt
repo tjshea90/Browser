@@ -910,4 +910,19 @@ class OwnerRulesTest {
         assertTrue("the flag reaches the page and the Settings row turns it off", source(dir + "background.js").contains("dc: told && (f & 4096) !== 0") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("or (if (prefs().limitClips) 4096 else 0)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.limitClips) { prefs.limitClips = it }"))
         assertTrue("on by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var limitClips: Boolean get() = bool(\"limit_clips\", true)"))
     }
+
+    /** PERF22 (owner 2026-11-24: "do even more deep research ... best possible speed ... low ram and weak cpus ... my hardware ... Android 10 go"; research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF by default, reversible, recorded in uploads. */
+    @Test fun perf22ThreeEngineExperimentsAreOffByDefaultAndGoThroughTheOverrideGrammar() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        for ((fn, key) in listOf("labDither" to "lab_dither", "labBytecode" to "lab_bytecode", "labGcPar" to "lab_gcpar"))
+            assertTrue("$fn is a switch that defaults to OFF", prefs.contains("var $fn: Boolean get() = bool(\"$key\", false)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("an experiment that is also in gecko-prefs.txt REPLACES its line (no duplicate YAML key)", gp.contains("yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx)))"))
+        assertTrue(gp.contains("if (p.labDither) add(\"gfx.webrender.dithering=false\")") && gp.contains("if (p.labBytecode) add(\"dom.script_loader.bytecode_cache.strategy=-1\")") && gp.contains("if (p.labGcPar) add(\"javascript.options.mem.gc_parallel_marking=true\")"))
+        val sv = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("all three are in Settings", sv.contains("prefs.labDither) { prefs.labDither = it") && sv.contains("prefs.labBytecode) { prefs.labBytecode = it") && sv.contains("prefs.labGcPar) { prefs.labGcPar = it"))
+        val bk = source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt")
+        assertTrue("and in a backup", bk.contains("Spec(\"lab_dither\", T.BOOL)") && bk.contains("Spec(\"lab_bytecode\", T.BOOL)") && bk.contains("Spec(\"lab_gcpar\", T.BOOL)"))
+        assertTrue("the report script compares page loads by them", source("tools/diag_digest.py").contains("'lab_dither', 'lab_bytecode', 'lab_gcpar'"))
+    }
 }
