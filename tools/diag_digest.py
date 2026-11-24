@@ -659,7 +659,7 @@ def tab_analysis(batches):
 
 def setting_ab(batches):
     """PERF14: the uploads carry the owner's changed settings AND the pages' own load timing, so a setting can be judged by the numbers instead of by feel: for each watched setting, per site with at least 2 timed loads on each side, the median first contentful paint and load time with the setting ON against OFF (a setting that was never changed counts as OFF)."""
-    WATCH = ['lab_soft', 'lab_fps30', 'lab_draw', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
+    WATCH = ['lab_soft', 'lab_fps30', 'lab_draw', 'lab_dither', 'lab_bytecode', 'lab_gcpar', 'hold_false_trims', 'limit_clips', 'lazy_start', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
     import statistics
     rows = []
     for b in batches:

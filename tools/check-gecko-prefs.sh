@@ -30,5 +30,11 @@ while IFS= read -r name; do
   N=$((N+1))
   if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (written by GeckoPrefs.kt from a Settings switch, but not in this GeckoView)"; MISSING=$((MISSING+1)); fi
 done < <(grep -hoE 'append\("  [a-z0-9_.-]+:' geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt | sed -E 's/^append\("  //; s/:$//' | sort -u)
+# the prefs the Network lab experiments override (GeckoPrefs.labOverrides: `add("name=value")`) are held to the same rule
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  N=$((N+1))
+  if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (overridden by GeckoPrefs.labOverrides from a Settings switch, but not in this GeckoView)"; MISSING=$((MISSING+1)); fi
+done < <(grep -hoE 'add\("[a-z0-9_.-]+=' geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt | sed -E 's/^add\("//; s/=$//' | sort -u)
 echo "  checked $N pref names against $(basename "$AAR"): $MISSING missing"
 [ "$MISSING" -eq 0 ]
