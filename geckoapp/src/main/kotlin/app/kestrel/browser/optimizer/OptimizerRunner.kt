@@ -151,7 +151,12 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         s.open(GeckoEngine.runtime(ctx))
         view.setSession(s)
         session = s
+        // an inactive GeckoSession is a page nobody can see: the engine stops its animation frames, so every animation page of the suite ran into its time limit (found by lab opt v4); the browser does the same in BrowserActivity
+        try { s.setActive(true) } catch (e: Exception) { /* closed again */ }
     }
+
+    /** The screen is in front again (also after a restart): the page must be one the engine treats as visible. */
+    fun activate() { try { session?.setActive(true) } catch (e: Exception) { /* none */ } }
 
     private fun pageDied(why: String) {
         Health.log("opt", "page-died", why); pageDied = true
@@ -286,7 +291,10 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
                 if (gen != generation) return@Thread
                 val my = synchronized(this) { ++seq }
                 Io.main.post { currentPage = p; scrollPulses = 0; session?.loadUri(server.url(p, my, if (fastPages()) "&fast=1" else "")) }
+                val pageT0 = SystemClock.elapsedRealtime()
                 val r = server.await(p, my, limits.getValue(p))
+                if (gen != generation) return@Thread
+                Health.log("opt", "page", "$p ${if (r == null) "timed out" else if (r.err.isNotEmpty()) "error " + r.err.take(60) else "ok"} in ${(SystemClock.elapsedRealtime() - pageT0) / 1000}s")
                 if (gen != generation) return@Thread
                 when {
                     r == null -> { ok = false; notes.append("$p timed out; ") }
