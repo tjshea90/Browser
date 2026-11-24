@@ -1992,6 +1992,19 @@ test('LD4: a page-timing report is checked in the background page, carries the p
   assert.equal(h.of('pt').length, 2, 'only the top frame of a tab may report');
 });
 
+test('PERF17: the page-timing report passes the frame cadence and the bot-check marker on only as checked numbers', async () => {
+  const h = await onPage();
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: [150, 4, 1, 220], ch: 1, chs: 12000, lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: [1, 2, 3], ch: 7, chs: 'x', lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: ['a', -5, 1e12, 5e12], ch: 2, chs: -3, lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  await tick(10);
+  const pt = h.of('pt');
+  assert.equal(pt.length, 3);
+  eq(pt[0].fm, [150, 4, 1, 220]); assert.equal(pt[0].ch, 1); assert.equal(pt[0].chs, 12000);
+  assert.equal(pt[1].fm, null, 'a cadence that is not four numbers is dropped'); assert.equal(pt[1].ch, 0, 'an unknown marker is nothing'); assert.equal(pt[1].chs, -1);
+  eq(pt[2].fm, [0, 0, 0, -1]); assert.equal(pt[2].ch, 2); assert.equal(pt[2].chs, -1);
+});
+
 test('PERF10c: a file-pick report is checked in the background page: fixed words and clamped numbers only, three files at most, the page of its tab, top frame only', async () => {
   const h = await onPage();
   const good = { k: 'fc', n: 2, a: [
