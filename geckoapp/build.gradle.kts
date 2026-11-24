@@ -16,7 +16,7 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
-val geckoVersion = "160.0.20261104181552"
+val geckoVersion = "161.0.20261118180411"
 // `-PgeckoAbi=x86` builds a debug APK for the x86 emulator; the tablet build is always armeabi-v7a.
 val geckoAbi = (findProperty("geckoAbi") as String?) ?: "armeabi-v7a"
 // LAB5 packaging switches (research/LAB5_PACKAGING.md):
@@ -30,7 +30,7 @@ val libsInApk = (findProperty("libsInApk") as String?) == "true"
 // NL1 (research/REVIEW_2026-11-22_NEWLEVERS.md): Mozilla's "Web Compatibility Interventions" extension (webcompat@mozilla.org, MPL-2.0), the site fixes stock Firefox for Android carries and the engine itself does not.
 // It is fetched at build time from Mozilla's Maven (only its assets are unpacked; the library's classes never enter the app), so no third-party code is committed. Keep the version at the engine's major (geckoVersion).
 // The Remote Settings listener is replaced by an empty one: the interventions baked into the build are used and no new background traffic starts (they are renewed with the monthly engine bump).
-val webcompatVersion = "160.0.1"
+val webcompatVersion = "161.0"
 val webcompatAar: Configuration by configurations.creating { isTransitive = false; isCanBeConsumed = false }
 
 abstract class PrepareWebcompat : DefaultTask() {
@@ -85,7 +85,7 @@ androidComponents {
 
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
-    // GeckoView 160 is built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
+    // GeckoView 161 is built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
     compileSdk { version = release(37) { minorApiLevel = 0 } }
 
     defaultConfig {
@@ -159,7 +159,7 @@ configurations.all {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
     resolutionStrategy {
-        // androidx.core 1.19.x (what GeckoView 160 declares) requires AGP 9.1; 1.17.x is API-compatible for GeckoView's use and builds with AGP 8.13.
+        // androidx.core 1.19.x (what GeckoView 161 declares) requires AGP 9.1; 1.17.x is API-compatible for GeckoView's use and builds with AGP 8.13.
         force("androidx.core:core:1.17.0")
     }
 }
