@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench scroll</title><script src="common.js"></script>
+<style>body{margin:0;font:16px sans-serif;background:#fff;color:#222}header{position:sticky;top:0;background:#1e3a5f;color:#fff;padding:10px;z-index:2}section{padding:12px;border-bottom:1px solid #ddd}.g{height:70px;border-radius:8px;margin:6px 0}p{margin:6px 0}</style></head>
+<body><header>scroll test</header><div id="root"></div>
+<script>
+// Scrolling: a 40,000 px page (text, gradients, a sticky header). The APP scrolls it with the engine's own animated scroll (a real finger-like pan) when the page says it is ready; the page records the frame
+// gaps while it moves. With no scroll from the app within 6 s (tests, or a refusal) the page scrolls itself in steps and says so (scroll_mode 1).
+K.run('scroll', function () {
+  var root = document.getElementById('root'), n = K.fast ? 60 : 400, html = '';
+  for (var i = 0; i < n; i++) html += '<section><h3>Section ' + i + '</h3><p>' + 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. '.repeat(1 + i % 3) + '</p><div class="g" style="background:linear-gradient(' + (i * 37 % 360) + 'deg,hsl(' + (i * 29 % 360) + ',70%,60%),hsl(' + (i * 53 % 360) + ',70%,40%))"></div></section>';
+  root.innerHTML = html;
+  return new Promise(function (resolve) {
+    var gaps = [], last = 0, started = false, t0 = 0, lastScrollAt = 0, mode = 0, finished = false, startY = window.scrollY;
+    function finish() {
+      if (finished) return; finished = true;
+      var g = gaps.slice(1);
+      resolve({ scroll_gap_p95: K.round(K.pct(g, 0.95)), scroll_fps: K.round(g.length * 1000 / Math.max(1, K.now() - t0)), scroll_ms: K.round(K.now() - t0), scroll_mode: mode, scroll_px: Math.round(window.scrollY - startY) });
+    }
+    function frame() { if (finished) return; var now = K.now(); if (started) { gaps.push(now - last); last = now; } if (started && now - lastScrollAt > 1200) return finish(); requestAnimationFrame(frame); }
+    window.addEventListener('scroll', function () { lastScrollAt = K.now(); if (!started) { started = true; t0 = lastScrollAt; last = t0; } }, { passive: true });
+    requestAnimationFrame(frame);
+    K.ready('scroll');
+    setTimeout(function () {
+      if (started || finished) return;
+      mode = 1; var steps = K.fast ? 20 : 60, i = 0;
+      (function step() { window.scrollBy(0, 400); if (++i < steps) setTimeout(step, 16); })();
+    }, K.fast ? 600 : 6000);
+    setTimeout(finish, K.fast ? 8000 : 40000);
+  });
+});
+</script></body></html>
