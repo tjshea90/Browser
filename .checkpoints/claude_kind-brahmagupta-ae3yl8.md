@@ -1,22 +1,22 @@
-# CHECKPOINT 3179 — read me first, then TASKS.md
+# CHECKPOINT 3182 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T05:16:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `eadf09d6` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T05:28:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `af8a1202` (this checkpoint is the commit after it)
 
 ## Just done
-PERF22: research/LOW_END_PLAYBOOK.md written; three Network lab experiments coded (labDither, labBytecode, labGcPar via GeckoPrefs.labOverrides, Settings rows, backup specs, digest WATCH, check-gecko-prefs.sh 66 names 0 missing, OwnerRulesTest perf22 guard); PERF23 written
+pre-ship: alpha103: the deep low-end research, three speed experiments, and a test fix. (1) RESEARCH: research/LOW_END_PLAYBOOK.md compares what popular browsers do for speed on weak hardware with what Kestrel does today, using your own tablet numbers: four ARM cores, Mali-G52 graphics, 1954 MB of memory, Android 10 Go with a 32-bit only system, and no heat slowdown in any of 35 uploads. Almost everything popular browsers do, Kestrel already does. What is left and measured: the engine's main thread inside the app process is the busiest competitor for your four cores (it carries the ad blocker; median 34 percent of one core when busy, in 121 of 175 busy moments), then the disk cache thread, the engine's tracking list updater (rare but up to 96 percent of a core) and the app's own memory clean-up; those are the next tasks. Android 10 Go specifics I found: its memory warnings do not follow free memory (filtered since alpha101), apps in the background die first (hence the start screen after 4 hours, alpha100), this device has no performance hint or sustained performance mode to call, and a 64-bit engine cannot run on a 32-bit only system. (2) THREE EXPERIMENTS in Settings, Network lab, all OFF: Cheaper gradients (no dithering), Compile scripts on first load, and Parallel script clean-up. I claim no gain: each is a setting your engine has that popular browser notes point at, and only your tablet can judge it. Each takes effect at the next start of Kestrel and every upload records it, so my report compares page times with and without. Turn them on one at a time for a day. (3) The download test that failed once on the build computer, because a 30 second wait ran out on its two slow cores, now waits longer, and failing tests print their message; this changes nothing in the app. Not run on the tablet: the three switches are tested in unit tests and the engine setting names are checked against your engine.
 
 ## Do this next
-run ./gradlew --offline -q :core:test :geckoapp:compileDebugKotlin :app:compileDebugKotlin (Monitor), then bump geckoapp to versionCode 204 / 0.3.0-alpha103, sync-ext-version, docs/handoff/ALPHA103_RELEASE_NOTE.txt (ASCII, no double quotes; says: FLK1 test hardening, 3 experiments OFF by default, research file; NOT run on the tablet), ship.sh gecko (background), ONE dispatch, poll the RUN (rerun_failed_jobs on the same run if a known flaky test fails again: now with failure messages in the log), record-release, answer the owner (PERF22 + FLK1), re-list open items (PERF17c/d fixes wait for alpha100+ numbers, PERF19 blocker, PERF23, PERF14e, PERF9, BackLab MISSED false positive)
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M core/src/test/kotlin/app/kestrel/core/OwnerRulesTest.kt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  ee5eb3f1 ckpt 3179: PERF22: research/LOW_END_PLAYBOOK.md written; three Network lab experiments 
   3b1d4574 ckpt 3175: FLK1 done: real-time waits tripled in StreamEngineTest, PhoneBackendTest, Se
   9e7ae1ef ckpt 3173: alpha102 SHIPPED and recorded: run 45326840944 green on attempt 2 (attempt 1
   b1b76738 ckpt 3171: alpha102 run 45326840944 attempt 1: test-jvm FAILED on the known flaky Strea
@@ -26,8 +26,7 @@ run ./gradlew --offline -q :core:test :geckoapp:compileDebugKotlin :app:compileD
   15d8bb97 ckpt 3165: owner request PERF22 (deep research: popular browsers' speed techniques, cod
   d452ebef ckpt 3163: PERF21 coded: no bar on decorative clips (vfind decorative + videobar judge)
   09db2cad ckpt 3153: owner request PERF21 (screenshot: a page of looping picture clips is very la
-  2057b01b ckpt 3152: alpha101 SHIPPED and recorded: run 45312620908 green on attempt 1 (check, te
 ```
 
-(3 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
