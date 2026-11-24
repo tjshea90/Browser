@@ -17,7 +17,7 @@
     return new Promise(function (resolve, reject) {
       var t0 = K.now(), last = t0, gaps = [], frames = 0, done = false;
       // no frame at all for 6 s = the page is not being drawn (hidden, or the engine is stuck): say so at once instead of running into the page's time limit
-      var dog = setInterval(function () { if (!done && K.now() - last > 6000) { done = true; clearInterval(dog); reject(new Error('no animation frames for 6 s (page not drawn)')); } }, 500);
+      var dog = setInterval(function () { if (!done && K.now() - last > 6000) { done = true; clearInterval(dog); reject(new Error('no animation frames for 6 s (page not drawn; ' + (document.visibilityState || '?') + ', focus=' + (document.hasFocus ? document.hasFocus() : '?') + ', ' + innerWidth + 'x' + innerHeight + ', frames=' + frames + ')')); } }, 500);
       function tick(t) {
         if (done) return;
         var now = K.now(); gaps.push(now - last); last = now; frames++;

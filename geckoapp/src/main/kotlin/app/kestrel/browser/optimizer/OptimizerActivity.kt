@@ -86,6 +86,8 @@ class OptimizerActivity : Activity(), OptimizerRunner.Ui {
         if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.maybeExit() }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus && started) runner.activate() }
+
     override fun onDestroy() { super.onDestroy(); runner.close() }
 
     @Deprecated("Deprecated in Java")

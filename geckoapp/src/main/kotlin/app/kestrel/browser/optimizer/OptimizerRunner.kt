@@ -156,7 +156,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     }
 
     /** The screen is in front again (also after a restart): the page must be one the engine treats as visible. */
-    fun activate() { try { session?.setActive(true) } catch (e: Exception) { /* none */ } }
+    fun activate() { try { session?.setActive(true); session?.setFocused(true) } catch (e: Exception) { /* none */ } }
 
     private fun pageDied(why: String) {
         Health.log("opt", "page-died", why); pageDied = true
@@ -230,7 +230,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         when (action) {
             is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true), act) }
             is Action.ApplySettings -> { OptimizerApply.write(prefs, action.config); applyLive(); loop() }
-            is Action.Measure -> { val why = pauseReason(); if (why != null) pause(why) else measure() }
+            is Action.Measure -> measure()
             is Action.Ask -> ask(action)
             is Action.Pause -> ui.paused(action.reason)
             is Action.Finish -> finish(action.status)
@@ -284,8 +284,12 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     private fun measure() {
         val gen = generation
         pageDied = false
-        val cpu0 = cpuTicks(); val t0 = SystemClock.elapsedRealtime()
         Thread({
+            // binder calls (battery, process list) stay OFF the screen thread: a system service that answers late must never freeze the run (lab v5: the screen thread went silent right after the second sample)
+            val why = pauseReason()
+            if (why != null) { Io.main.post { if (gen == generation) pause(why) }; return@Thread }
+            val cpu0 = cpuTicks(); val t0 = SystemClock.elapsedRealtime()
+            Health.log("opt", "view", "${view.width}x${view.height} shown=${view.isShown} attached=${view.isAttachedToWindow} windowFocus=${act.hasWindowFocus()}")
             val metrics = HashMap<String, Double>(); val notes = StringBuilder(); var ok = true
             for (p in pages) {
                 if (gen != generation) return@Thread
