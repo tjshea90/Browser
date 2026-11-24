@@ -55,7 +55,7 @@ class OptimizerPartsTest {
     }
 
     @Test fun aBorderlineResultAsksForOneMoreSample() {
-        val thr = maxOf(Decider.MIN_THRESHOLD, 2 * Decider.noise(noisy, metrics))
+        val thr = Decider.threshold(noisy, 2, metrics)
         val borderline = listOf(sample(1.0 + thr * 1.2), sample(1.0 + thr * 1.2))
         assertTrue(Decider.borderline(noisy, borderline, metrics))
         assertFalse(Decider.borderline(noisy, listOf(sample(1.3), sample(1.3)), metrics))

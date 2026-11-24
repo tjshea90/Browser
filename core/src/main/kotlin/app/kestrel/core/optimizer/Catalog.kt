@@ -72,7 +72,7 @@ object Catalog {
     /**
      * Names and key patterns an experiment may never touch (privacy, security, anything that sends data). A catalog test holds every change to this list, so a later edit cannot slip one in.
      */
-    private val denied = Regex("(shield|tracking|trackingprotection|https|upgrade|fingerprint|resistfingerprinting|cookie|cert|security|sandbox|trr|doh|dns|safebrowsing|permission|telemetry|geo|webrtc|referrer|proxy|ech|tls|ssl|pkcs|privacy|private)", RegexOption.IGNORE_CASE)
+    private val denied = Regex("(shield|tracking|trackingprotection|https|upgrade|fingerprint|resistfingerprinting|cookie|cert|security|sandbox|trr|doh|dns|safebrowsing|permission|telemetry|geo|webrtc|referrer|proxy|ech|tls|ssl|pkcs|privacy|private|datareporting|healthreport|upload|crash|collect|consent|report)", RegexOption.IGNORE_CASE)
 
     fun isAllowed(c: Change): Boolean = !denied.containsMatchIn(c.key)
 

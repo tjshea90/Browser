@@ -21,6 +21,11 @@ class Decision(val verdict: Verdict, val gain: Double, val threshold: Double, va
 class Guards(val maxMemMb: Double = 60.0, val maxSingleLoss: Double = 0.20)
 
 object Stats {
+    fun stdev(xs: List<Double>): Double {
+        if (xs.size < 2) return 0.0
+        val m = xs.sum() / xs.size
+        return sqrt(xs.sumOf { (it - m) * (it - m) } / (xs.size - 1))
+    }
     fun median(xs: List<Double>): Double {
         if (xs.isEmpty()) return 0.0
         val s = xs.sorted(); val n = s.size
@@ -46,9 +51,12 @@ object Decider {
         return ids.associateWith { id -> Stats.median(ok.mapNotNull { it.values[id] }) }
     }
 
+    /** How many noise units a gain must clear: three, because a tool that CHANGES settings must be far more afraid of a lucky number than of a missed small gain. */
+    const val K = 3.0
+
     private fun metricNoise(m: Metric, baselines: List<Sample>): Double {
         val logs = baselines.filter { it.ok }.mapNotNull { it.values[m.id] }.map { ln(it + m.eps) }
-        return max(NOISE_FLOOR, Stats.madSigma(logs))
+        return max(NOISE_FLOOR, max(Stats.madSigma(logs), Stats.stdev(logs)))      // MAD ignores one odd sample, the standard deviation does not: with few samples the larger of the two
     }
 
     /** The score noise: how much the weighted gain moves between samples of the SAME configuration. */
@@ -76,9 +84,18 @@ object Decider {
         return metrics.filter { it.id in ref && it.id in cand }.map { it to (1.0 - exp(it.gain(ref.getValue(it.id), cand.getValue(it.id)))) }.maxByOrNull { it.second }
     }
 
+    /**
+     * The gain needed to believe a candidate measured [nCand] times against these baselines: [K] noise units of the DIFFERENCE of two averages (the baseline has its own noise, the candidate too),
+     * and never under [MIN_THRESHOLD].
+     */
+    fun threshold(baselines: List<Sample>, nCand: Int, metrics: List<Metric>): Double {
+        val nb = max(1, baselines.count { it.ok })
+        return max(MIN_THRESHOLD, K * noise(baselines, metrics) * sqrt(1.0 / max(1, nCand) + 1.0 / nb))
+    }
+
     /** True when the verdict is too close to call and one more sample (no extra restart: same engine session) is worth its minute. */
     fun borderline(baselines: List<Sample>, candidate: List<Sample>, metrics: List<Metric>): Boolean {
-        val thr = max(MIN_THRESHOLD, 2 * noise(baselines, metrics))
+        val thr = threshold(baselines, candidate.size, metrics)
         val g = abs(gain(baselines, candidate, metrics))
         return candidate.size < 3 && g > thr / 2 && g < thr * 2
     }
@@ -91,8 +108,9 @@ object Decider {
         if (bad != null) return Decision(Verdict.FAILED, 0.0, MIN_THRESHOLD, 0.0, "a benchmark page failed: " + bad.note.ifEmpty { "no reason given" })
         if (ownerOk == false) return Decision(Verdict.FAILED, 0.0, MIN_THRESHOLD, 0.0, "you saw something wrong on the screen")
         val noise = noise(baselines, metrics)
-        val thr = max(MIN_THRESHOLD, 2 * noise)
+        val thr = threshold(baselines, candidate.size, metrics)
         val g = gain(baselines, candidate, metrics)
+        val everySampleBetter = candidate.all { gain(baselines, listOf(it), metrics) > 0.0 }
         val ref = reference(baselines); val cand = reference(candidate)
         val compatBase = ref[Metrics.COMPAT]; val compatCand = cand[Metrics.COMPAT]
         if (compatBase != null && compatCand != null && compatCand < compatBase) return Decision(Verdict.REJECT, g, thr, noise, "a feature test that passed before fails (${compatCand.toInt()} of ${compatBase.toInt()})")
@@ -101,6 +119,7 @@ object Decider {
         val w = worst(baselines, candidate, metrics)
         if (w != null && w.second > guards.maxSingleLoss) return Decision(Verdict.REJECT, g, thr, noise, "it makes '${w.first.label}' ${(w.second * 100).toInt()} % worse")
         return when {
+            g >= thr && !everySampleBetter -> Decision(Verdict.INCONCLUSIVE, g, thr, noise, "better by ${pct(g)} on average, but not in every sample: not proven, left as it was")
             g >= thr -> Decision(Verdict.ACCEPT, g, thr, noise, "better by ${pct(g)} (needs ${pct(thr)})")
             g <= -thr -> Decision(Verdict.REJECT, g, thr, noise, "worse by ${pct(-g)} (needs ${pct(thr)})")
             else -> Decision(Verdict.INCONCLUSIVE, g, thr, noise, "${if (g >= 0) "better" else "worse"} by ${pct(abs(g))}, inside the noise of ${pct(thr)}: not proven, left as it was")
