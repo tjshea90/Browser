@@ -903,7 +903,7 @@ class OwnerRulesTest {
         assertTrue("one definition of a decorative clip: silent, looping, no controls of its own", vf.contains("v.loop && (v.muted || v.defaultMuted) && !v.controls") && vf.contains("decorative: decorative"))
         assertTrue("the bar is never drawn over one", source(dir + "videobar.js").contains("if (VF.decorative && VF.decorative(v)) { if (!late) report('deco', 'bar'); return; }"))
         val dc = source(dir + "decoclips.js")
-        assertTrue("two at a time", dc.contains("max: 2"))
+        assertTrue("one at a time (alpha103 uploads: two still dropped 40 to 99 % of their frames) and none while the page scrolls", dc.contains("max: 1") && dc.contains("scrollMs: 450") && dc.contains("function hold(v)"))
         assertTrue("only clips that already play are governed, and only after the app said so", dc.contains("r.dc === true") && dc.contains("window.addEventListener('playing'"))
         assertTrue("a page that fights it is left alone", dc.contains("list.length > T.tries") && dc.contains("free.set(v, 1)"))
         assertTrue("it is declared in the manifest like the other video scripts", source(dir + "manifest.json").contains("\"decoclips.js\""))
@@ -924,5 +924,15 @@ class OwnerRulesTest {
         val bk = source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt")
         assertTrue("and in a backup", bk.contains("Spec(\"lab_dither\", T.BOOL)") && bk.contains("Spec(\"lab_bytecode\", T.BOOL)") && bk.contains("Spec(\"lab_gcpar\", T.BOOL)"))
         assertTrue("the report script compares page loads by them", source("tools/diag_digest.py").contains("'lab_dither', 'lab_bytecode', 'lab_gcpar'"))
+    }
+
+    /** PERF24 (owner 2026-11-24: "Switching between tabs has to reload sites and this is slow"): the Settings number limits the REGULAR tabs, private tabs do not count against it, the cheapest tab to bring back sleeps first. */
+    @Test fun perf24TheTabSleepRuleCountsRegularTabsAgainstTheSettingAndSparesTheHeavyOnes() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val enforce = body(act, "    private fun enforceLiveLimit(max: Int = liveBudget()) {")
+        assertTrue("one plan decides: total from memory, regular from the Settings number", enforce.contains("LiveBudget.sleepPlan(") && enforce.contains("max, LiveBudget.regularCap(prefs.tabsKeptCount))") && enforce.contains("it.reloadMs"))
+        assertTrue("the memory rule no longer lets a fixed Settings number override it", act.contains("LiveBudget.memoryLimit(avail, am?.isLowRamDevice != false, mi.lowMemory)"))
+        assertTrue("the tab remembers what its last load cost", source("app/src/main/kotlin/app/kestrel/browser/web/Tab.kt").contains("var reloadMs = 0L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("if (success && tookMs > 0L) tab.reloadMs = tookMs"))
+        assertTrue("a private tab is still never put to sleep", source("core/src/main/kotlin/app/kestrel/core/tabs/LiveBudget.kt").contains("fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate"))
     }
 }
