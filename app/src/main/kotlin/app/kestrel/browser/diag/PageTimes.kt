@@ -54,13 +54,15 @@ object PageTimes {
         }
     }
 
-    @Synchronized fun stop(key: Any, blocked: Int, ok: Boolean = true, cut: Boolean = false) {
-        val l = open.remove(key) ?: return
+    /** Returns how long the load took in ms (-1 for a load that was not timed: a private tab, a page without a host). */
+    @Synchronized fun stop(key: Any, blocked: Int, ok: Boolean = true, cut: Boolean = false): Long {
+        val l = open.remove(key) ?: return -1L
         if (l.doneMs < 0) l.doneMs = SystemClock.elapsedRealtime() - l.startedAt
         l.blocked = blocked
         if (l.paintMs < 0) { if (late.size >= 8) late.clear(); late[key] = l }
         // SOAK1: one line per finished load (the host only), so the emulator lab and a Diagnostics paste can tell slow pages from fast ones
         Health.log("page", "loaded", "host=${l.host} paint=${l.paintMs}ms done=${l.doneMs}ms blocked=$blocked visit=${l.nth} ok=$ok" + (if (!ok && cut) " cut=1" else ""))
+        return l.doneMs
     }
 
     @Synchronized fun lines(): List<String> {

@@ -214,7 +214,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // PERF12 (owner 2026-11-23: "see if anything can be improved"; the digest said 19 of 44 amazon and 15 of 37 google loads "failed"): a load that ends WITHOUT success and WITHOUT an engine load error was cut short
         // (a redirect hop, a tap on a result, Stop): it is said as `ok=false cut=1` and is not counted as a failed load by the live diagnostics (which then no longer advise "turn Shields off" for a tracking redirect).
         val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt
-        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
+        val tookMs = app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
+        if (success && tookMs > 0L) tab.reloadMs = tookMs      // PERF24: what it costs to bring this tab back after it slept
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false

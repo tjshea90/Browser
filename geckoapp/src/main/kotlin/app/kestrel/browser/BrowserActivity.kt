@@ -1863,17 +1863,18 @@ open class BrowserActivity : Activity(), DockListener {
         val mi = ActivityManager.MemoryInfo()
         try { am?.getMemoryInfo(mi) } catch (e: Exception) { /* keep the zeros */ }
         val avail = Health.memAvailableMb().let { if (it >= 0) it else if (mi.availMem > 0) (mi.availMem shr 20).toInt() else -1 }
-        return LiveBudget.limit(avail, am?.isLowRamDevice != false, mi.lowMemory, prefs.tabsKeptCount)
+        return LiveBudget.memoryLimit(avail, am?.isLowRamDevice != false, mi.lowMemory)   // PERF24: the memory rule only (all live tabs); the Settings number limits the regular tabs in enforceLiveLimit
     }
 
     /** Keep at most [max] live engine sessions: the least recently used others are hibernated (the tab in front and any tab with a live pop-up child never are). */
     private fun enforceLiveLimit(max: Int = liveBudget()) {
-        val live = tabs.filter { it.session != null }.sortedBy { it.lastActive }
+        val live = tabs.filter { it.session != null }
+        // PERF24: the owner's number limits the REGULAR tabs, the memory rule (max) all live tabs; the cheapest tab to bring back sleeps first, a heavy page last (core LiveBudget.sleepPlan; never a private tab: its logins would go, ANS58c)
+        val plan = LiveBudget.sleepPlan(live.map { LiveBudget.SleepCand(it.id, it.lastActive, it === current, hasLiveChild(it), it.isPrivateTab, it.reloadMs) }, max, LiveBudget.regularCap(prefs.tabsKeptCount))
         var count = live.size
-        for (t in live) {
-            if (count <= max) break
-            if (!LiveBudget.mayHibernate(t === current, hasLiveChild(t), t.isPrivateTab)) continue            // ANS58c: never a private tab (its logins would go)
-            Health.count("tabs.hibernate"); Health.log("tabs", "hibernate", "tab=${t.id} live=$count max=$max avail=${Health.memAvailableMb()}MB")
+        for (id in plan) {
+            val t = live.firstOrNull { it.id == id } ?: continue
+            Health.count("tabs.hibernate"); Health.log("tabs", "hibernate", "tab=${t.id} live=$count max=$max regular=${live.count { !it.isPrivateTab }}/${LiveBudget.regularCap(prefs.tabsKeptCount).coerceAtMost(99)} reload=${t.reloadMs}ms avail=${Health.memAvailableMb()}MB")
             hibernate(t)
             count--
         }

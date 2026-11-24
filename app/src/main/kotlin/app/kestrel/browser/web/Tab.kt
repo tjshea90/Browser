@@ -44,6 +44,7 @@ class Tab(@JvmField val id: Long) {
     var favicon: Bitmap? = null
     var error: ErrorScreen? = null
     var pendingLoad: String? = null // restored from the session but not loaded yet (lazy: no network at startup)
+    var reloadMs = 0L // PERF24: how long the page's last successful load took to finish (ms; 0 = unknown): a tab that is expensive to bring back is the last one put to sleep (core LiveBudget.sleepPlan)
     var lazyStart = false // PERF17b: the app started after a long break: this tab waits on the Home screen for the Continue tap (its page is not loaded); cleared when the page is shown
     var cacheFirstOnce = false // next load prefers the HTTP cache (restoring / hibernated tabs cost no data)
     var injectToken = 0 // per-page-load random token naming the page-side idempotence marker (0 = nothing injected yet); see ScriptInjector

@@ -36,6 +36,39 @@ object LiveBudget {
 
     const val MAX = 8
 
+    // ---- PERF24 (owner 2026-11-24: "Switching between tabs has to reload sites and this is slow"). The alpha103 uploads: "tabs hibernate tab=74 live=3 max=2 avail=534MB", again and again, once with 944 MB free: tab 74 was the heavy chat page
+    // (13 to 23 s to paint again, 36 s to finish), the other two live tabs were PRIVATE tabs, which can never sleep, and "Tabs kept ready: Few (2)" counted them, so the regular tab paid for them every time. Three rules now:
+    //  1. the number the owner chose limits the REGULAR tabs only; private tabs are never counted against it (they cannot sleep, and the memory rule below still counts every live tab);
+    //  2. the memory rule (what the kernel says is available) limits ALL live tabs, whatever the setting: a fixed "Many" no longer ignores a memory shortage;
+    //  3. when a tab has to go, the cheapest to bring back goes first: a tab whose last page took [HEAVY_RELOAD_MS] or more to load is the last one put to sleep, the least recently used first within each group.
+
+    /** A page that took this long to finish loading is expensive to bring back (the chat page of the owner's uploads: 13 to 23 s). */
+    const val HEAVY_RELOAD_MS = 8_000L
+
+    /** The most live tabs the free memory allows, whatever the Settings number says (0 = automatic and a fixed number are the same here). */
+    fun memoryLimit(availMb: Int, lowRamDevice: Boolean, systemLow: Boolean): Int = limit(availMb, lowRamDevice, systemLow, AUTO)
+
+    /** The most live REGULAR tabs the owner allows (Settings > Tabs kept ready); no limit for automatic. */
+    fun regularCap(setting: Int): Int = if (setting >= FLOOR) setting.coerceAtMost(MAX) else Int.MAX_VALUE
+
+    class SleepCand(val id: Long, val lastActive: Long, val isCurrent: Boolean, val hasLiveChild: Boolean, val isPrivate: Boolean, val reloadMs: Long)
+
+    /**
+     * The ids of the tabs to put to sleep, in order, so that at most [totalMax] tabs stay live and at most [regularMax] of them are regular. Never the tab in front, one with a live pop-up child or a private tab ([mayHibernate]);
+     * the cheapest to bring back first (a tab whose last load took [HEAVY_RELOAD_MS] or more is a last resort), the least recently used first within each group. Stops when both limits hold or nobody is left that may sleep.
+     */
+    fun sleepPlan(live: List<SleepCand>, totalMax: Int, regularMax: Int): List<Long> {
+        var total = live.size
+        var regular = live.count { !it.isPrivate }
+        val pool = live.filter { mayHibernate(it.isCurrent, it.hasLiveChild, it.isPrivate) }.sortedWith(compareBy<SleepCand>({ if (it.reloadMs >= HEAVY_RELOAD_MS) 1 else 0 }, { it.lastActive }))
+        val out = ArrayList<Long>()
+        for (c in pool) {
+            if (total <= totalMax && regular <= regularMax) break
+            out.add(c.id); total--; regular--
+        }
+        return out
+    }
+
     /**
      * ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a PRIVATE tab): may the memory handling put this tab to
      * sleep (close its engine session) to keep the budget? Never the tab in front, never one with a live pop-up child (window.opener), and never a PRIVATE tab: the engine forgets everything private (cookies,
