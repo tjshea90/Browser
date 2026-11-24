@@ -882,4 +882,17 @@ class OwnerRulesTest {
         assertTrue("the bot-check marker looks at the title and the check's own elements, never at the jsd script every protected site loads", pt.contains("just a moment|attention required") && pt.contains("challenge-stage") && !pt.contains("script[src*=\"/cdn-cgi/challenge-platform"))
         assertTrue("the numbers reach the live diagnostics line", act.contains("PageTimingLine.build(host, v, lag, sl, ctx, fm, m.optInt(\"ch\", 0), m.optLong(\"chs\", -1L))") && source("core/src/main/kotlin/app/kestrel/core/livediag/PageTimingLine.kt").contains("\" fm=\""))
     }
+
+    /** PERF20 (owner 2026-11-24: "as fast as possible utilizing as much ram as possible for speed within reason for a low ram tablet"). */
+    @Test fun perf20TheEngineHearsAndroidsMemorySignalsOnlyThroughTheGate() {
+        val eng = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt")
+        assertTrue("the runtime is created with the gating context", eng.contains("GeckoRuntime.create(EngineTrimGate.install(ctx), settings)"))
+        val gate = source("geckoapp/src/main/kotlin/app/kestrel/browser/EngineTrimGate.kt")
+        assertTrue("one place decides, with the core rule", gate.contains("TrimGate.decide(prefs.holdFalseTrims, level, avail, mi.lowMemory, since, heldAt.size)"))
+        assertTrue("anything unexpected passes the signal on, as before", gate.contains("return true          // anything unexpected"))
+        val ctx = source("app/src/main/kotlin/app/kestrel/browser/mem/TrimGateContext.kt")
+        assertTrue("the system's own low-memory call is never held", ctx.contains("override fun onLowMemory() { inner.onLowMemory() }"))
+        assertTrue("an engine kill is stamped so signals pass for 6 hours", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("prefs.lastEngineKillAt = System.currentTimeMillis()"))
+        assertTrue("on by default, with a Settings switch", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var holdFalseTrims: Boolean get() = bool(\"hold_false_trims\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.holdFalseTrims) { prefs.holdFalseTrims = it }"))
+    }
 }

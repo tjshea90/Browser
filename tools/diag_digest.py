@@ -487,6 +487,17 @@ def focus_report(batches):
     print('  info  switches to a SLEEPING tab (page loaded again): %d, median first frame %s ms' % (len(rev), med(rev) if rev else '-'))
     hib = kvs('tabs hibernate')
     print('  info  tabs put to sleep: %d (budget of one: %d); engine kills: %d' % (len(hib), sum(1 for h in hib if h.get('max') == '1'), sum(1 for e in ev if ' gecko onKill' in e)))
+    # PERF20 (owner 2026-11-24: "as fast as possible utilizing as much ram as possible ... within reason"): Android's memory signals and what the gate did with them. A critical signal (level 15, or 40 and up) makes the
+    # engine drop its warm caches and compiled script code; this tablet gets them with hundreds of MB free. held = not passed on (a false alarm), sent = passed on (memory short, an engine kill in the last 6 h, ...).
+    crit = [int(m.group(2)) for m in (re.search(r' mem trim level=(\d+) avail=(\d+)MB', e) for e in ev) if m and (int(m.group(1)) == 15 or int(m.group(1)) >= 40)]
+    heldl = [e for e in ev if ' mem trim-held ' in e]
+    sentl = [e for e in ev if ' mem trim-sent ' in e]
+    if crit:
+        print('  info  memory signals: Android sent %d critical ones (level 15 or 40+), median %s MB available at the time, %d of them under 300 MB' % (len(crit), med(crit), sum(1 for a in crit if a < 300)))
+    if heldl or sentl:
+        print('  info  the gate (alpha101+): %d held as false alarms, %d passed on to the engine (reasons: %s)' % (len(heldl), len(sentl), ', '.join('%s x%d' % kv for kv in Counter(re.sub(r'\d+', 'N', (re.search(r'why=(.*)$', e) or [None, '?'])[1] if re.search(r'why=(.*)$', e) else '?') for e in sentl).most_common(3)) or 'none passed on'))
+    else:
+        print('  info  the gate (alpha101+): no held / passed-on lines yet')
     print(verdict(dev_med('memAvailMb'), 450, 300, ' MB', lower_is_better=False, what='free memory (median of the uploads)'))
     print(verdict(dev_med('cpuParentAvg'), 40, 70, ' %', what='parent process CPU, average (one core = 100)'))
     print(verdict(dev_med('jankFrames'), 60, 200, '', what='slow screen frames per upload (median)'))
