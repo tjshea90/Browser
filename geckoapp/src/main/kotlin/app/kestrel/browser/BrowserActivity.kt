@@ -77,6 +77,7 @@ import app.kestrel.browser.ui.LastLook
 import app.kestrel.browser.ui.ThumbStore
 import app.kestrel.core.session.BackLab
 import app.kestrel.core.session.BackScrollRules
+import app.kestrel.core.session.LazyStart
 import app.kestrel.core.session.LastLookMeta
 import app.kestrel.core.session.LastLookRules
 import app.kestrel.browser.ui.BottomDock
