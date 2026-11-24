@@ -1,6 +1,7 @@
 package app.kestrel.browser.data
 
 import android.content.Context
+import app.kestrel.core.optimizer.Catalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -20,8 +21,8 @@ class OptimizerPrefsTest {
     private val p get() = Prefs.get(app)
 
     @Test fun everyCatalogSettingKeyCanBeReadAndWrittenWithEveryValueTheCatalogUses() {
-        for (k in app.kestrel.core.optimizer.Catalog.settingKeys().keys) assertNotNull("$k is readable", p.optGet(k))
-        for (e in app.kestrel.core.optimizer.Catalog.all) for (c in e.settingChanges()) {
+        for (k in Catalog.settingKeys().keys) assertNotNull("$k is readable", p.optGet(k))
+        for (e in Catalog.all) for (c in e.settingChanges()) {
             val before = p.optGet(c.prefKey)!!
             assertTrue("${c.prefKey} is writable", p.optSet(c.prefKey, c.value))
             assertEquals("${e.id}: ${c.prefKey} round-trips", c.value, p.optGet(c.prefKey))
@@ -31,7 +32,7 @@ class OptimizerPrefsTest {
 
     @Test fun theCatalogsTypeMatchesTheStoredType() {
         val sp = app.getSharedPreferences("kestrel", Context.MODE_PRIVATE)
-        for ((key, isBool) in app.kestrel.core.optimizer.Catalog.settingKeys()) {
+        for ((key, isBool) in Catalog.settingKeys()) {
             val v = p.optGet(key)!!
             p.optSet(key, v)
             val stored = sp.all[key]
