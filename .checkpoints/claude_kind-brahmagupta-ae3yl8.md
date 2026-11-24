@@ -1,25 +1,22 @@
-# CHECKPOINT 3193 — read me first, then TASKS.md
+# CHECKPOINT 3197 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T06:44:35Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `17f25087` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T06:57:59Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `7b2d81ae` (this checkpoint is the commit after it)
 
 ## Just done
-PERF24 coded: tab sleep plan (core LiveBudget.sleepPlan + Tab.reloadMs + PageTimes.stop returns ms + BrowserActivity.enforceLiveLimit), decoclips.js one clip at a time + none while scrolling (8 Chromium tests pass), Settings/Diagnostics text, OwnerRulesTest perf24, research/LAG_2026-11-24.md
+pre-ship: alpha104: tab reloads, and the clip page. I read your two alpha103 uploads. (1) TABS RELOAD: the tab that kept going to sleep was your heavy chat page (it takes 13 to 23 seconds to paint again, 36 seconds to finish). Your other two live tabs were private tabs, which can never sleep, and the setting Tabs kept ready, Few (2), counted them, so the regular tab paid for them every time, even with 944 MB free. Now that number limits your regular tabs only, private tabs do not count against it, free memory still limits all live tabs (and now also caps a fixed number, so Many no longer ignores a memory shortage), and when a tab has to sleep the cheapest one to bring back goes first: a tab whose last page took 8 seconds or more to load is the last one put to sleep. (2) THE CLIP PAGE: the uploads show clips dropping 40 to 99 percent of their frames while three or four played within seconds of each other, and the app's own window stalling up to 0.98 seconds. Two clips at a time, the alpha102 limit, was still too many for this tablet, so now one clip plays at a time, and none while you scroll the page; they start again half a second after you stop. (3) TYPING AND SCROLLING: typing in text boxes waits for the page's own next picture (up to 1.2 seconds on busy pages, while the keyboard's own hand-over takes 16 to 24 milliseconds), and scrolling shows the same thing: pages draw about 6 pictures a second right after they load. The clip change removes the biggest source of late pictures on the clip page; the rest is the pages' own scripts on four weak cores, so there is no separate fix. One setting to try, no code: Settings, Appearance, Scroll feel: yours is Standard (Firefox's own), the least pre-drawing; the default is Smoother. Not run on the tablet: the tab rule and the clip limiter are tested in unit tests and in a desktop browser engine only. Said plainly: a heavy page that does have to reload still takes 13 to 23 seconds; the change makes it sleep far less often, not load faster.
 
 ## Do this next
-run ./gradlew --offline -q :core:test :geckoapp:compileDebugKotlin :app:compileDebugKotlin (Monitor); then bump geckoapp to versionCode 205 / 0.3.0-alpha104, sync-ext-version, docs/handoff/ALPHA104_RELEASE_NOTE.txt (ASCII, no double quotes, no site name; say what was NOT run on the tablet and the Scroll feel setting to try), ship.sh gecko (background), ONE dispatch, poll the RUN (rerun_failed_jobs on the same run if a known flaky test fails: the message now prints), record-release, answer the owner (PERF24) with the Release link and re-list open items
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt
-     M core/src/test/kotlin/app/kestrel/core/OwnerRulesTest.kt
-     M geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt
-    ?? research/LAG_2026-11-24.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  b46f56e2 ckpt 3193: PERF24 coded: tab sleep plan (core LiveBudget.sleepPlan + Tab.reloadMs + Pag
   64c28c57 ckpt 3188: owner request PERF24 (laggy typing in text boxes, the sports-odds page and i
   5a4fdea9 ckpt 3187: TEST1: the owner's step-by-step test guide written (research/TEST_PLAN_alpha
   2775495b ckpt 3186: alpha103 SHIPPED and recorded: run 45333801406 green on attempt 1, Release h
@@ -29,8 +26,7 @@ run ./gradlew --offline -q :core:test :geckoapp:compileDebugKotlin :app:compileD
   ee5eb3f1 ckpt 3179: PERF22: research/LOW_END_PLAYBOOK.md written; three Network lab experiments 
   3b1d4574 ckpt 3175: FLK1 done: real-time waits tripled in StreamEngineTest, PhoneBackendTest, Se
   9e7ae1ef ckpt 3173: alpha102 SHIPPED and recorded: run 45326840944 green on attempt 2 (attempt 1
-  b1b76738 ckpt 3171: alpha102 run 45326840944 attempt 1: test-jvm FAILED on the known flaky Strea
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
