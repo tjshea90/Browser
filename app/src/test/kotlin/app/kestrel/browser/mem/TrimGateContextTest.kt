@@ -25,8 +25,7 @@ class TrimGateContextTest {
     }
 
     @Test fun onlyTheSignalsTheGateLetsThroughReachTheEngine() {
-        val asked = ArrayList<Int>()
-        val ctx = TrimGateContext(app, object : TrimGateContext.Gate { override fun forward(level: Int) = level != 80 && level != 15.also { asked.add(level) } })
+        val ctx = TrimGateContext(app, object : TrimGateContext.Gate { override fun forward(level: Int) = level != 80 && level != 15 })
         val engine = Engine()
         ctx.registerComponentCallbacks(engine)
         app.onTrimMemory(80); app.onTrimMemory(15); app.onTrimMemory(40)
