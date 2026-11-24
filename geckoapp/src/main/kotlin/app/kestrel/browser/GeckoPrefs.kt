@@ -51,6 +51,16 @@ object GeckoPrefs {
     }
 
     /**
+     * PERF22 (research/LOW_END_PLAYBOOK.md): the engine experiments of the Network lab, in the `name=value` grammar of [yaml]'s overrides (a value that is also in gecko-prefs.txt REPLACES it: a duplicate YAML key would
+     * be an error). Off = nothing here: the engine's own value or the one in gecko-prefs.txt. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh reads these strings too).
+     */
+    internal fun labOverrides(p: app.kestrel.browser.data.Prefs): List<String> = buildList {
+        if (p.labDither) add("gfx.webrender.dithering=false")                              // no dithering of gradients: less per-pixel work in CPU drawing, a little banding in smooth gradients
+        if (p.labBytecode) add("dom.script_loader.bytecode_cache.strategy=-1")              // the compiled form of a script is saved the first time it is seen, not after the second load
+        if (p.labGcPar) add("javascript.options.mem.gc_parallel_marking=true")              // the script engine's clean-up marks on more than one thread
+    }
+
+    /**
      * PERF7c (owner 2026-11-22, two screenshots: horizontal bands of text missing on claude.ai, the pornhub loading circle cut at the bottom; research/PAINT_GLITCH.md): the shortcuts of the engine's graphics
      * renderer (WebRender) that redraw or upload only PART of a frame or a texture. A driver that gets one of them wrong leaves exactly such bands undrawn. "Safe drawing" turns them off: whole clears, one
      * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh).
@@ -76,7 +86,7 @@ object GeckoPrefs {
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
-        var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
+        var yaml = yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx))) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
         app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.moz_log")?.takeIf { LOG_SPEC.matches(it) }?.let {

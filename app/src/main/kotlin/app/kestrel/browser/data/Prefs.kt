@@ -97,6 +97,10 @@ class Prefs private constructor(ctx: Context) {
     var labSoft: Boolean get() = bool("lab_soft", false); set(v) = put("lab_soft", v)
     /** PERF14 (owner 2026-11-23: "is there a way to speed up page loading"): "Calmer redrawing" (default OFF): the engine redraws a page at most 30 times a second (layout.frame_rate) instead of 60, which halves the drawing work of pages that animate while they load; read when the engine starts. */
     var labFps30: Boolean get() = bool("lab_fps30", false); set(v) = put("lab_fps30", v)
+    /** PERF22 (research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF; applied at the next start; every upload carries them, the digest's SETTING A/B compares page loads with and without. */
+    var labDither: Boolean get() = bool("lab_dither", false); set(v) = put("lab_dither", v)
+    var labBytecode: Boolean get() = bool("lab_bytecode", false); set(v) = put("lab_bytecode", v)
+    var labGcPar: Boolean get() = bool("lab_gcpar", false); set(v) = put("lab_gcpar", v)
     /** EX-12: speculation rules (a site's own "fetch the next page early" hints): 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on. A pre-release engine feature. */
     var labSpec: Int get() = sp.getInt("lab_spec", 0); set(v) = put("lab_spec", v.coerceIn(0, 2))
     /** EX-14: while LinkMeter's Fast Wi-Fi is on, ask websites for WebP / JPEG / PNG instead of AVIF (cheaper to decode on this CPU when bytes are cheap; image.http.accept on the USER branch, cleared when the profile ends). OFF: the owner's Decode lab numbers (AVIF 108 ms vs WebP 50 ms vs JPEG 27 ms per picture, research/EX_RESULTS.md) say AVIF still wins on the 5 Mbit/s hotspot; the lab page was removed afterwards (research/DIAG_TOOLS.md). */
