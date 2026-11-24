@@ -1,0 +1,65 @@
+# OPTIMIZER: the automatic "Auto-tune" (owner, 2026-11-24, OPT1)
+Owner, verbatim: "I'm too lazy to do the one by one experiments in the kestrel settings for browser speed and performance optimizations. Build an automated system that i can run which tries all different experiments and settings and logs how well they work and make a smart completely automatic optimizer that runs all the proposed tests and experiments and finds the best speed and improvements. It may include comprehensive logging and sending diagnostics to claude. It may include prompts to ask me to answer questions or to try different things, etc. The goal is maximum browser optimization , compatibility, speed, loading time, etc."
+Public repo: nothing from the owner's browsing goes in here; results go to the PRIVATE repo only. Tags: [V] verified in code or a primary source, [E] estimate, [N] not proven.
+
+## 1. What it is, in one paragraph
+Settings > Auto-tune > Start. A few questions (plug in, Battery Saver off, which matters most), then it runs by itself for about an hour on its own screen: for every experiment in a catalog it applies the setting (restarting the engine when the setting needs it), runs a fixed set of local benchmark pages, compares against baselines measured before, between and after, decides keep / drop / can't tell, tries the keepers together, checks the combination, applies the best set, and tells the owner in plain words what it kept and what it measured. It survives being killed, a crash, a flat battery or the owner leaving the app: every step is saved first and the run resumes where it stopped. Everything it learned is sent (if the owner's diagnostics switch and token are on) to the private repo for Claude to read, and `tools/optimizer_digest.py` prints it.
+
+## 2. Why a separate screen and a loopback benchmark server
+- Own Activity (`OptimizerActivity`, same app, same engine runtime): the owner's tabs, history and the 3,400-line `BrowserActivity` are not touched; its own GeckoView + one GeckoSession. A crash of the page process is seen by the activity itself.
+- Benchmarks are pages served from the app's own assets by a tiny HTTP server on `127.0.0.1` (random port, random token in the path, loopback only): they run through the real engine, the real Shields extension and the real content scripts, they need no network (the hotspot is too noisy to judge a 5 % effect) and they can POST their results (`/<token>/r`) instead of smuggling them out through the page title. [E: Shields judging adds a few ms per request to a local page; the same in every arm.]
+- Experiments that change an engine preference at start need a new engine process: `RestartActivity` (own process `:restart`, ProcessPhoenix pattern: started while the app is in front, it starts the target activity and kills the old process) relaunches `OptimizerActivity` with `resume`. A notification with the same intent is the fallback if the system refuses the start. [N: the exact behaviour on Android 10 Go is proved by the emulator lab, not here.]
+
+## 3. The catalog (evidence for each row is in research/LAB5_PREFSWEEP.md, GECKO_TUNING_2.md, LOW_END_PLAYBOOK.md, PAINT_GLITCH.md, FIREFOX_UPGRADE_161.md)
+Every experiment = one or more `Change`s: an engine pref (`name=value`, or FLIP = the opposite of the engine's own value read back at run time, for the 161-new prefs whose default is compiled in) or an app setting (Prefs key). Engine prefs go into `Prefs.optPrefs`, written into the engine config at start (`GeckoPrefs.labOverrides`), so adding an experiment never needs a new Settings toggle.
+| Group | Experiment | Change | Restart | Measured by |
+| :- | :- | :- | :- | :- |
+| draw | hardware drawing trial 1 / 2 | `draw_trial` 1 / 2 | yes | animation, scroll, input, JS, **owner glitch question** |
+| draw | calmer redrawing | `layout.frame_rate` 30 | yes | animation, input, scroll |
+| draw | cheaper gradients | `gfx.webrender.dithering` false | yes | animation (blur / gradient arm) |
+| draw | new 161 path drawing | FLIP `gfx.webrender.paths`, FLIP `gfx.webrender.paths.swgl` | yes | animation, JS |
+| draw | Rust font reader (161) | FLIP `gfx.font_rendering.fontations.enabled` | yes | layout, input |
+| draw | no decode of hidden pictures (161) | FLIP `image.decode.defer_if_not_visible` | yes | scroll, memory |
+| script | compile on first sight | `dom.script_loader.bytecode_cache.strategy` -1 | yes | JS (second page load) |
+| script | parallel GC marking | `javascript.options.mem.gc_parallel_marking` true | yes | JS, input |
+| script | small-device GC growth | `gc_high_frequency_small_heap_growth` 120, `..._large_heap_growth` 110, `gc_low_frequency_heap_growth` 110 | yes | JS, memory |
+| script | smaller nursery | `javascript.options.mem.nursery.max_kb` 16384 | yes | JS, memory |
+| script | off-thread JIT compile | `javascript.options.baselinejit.offthread_compilation_strategy` 0 | yes | JS |
+| cpu | two style threads | `layout.css.stylo-threads` 2 | yes | layout, animation |
+| cpu | no captcha-frame observers | `captchadetection.actor.enabled` false | yes | JS (compat probe) |
+| cpu | no password / form-history work | `signon.rememberSignons` false, `browser.formfill.enable` false | yes | input |
+| ui | scroll feel Standard / Smoothest | `scroll_feel` 0 / 2 | no | scroll |
+| ui | no limit on looping clips | `limit_clips` false | no | clip arm |
+| memory | second content process | `dom.ipc.processCount` 2 | yes | input p95 with a memory GUARD (+120 MB max) |
+NEVER in the catalog (enforced by a unit test on name patterns): Shields, tracking protection, HTTPS-only / upgrades, fingerprint protection, cookie rules, certificate / security / sandbox prefs, encrypted DNS, Safe Browsing, permissions, anything that sends data. Network-speed experiments (HTTP/3, warm-up connections, buffer sizes) are NOT in v1: the hotspot's noise (+-30 %) is larger than their effect; they stay with the passive A/B in the digest (OPT2).
+
+## 4. The benchmark suite (local pages; `geckoapp/src/main/assets/bench/`, tested in headless Chromium by `web-tests/bench.test.js`)
+| Page | What runs | Metrics (lower / higher is better) |
+| :- | :- | :- |
+| `js.html` | integer + float loops, string / regex / JSON, array sort, allocation churn (GC), a framework-like DOM build, 3 passes | `script_ms` (sum of medians) |
+| `layout.html` | 4,000-node tree, style recalcs, forced layouts | `layout_ms` |
+| `anim.html` | 3 arms of 3 s: (A) 40 CSS-transform boxes, (B) gradient + blur layers, (C) a strip of 8 small looping muted clips like the sports-odds page | `fps_css`, `fps_blur`, `fps_clips` (higher), `late_pct` (frames over 50 ms; lower) |
+| `scroll.html` | a long page scrolled by the app's own animated scroll | `scroll_gap_p95` (ms), `scroll_fps` |
+| `input.html` | synthetic input events during a busy page: time from the event to the next frame | `input_p50`, `input_p95` (ms) |
+| `compat.html` | 25 feature probes (fetch, observers, CSS features, canvas, WebGL, WebAudio, MSE, IndexedDB, WebAssembly, Intl, service worker ...) | `compat_pass` (count; must not drop) |
+| `text.html` | big text, wrapped table headers (the page that showed the missing-bands fault) | the owner's glitch answer |
+The runner adds `engine_ready_ms`, `first_paint_ms` (first bench page, cold) and `mem_mb` (PSS of all app processes after the suite) and the time the whole suite took. Score weights default: script .20, layout .10, fps_css .10, fps_blur .10, fps_clips .15, late_pct .05, scroll .10, input .15, startup .05; the question "what matters most to you" shifts them (loading / smoothness / battery).
+
+## 5. Statistics and decisions (core, pure Kotlin, JVM-tested with seeded simulations)
+- A SAMPLE is one pass of the suite. Baseline = at least 3 samples (start, after a third of the plan, end); the spread between them is the noise of that tablet that hour (robust: median and MAD, floor 3 % per metric).
+- Score of a sample = weighted sum of signed log ratios against the baseline median (so +10 % fps and -10 % ms count the same). Noise of the score = sqrt(sum of (weight x per-metric noise)^2). Threshold = max(2.5 %, 2 x noise).
+- A candidate gets 2 samples (the second in the same engine session, no extra restart); a borderline one (|gain| between half and twice the threshold) gets a third. ACCEPT = gain above the threshold, no guard metric (compat count, memory, crash, owner answer) worse than its limit. REJECT = loss above the threshold or a guard hit. INCONCLUSIVE otherwise (left as is: an unproven change is not a change). FAILED = the app died, a page timed out, the setting did not reach the engine (read back after start), or the owner reported a glitch.
+- COMBINE: the ACCEPTed ones together (one restart), 2 samples; if the combination is worse than the best single, keep the best single (an interaction is recorded). FINAL: 2 more baseline-vs-final real-page probes (up to 3 sites from history, 2 loads each) are shown as "indicative" with their own spread.
+- SMART parts: order by expected gain per minute (priors in the catalog, cheap live ones first, expensive restarts by prior); adaptive repeats for borderline; skip hardware-only experiments when the hardware trial was rejected; skip experiments settled in an earlier run on the SAME engine version and app version (history), unless "test everything again"; a time budget (default 75 min) after which the rest waits for the next run; pause (not abort) on low battery, heat, Battery Saver or leaving the app.
+
+## 6. Safety
+- Snapshot of every setting the run may change before it starts; "Undo what Auto-tune changed" restores it. Applied changes are listed in Settings.
+- Crash mark per start (the DrawTrial rule generalised): a start that never reaches its first suite page marks that experiment FAILED and the next start runs on the baseline config; two failed starts in a row stop the run ("unstable"), restore the baseline and keep the log.
+- Private tabs: it refuses to start while one exists and never uploads while one exists (PV1); the diagnostics master switch is respected (off: results stay on the tablet).
+- Never changes anything outside the catalog; every engine pref is checked against the pinned engine by tools/check-gecko-prefs.sh (the optimizer's names are read from `core/.../Catalog.kt`).
+
+## 7. What is sent (private repo, `optimizer/<date>/<time>-<install>.json`)
+Run id, app and engine version, device facts (RAM, cores, battery, thermal, Battery Saver), the answers the owner gave, the catalog version, every sample (all metrics), every decision with gain / threshold / noise, the combination and final configuration, timings, failures with their reason, the real-page probe numbers (host names are allowed: the repo is private). Digest: `python3 -B -I tools/optimizer_digest.py` (reads origin/main of the private clone like diag_digest.py).
+
+## 8. Build plan and honest limits
+Core (catalog, scoring, decision, plan, state machine, log) -> bench pages + web test -> loopback server + activity + runner + restart helper + Settings row -> upload + digest -> emulator-lab suite `opt` (runs a short plan end to end: restart, resume, results file) -> ship. NOT proven until it has run on the tablet: restart behaviour on Android 10 Go, the real size of each effect, the clip arm's resemblance to the real page. Open (OPT2): network experiments, an automatic missing-text detector (canvas versus DOM text comparison), per-site probes of the owner's top pages as full experiments.
