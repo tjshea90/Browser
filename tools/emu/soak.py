@@ -3689,13 +3689,19 @@ class Soak:
         self.adb.sh("run-as %s sh -c 'for f in files/optimizer/*; do rm -f $f; done'" % pkg, timeout=30)
         lm = self.log.size()
         say("opt: am start says: %s" % self.adb.sh("am start -n %s/app.kestrel.browser.MainActivity --es auto_tune quick" % pkg, timeout=60).strip()[:300].replace("\n", " | "))
-        t0 = time.time(); result = ""; last_state = ""
+        t0 = time.time(); result = ""; last_state = ""; seen_lines = 0
         while time.time() - t0 < 17 * 60:
             time.sleep(20)
             result = self.adb.sh("run-as %s cat files/optimizer/last.json" % pkg, timeout=30)
             if '"kind":"kestrel-autotune"' in result:
                 break
             st = self.adb.sh("run-as %s cat files/optimizer/state.txt" % pkg, timeout=30)
+            # a live timeline in the console (its text is the only thing that survives a failed job): every opt line, stalls and crashes, as they arrive
+            seen = seen_lines
+            allx = [ln for ln in self.log.since(lm) if re.search(r"KestrelHealth.*(opt|stall|STALL|crash|anr)|FATAL EXCEPTION|ANR in|am_anr|am_proc_died.*kestrel", ln)]
+            for ln in allx[seen:seen + 40]:
+                say("   live: " + ln.strip()[:240])
+            seen_lines = min(len(allx), seen + 40)
             cur = [l for l in st.splitlines() if l.startswith(("cursor|", "status|", "bootMark|"))]
             if cur != last_state:
                 say("opt state: %s" % " ".join(cur)); last_state = cur
