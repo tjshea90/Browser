@@ -544,7 +544,8 @@ def focus_report(batches):
         for b in batches:
             s = b.get('settings') or {}
             vals = fm_vals([parse_timing(e) or {} for e in b.get('events', []) if isinstance(e, str) and ' page timing ' in e and ' fm=' in e])
-            key = 'drawing=%s redraw=%s' % ('software' if s.get('lab_soft') == 'true' else 'hardware/default', '30/s' if s.get('lab_fps30') == 'true' else '60/s')
+            trial = str(s.get('draw_trial') or '0')
+            key = 'drawing=%s redraw=%s' % (('hardware trial %s' % trial) if trial not in ('0', '') else ('software' if s.get('lab_soft') == 'true' else 'hardware/default'), '30/s' if s.get('lab_fps30') == 'true' else '60/s')
             groups.setdefault(key, []).extend(vals)
         for key, vals in sorted(groups.items()):
             if len(vals) >= 3:
@@ -659,7 +660,7 @@ def tab_analysis(batches):
 
 def setting_ab(batches):
     """PERF14: the uploads carry the owner's changed settings AND the pages' own load timing, so a setting can be judged by the numbers instead of by feel: for each watched setting, per site with at least 2 timed loads on each side, the median first contentful paint and load time with the setting ON against OFF (a setting that was never changed counts as OFF)."""
-    WATCH = ['lab_soft', 'lab_fps30', 'lab_draw', 'lab_dither', 'lab_bytecode', 'lab_gcpar', 'hold_false_trims', 'limit_clips', 'lazy_start', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
+    WATCH = ['lab_soft', 'draw_trial', 'lab_fps30', 'lab_draw', 'lab_dither', 'lab_bytecode', 'lab_gcpar', 'hold_false_trims', 'limit_clips', 'lazy_start', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
     import statistics
     rows = []
     for b in batches:
