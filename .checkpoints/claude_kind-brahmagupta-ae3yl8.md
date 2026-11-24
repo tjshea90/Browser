@@ -1,21 +1,22 @@
-# CHECKPOINT 3202 — read me first, then TASKS.md
+# CHECKPOINT 3203 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T07:27:05Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `7a43d794` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T07:41:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `f3c4d330` (this checkpoint is the commit after it)
 
 ## Just done
-alpha104 (code 205) SHIPPED: run 45346018174 green, Release kestrel-g-v0.3.0-alpha104 has the APK, recorded in BUILDLOG, PERF24 ticked. Owner answered in the reply.
+wrote PERF25 (owner: Brave is smooth on the parlayapi site) into TASKS.md, no code yet
 
 ## Do this next
-Waiting for the owner's tablet test of alpha104 and the next uploads. Then: (1) python3 -B -I tools/diag_digest.py --days 2 and read the tabs hibernate lines (reload=ms, regular=n/cap), videoclips.deco counters (scroll/cap/off/back), fm= cadence and ch=/chs= bot-check numbers; (2) if the owner tried Scroll feel Smoother, compare typing/scroll waits against Standard; (3) open: PERF17c/d (animations + Cloudflare checks need fm/ch numbers), PERF19 cheaper blocker (benchmark in web-tests first), PERF23 (Cache2 I/O, Classifier updater policy with owner, HeapTaskDaemon), PERF14e Calmer redrawing A/B, PERF9 second film, BackLab MISSED false positive on kept pages. Next version is alpha105 / versionCode 206. No heartbeat trigger exists.
+PERF25b: read research/PAGE_SPEED_2026-11-23.md section 3 and GECKO_TUNING_2.md for the software-drawing levers, probe the real page behaviour in web-tests (Playwright, CPU slowed) to compare Chromium and the clip strip, write research/BRAVE_SMOOTH.md; ask the owner in the reply whether Brave ran on the tablet or the phone
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  f3c4d330 ckpt 3202: alpha104 (code 205) SHIPPED: run 45346018174 green, Release kestrel-g-v0.3.0
   e168b9a7 ckpt 3199: alpha104 (code 205) gated (ckpt 3198, head 96feacef) and dispatched ONCE: ru
   96feacef ckpt 3198: gated kestrel-g-v0.3.0-alpha104 (gecko code 205) and pushed it: handoff self
   c6ef6bb0 ckpt 3197: pre-ship: alpha104: tab reloads, and the clip page. I read your two alpha103
@@ -25,8 +26,4 @@ Waiting for the owner's tablet test of alpha104 and the next uploads. Then: (1) 
   2775495b ckpt 3186: alpha103 SHIPPED and recorded: run 45333801406 green on attempt 1, Release h
   4a09769f ckpt 3184: alpha103 (code 204) gated (ckpt 3183, head 3596f285) and dispatched ONCE: ru
   3596f285 ckpt 3183: gated kestrel-g-v0.3.0-alpha103 (gecko code 204) and pushed it: handoff self
-  cb169fe5 ckpt 3182: pre-ship: alpha103: the deep low-end research, three speed experiments, and 
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
