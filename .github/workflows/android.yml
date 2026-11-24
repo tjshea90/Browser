@@ -169,28 +169,28 @@ jobs:
       SHA: ${{ github.sha }}
       BRANCH: ${{ github.ref_name }}
     steps:
-      - name: Probe the token (repository settings it can read, then draft and real release and tag creation, each removed again)
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Probe the token (release creation straight through the API, then through gh with a file, each removed again)
         run: |
           set +e
           echo "gh: $(gh --version | head -1)"
           t() { echo; echo "== $*"; "$@" 2>&1 | head -12; echo "exit=${PIPESTATUS[0]}"; }
-          t gh api "repos/$REPO" --jq '{private,visibility,archived,default_branch,permissions}'
-          t gh api "repos/$REPO/actions/permissions"
-          t gh api "repos/$REPO/actions/permissions/workflow"
-          t gh api "repos/$REPO/rulesets"
-          t gh api "repos/$REPO/tags/protection"
           P="zz-probe-$GITHUB_RUN_ID"
-          t gh release create "$P-a" --draft --target "$SHA" --title probe --notes probe
-          t gh release delete "$P-a" --yes --cleanup-tag
-          t gh release create "$P-b" --draft --target "$BRANCH" --title probe --notes probe
-          t gh release delete "$P-b" --yes --cleanup-tag
-          t gh api "repos/$REPO/git/refs" -f ref="refs/tags/$P-d" -f sha="$SHA"
-          t gh api -X DELETE "repos/$REPO/git/refs/tags/$P-d"
-          t gh release create "$P-e" --prerelease --target "$SHA" --title probe --notes probe
-          t gh release delete "$P-e" --yes --cleanup-tag
-          t gh release create "$P-f" --prerelease --target "$BRANCH" --title probe --notes probe
-          t gh release delete "$P-f" --yes --cleanup-tag
-          echo; echo "tags left by the probe:"; git ls-remote --tags "https://github.com/$REPO" "zz-probe-$GITHUB_RUN_ID*" | head
+          DEF="$(gh api "repos/$REPO" --jq .default_branch)"
+          rel() { t gh api "repos/$REPO/releases" -f tag_name="$1" -f target_commitish="$2" -f name=probe -f body=probe -F draft="$3" -F prerelease=true --jq '{id,draft,tag_name,target_commitish}'; }
+          rel "$P-a" "$SHA" true
+          rel "$P-b" "$BRANCH" true
+          rel "$P-c" "$SHA" false
+          rel "$P-g" "$DEF" true
+          echo x > probe.txt
+          t gh release create "$P-h" probe.txt --prerelease --target "$SHA" --title probe --notes probe
+          t gh release create "$P-i" --draft --target "$SHA" --title probe --notes probe
+          echo; echo "== clean up"
+          for id in $(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name | startswith(\"$P\")) | .id"); do gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id"; done
+          for ref in $(gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'); do gh api -X DELETE "repos/$REPO/git/$ref" && echo "deleted $ref"; done
+          echo "tags left:"; gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'
 
   # ------------------------------------------------------------------ minutes: the JVM suites + lint (once, shared by both apps)
   test-jvm:
