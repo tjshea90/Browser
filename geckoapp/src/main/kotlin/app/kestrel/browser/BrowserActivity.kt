@@ -2677,7 +2677,9 @@ open class BrowserActivity : Activity(), DockListener {
             val cpuP = app.kestrel.browser.diag.CpuMeter.recentMean("parent", span); val cpuT = app.kestrel.browser.diag.CpuMeter.recentMean("tab", span)
             val ctx = "shields=" + (if (eff.shieldsUp) "up" else "down") + " ads=" + (if (eff.shieldsUp && eff.blockAds) 1 else 0) + " net=" + GeckoEngine.networkProfileCode + " avail=" + avail +
                 " cpuP=" + cpuP + " cpuT=" + cpuT + " tabs=" + tabs.count { !it.isPrivateTab } + " live=" + tabs.count { it.session != null && !it.isPrivateTab }
-            Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx))
+            val fmA = m.optJSONArray("fm")
+            val fm = if (fmA != null && fmA.length() == 4) listOf(fmA.optLong(0, 0L), fmA.optLong(1, 0L), fmA.optLong(2, 0L), fmA.optLong(3, 0L)) else null
+            Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx, fm, m.optInt("ch", 0), m.optLong("chs", -1L)))
         }
     }
 
