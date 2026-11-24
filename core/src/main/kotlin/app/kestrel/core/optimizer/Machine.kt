@@ -64,7 +64,7 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     fun onProcessStart(s: RunState): RunState {
         if (s.status == Status.DONE) return s
         if (s.status != Status.RUNNING) return s.copy(bootConfig = s.base, running = null)
-        if (s.bootMark == 0L) return s.copy(status = Status.PAUSED, note = "the app was closed in the middle of the run", bootConfig = s.base, running = null, taken = 0, extra = 0)
+        if (s.bootMark == 0L) return s.copy(status = Status.PAUSED, note = "the app was closed in the middle of the run", bootConfig = s.base, running = null, samples = s.samples - s.cursor, taken = 0, extra = 0)
         if (s.bootStarts == 0) return s.copy(bootStarts = 1)
         val f = s.failures + 1
         var t = s
