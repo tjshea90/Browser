@@ -1,13 +1,13 @@
-# CHECKPOINT 3203 — read me first, then TASKS.md
+# CHECKPOINT 3215 — read me first, then TASKS.md
 
-**Written:** 2026-11-24T07:41:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `f3c4d330` (this checkpoint is the commit after it)
+**Written:** 2026-11-24T07:49:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kind-brahmagupta-ae3yl8` · **builds on:** `d7d755b6` (this checkpoint is the commit after it)
 
 ## Just done
-wrote PERF25 (owner: Brave is smooth on the parlayapi site) into TASKS.md, no code yet
+PERF25c: built the hardware drawing trial (core DrawTrial + DrawTrialTest + OwnerRulesTest perf25, Prefs draw_trial/draw_trial_start/draw_trial_why, GeckoPrefs lines + guardTrial, BrowserActivity steady timer + early-crash rule, Settings row, Diagnostics read-back, digest A/B, check-gecko-prefs 71 names 0 missing); :core tests, :geckoapp and :app compile green; research/BRAVE_SMOOTH.md written
 
 ## Do this next
-PERF25b: read research/PAGE_SPEED_2026-11-23.md section 3 and GECKO_TUNING_2.md for the software-drawing levers, probe the real page behaviour in web-tests (Playwright, CPU slowed) to compare Chromium and the clip strip, write research/BRAVE_SMOOTH.md; ask the owner in the reply whether Brave ran on the tablet or the phone
+Run ./gradlew --offline -q :app:testDebugUnitTest (Robolectric: BackupManager/Prefs specs) then bash tools/test_handoff.sh; fix anything red; then release alpha105: bump geckoapp/build.gradle.kts versionCode 206 / 0.3.0-alpha105, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA105_RELEASE_NOTE.txt (ASCII, no double quotes/backslashes; say NOT run on the tablet; owner test = Settings > Network lab > Hardware drawing trial 1, restart, claude.ai table + YouTube, bands -> 2 -> Off), bash ship.sh gecko with the note, ONE dispatch, verify, record-release, answer PERF25 and ask which device Brave ran on
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ PERF25b: read research/PAGE_SPEED_2026-11-23.md section 3 and GECKO_TUNING_2.md 
 
 ## Last ten checkpoints
 ```
+  6d20d18a ckpt 3203: wrote PERF25 (owner: Brave is smooth on the parlayapi site) into TASKS.md, n
   f3c4d330 ckpt 3202: alpha104 (code 205) SHIPPED: run 45346018174 green, Release kestrel-g-v0.3.0
   e168b9a7 ckpt 3199: alpha104 (code 205) gated (ckpt 3198, head 96feacef) and dispatched ONCE: ru
   96feacef ckpt 3198: gated kestrel-g-v0.3.0-alpha104 (gecko code 205) and pushed it: handoff self
@@ -25,5 +26,7 @@ PERF25b: read research/PAGE_SPEED_2026-11-23.md section 3 and GECKO_TUNING_2.md 
   5a4fdea9 ckpt 3187: TEST1: the owner's step-by-step test guide written (research/TEST_PLAN_alpha
   2775495b ckpt 3186: alpha103 SHIPPED and recorded: run 45333801406 green on attempt 1, Release h
   4a09769f ckpt 3184: alpha103 (code 204) gated (ckpt 3183, head 3596f285) and dispatched ONCE: ru
-  3596f285 ckpt 3183: gated kestrel-g-v0.3.0-alpha103 (gecko code 204) and pushed it: handoff self
 ```
+
+(11 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
