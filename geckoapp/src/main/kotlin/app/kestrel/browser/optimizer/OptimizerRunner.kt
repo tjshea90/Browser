@@ -99,8 +99,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         state = state!!.copy(bootMark = System.currentTimeMillis(), bootStarts = 0, running = null, bootConfig = base)
         persist()
         ui.say("Restarting Kestrel for a clean start. Your tabs come back afterwards.")
-        restarting = true
-        ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true), act)
+        restartQuietly(Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true))
     }
 
     fun cont() { val st = state ?: return; state = machine.onResume(st); persist(); engineReady() }
@@ -132,7 +131,18 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         upload(json, force = true)
     }
 
-    fun restartIntoBrowser() { restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, app.kestrel.browser.MainActivity::class.java), act) }
+    /**
+     * Every restart ends the process with a kill. Lab v13: the FIRST restart (from a screen that draws nothing) always came back, the second one (from this screen, the page view still drawing) was followed by the death of the emulator's
+     * whole Android system about 100 s later (DeadSystemException; the screen thread sat inside a native draw call): a kill in the middle of GPU drawing leaves the emulator's graphics stuck. So the page view is taken away
+     * and the session closed first, and the kill comes a moment later, when nothing is being drawn. A real device does not mind either way.
+     */
+    private fun restartQuietly(target: Intent) {
+        restarting = true
+        Io.main.post { try { view.visibility = android.view.View.GONE; view.releaseSession(); session?.close(); session = null } catch (e: Exception) { /* closing anyway */ } }
+        Io.main.postDelayed({ ProcessRestart.restartInto(ctx, target, act) }, 1800)
+    }
+
+    fun restartIntoBrowser() { restartQuietly(Intent(ctx, app.kestrel.browser.MainActivity::class.java)) }
 
     fun close() { generation++; server.stop(); try { view.releaseSession() } catch (e: Exception) { /* none */ }; try { session?.close() } catch (e: Exception) { /* closed */ }; session = null }
 
@@ -231,7 +241,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
         val (st1, action) = machine.next(st0, System.currentTimeMillis())
         state = st1; persist(); showStatus(st1, action)
         when (action) {
-            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restarting = true; ProcessRestart.restartInto(ctx, Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true), act) }
+            is Action.Restart -> { Health.log("opt", "restart", action.why.take(140)); OptimizerApply.write(prefs, action.config); persist(); restartQuietly(Intent(ctx, OptimizerActivity::class.java).putExtra("resume", true)) }
             is Action.ApplySettings -> { OptimizerApply.write(prefs, action.config); applyLive(); loop() }
             is Action.Measure -> measure()
             is Action.Ask -> ask(action)
