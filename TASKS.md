@@ -1271,4 +1271,8 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [ ] OPT3c one outlier must not reject a setting: single-metric loss guard needs both samples worse (or a third sample), test with the gcsmall numbers (13.1 s then 7.8 s against 7.2 s)
   - [x] OPT3d digest counts a run sent twice once (tools/optimizer_digest.py, 2026-11-25)
   - [ ] OPT3e hw1: ask the missing-text question even when hw1 is already on (the run skipped it), or show the owner a plain 'look at text on a long page' prompt at the end
+- [ ] OPT4 (owner 2026-11-25, verbatim: "Whatever the tests show, and all the diagnostics sent, optimize the browser accordingly and release it") Act on the first real Auto-tune run (run 20261125-034537) AND on every live-diagnostics upload: change only what the numbers support, test, ship alpha108 without asking, answer in plain words with what was NOT proven on the tablet.
+  - [ ] OPT4a read ALL the diagnostics (tools/diag_digest.py --days 7 and tools/optimizer_digest.py) and list each data-backed change with its evidence in research/OPT4_ACTIONS.md
+  - [ ] OPT4b implement the data-backed changes (OPT3a-c,e from the review belong here: real-clock budget, clips really play in the bench, one outlier cannot reject a setting, hw1 glitch question) + whatever 4a finds
+  - [ ] OPT4c tests (core, app, web) green, ship alpha108 per the release order, record it, answer the owner
 
