@@ -136,4 +136,16 @@ class LoadAnalysisTest {
         val s = d.sites().single()
         assertEquals("claude.ai", s.site); assertEquals(1, s.timed); assertEquals(14000L, s.avgFcpMs); assertEquals(1044, s.avgReqs); assertEquals("11000 ms late of a 28000 ms load", 39, s.lagPct)
     }
+
+    /** PERF17c / PERF17d: frame cadence and the bot-check marker are optional tokens: absent unless measured, and the old keys keep their order. */
+    @Test fun pageTimingCarriesFrameCadenceAndTheBotCheckMarkerOnlyWhenMeasured() {
+        val v = mapOf("nt" to 0L, "fcp" to 1800L, "load" to 4000L, "at" to 7000L)
+        val plain = PageTimingLine.build("a.example", v, listOf(10L, 20L, 1L), emptyList(), "shields=up")
+        assertFalse(plain, plain.contains(" fm=") || plain.contains(" ch="))
+        val full = PageTimingLine.build("a.example", v, listOf(10L, 20L, 1L), emptyList(), "shields=up", listOf(60L, 7L, 2L, 240L), 1, 14000L)
+        assertTrue(full, full.contains(" at=7000 fm=60/7/2/240 ch=1 chs=14000 | shields=up"))
+        val widget = PageTimingLine.build("a.example", v, listOf(0L, 0L, 0L), emptyList(), "", null, 2, -1L)
+        assertTrue(widget, widget.endsWith(" at=7000 ch=2"))
+        assertFalse("an empty window (no frames) says nothing", PageTimingLine.build("a.example", v, listOf(0L, 0L, 0L), emptyList(), "", listOf(0L, 0L, 0L, 0L)).contains(" fm="))
+    }
 }

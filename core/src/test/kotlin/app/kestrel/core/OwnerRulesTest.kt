@@ -549,7 +549,7 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         val rules = source("core/src/main/kotlin/app/kestrel/core/tabs/LiveBudget.kt")
         assertTrue("the rule: never a private tab, by the budget or because the app was left", rules.contains("fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate") && rules.contains("fun mayHibernateInBackground(isPrivate: Boolean, awayMs: Long, level: Int): Boolean = !isPrivate && level >= TRIM_COMPLETE && awayMs >= AWAY_BEFORE_SLEEP_MS"))
-        assertTrue("hibernate itself refuses a private tab, the live limit and the trim handler ask the rule", act.contains("if (tab.isPrivateTab) { Health.count(\"tabs.privateKept\")") && act.contains("LiveBudget.mayHibernate(t === current, hasLiveChild(t), t.isPrivateTab)") && act.contains("LiveBudget.mayHibernateInBackground(it.isPrivateTab, if (pausedAt == 0L) 0L else SystemClock.uptimeMillis() - pausedAt, level)"))
+        assertTrue("hibernate itself refuses a private tab, the live limit and the trim handler ask the rule", act.contains("if (tab.isPrivateTab) { Health.count(\"tabs.privateKept\")") && act.contains("LiveBudget.sleepPlan(") && rules.contains("val pool = live.filter { mayHibernate(it.isCurrent, it.hasLiveChild, it.isPrivate) }") && act.contains("LiveBudget.mayHibernateInBackground(it.isPrivateTab, if (pausedAt == 0L) 0L else SystemClock.uptimeMillis() - pausedAt, level)"))
         assertTrue("one hidden private session stays open while any private tab exists (a replaced session is never the last one: the engine forgets private logins then) and goes with the last private tab",
             act.contains("private var privateAnchor: GeckoSession? = null") && act.contains("private fun syncPrivateAnchor()") && act.contains("if (tab.isPrivateTab) syncPrivateAnchor()") && act.contains("syncPrivateAnchor()                                                      // ANS58c") && act.contains("try { privateAnchor?.close() }"))
     }
@@ -719,9 +719,9 @@ class OwnerRulesTest {
     @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
         assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
-        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false"))
+        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false", "gfx.webrender.pbo-uploads: false"))
             assertTrue("drawLines writes $name", gp.contains(name))
-        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (!p.labDraw) \"\""))
+        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (p.labDraw) {"))
         assertTrue("the person can switch it off in Settings", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
         assertTrue("it is part of a backup", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
         assertTrue("the pref check reads the names GeckoPrefs.kt writes", source("tools/check-gecko-prefs.sh").contains("GeckoPrefs.kt"))
@@ -799,6 +799,178 @@ class OwnerRulesTest {
         assertTrue("the owner can turn it off", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Instant Back\""))
         assertTrue("eight pictures of the pages left, not four", source("app/src/main/kotlin/app/kestrel/browser/ui/BackPictures.kt").contains("const val MAX = 8"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
-        assertTrue("a Back picture that waits shows a loading line after 1 s and the site's name after 4 s, and both go with the picture", act.contains("postDelayed(backWaitLine, 1_000L)") && act.contains("postDelayed(backWaitNote, 4_000L)") && act.contains("removeCallbacks(backWaitLine)"))
+        assertTrue("PERF13: a Back picture that waits shows a thin loading line after 0.6 s and NO note box (owner: it pauses with a box that says loading), and the line goes with the picture", act.contains("postDelayed(backWaitLine, 600L)") && act.contains("removeCallbacks(backWaitLine)") && !act.contains("Still loading") && !act.contains("backWaitNote"))
+    }
+
+    /** PERF10 (owner 2026-11-22, after alpha94: "still chopping off paint ... I can't attach photos to claude.ai ... all files permission ... does not show as an option"). */
+    @Test fun perf10PaintSwitchPermissionRowAndThePageSideAttachProbe() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("Software drawing is a switch that defaults to OFF", prefs.contains("var labSoft: Boolean get() = bool(\"lab_soft\", false)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("it writes the engine's CPU-drawing pref only when switched on and no hardware trial runs (PERF25)", gp.contains("if (app.kestrel.core.gfx.DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)) append(\"  gfx.webrender.software: true\\n\")"))
+        assertTrue("it is in Settings and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Software drawing (slower)\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("PERF14: no storage permission is declared any more: the picked file is COPIED into the app's own cache, so the engine never needs a raw path into shared storage (research/ATTACH_ROOT_CAUSE.md)", !man.contains("READ_EXTERNAL_STORAGE") && !man.contains("READ_MEDIA") && !man.contains("MANAGE_EXTERNAL_STORAGE"))
+        val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
+        assertTrue("the attach probe runs from the top page script, changes of a file input that has files only, at most 4 per page and 3 files", pt.contains("t.type).toLowerCase() !== 'file'") && pt.contains("FCN >= 4") && pt.contains("Math.min(fl.length, 3)") && pt.contains("k: 'fc'"))
+        assertTrue("it never sends a name or a path", !pt.contains("f.name") && !pt.contains("webkitRelativePath") && !pt.contains("getAsFile"))
+        val bg = source("geckoapp/src/main/assets/kestrel-shields/background.js")
+        assertTrue("the background page checks it and only the top frame of a tab may send it", bg.contains("if (m.k === 'fc')") && bg.contains("sender.frameId !== 0") && bg.contains("fcMg[fcE.mg] === 1"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the app logs it for a normal tab only and never while a private tab exists", act.contains("private fun onFileCheck(") && act.contains("if (page.isEmpty() || pageIsPrivate(page) || PrivateGuard.active()) return\n        val arr = m.optJSONArray(\"a\")") && act.contains("Health.log(\"filepick\", \"page-got\""))
+        assertTrue("the bridge routes it", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"fc\" -> { fileCheck(m); \"\" }"))
+    }
+
+    /** PERF14 (owner 2026-11-23: "Photos still won't attach to claude website"): the engine opens the RAW PATH of a picked content address; Android 10 and later refuse it without the storage permission. The app copies the file into its own cache and gives the engine the copy. */
+    @Test fun perf14APickedFileIsCopiedIntoTheAppsOwnCacheBeforeTheEngineGetsIt() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the result handler copies each picked content address and answers with the copies", act.contains("for (u in given.take(MAX_PICKS)) copyPick(appCtx, u, priv)?.let { copies.add(it) }") && act.contains("Io.main.post { cb.invoke(copies) }") && act.contains("Uri.fromFile(file)"))
+        assertTrue("the copy goes through the core store with the grant of the picker (openInputStream of the content address)", act.contains("cr.openInputStream(u)?.use { app.kestrel.core.prompt.PickStore.copy(root, id, it, name, cr.getType(u)) }"))
+        assertTrue("only content addresses are ever copied (a rogue picker cannot name a file of the app)", act.contains("val given = uris.filter { it.scheme == \"content\" }.distinct()"))
+        assertTrue("private picks live apart and go with the last private tab; every copy goes at the start of the process; old ones after 6 hours", act.contains("\"picks-private\" else \"picks\"") && act.contains("PickStore.wipe(picksRoot(c, true))") && act.contains("if (!picksWiped)") && act.contains("6L * 3_600_000L"))
+        assertTrue("nothing about a file name or a private tab goes into a log line", !Regex("Health\\.log\\(\"filepick\", \"copied\"[^\\n]*(name|display)").containsMatchIn(act))
+        assertTrue("the engine is given file:// answers by TabDelegates unchanged", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("r.complete(prompt.confirm(a, uris.toTypedArray()))"))
+    }
+
+    /** PERF14 (owner 2026-11-23: "Back still takes a long time ... I was already on the page and it was already loaded"): the engine keeps a page for Back only when it has finished loading, so a plain link tap stops the unfinished loads of the page being left. */
+    @Test fun perf14ALinkTapStopsTheUnfinishedLoadsOfThePageBeingLeftSoTheEngineCanKeepIt() {
+        val c = source("geckoapp/src/main/assets/kestrel-shields/content.js")
+        assertTrue("it runs in the bubble phase after the page's own handlers and only for a real person's plain tap", c.contains("window.addEventListener('click', function (e) {") && c.contains("e.isTrusted !== true || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey"))
+        assertTrue("only for an ordinary link to another web page, never while media plays, once per page, and only with Instant Back on", c.contains("if (!stopOnLeave || didStop") && c.contains("a.hasAttribute('download')") && c.contains("u.protocol !== 'http:' && u.protocol !== 'https:'") && c.contains("document.querySelectorAll('video, audio')") && c.contains("window.stop();"))
+        assertTrue("the answer comes from the background page's Instant Back mode", source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("m.k !== 'bkm'") && source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("Promise.resolve(bkMode ? 1 : 0)"))
+        assertTrue("the leaving page reports whether it was stopped, and the Back line says +stop", c.contains("st: didStop ? 1 : 0") && source("core/src/main/kotlin/app/kestrel/core/session/BackLab.kt").contains("(if (stopped) \"+stop\" else \"\")"))
+        assertTrue("it is explained in Settings > Instant Back", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("stops downloading what it had not finished"))
+        assertTrue("the leave-stop web tests have their own file", java.io.File("../web-tests/leavestop.test.js").exists() || java.io.File("web-tests/leavestop.test.js").exists())
+    }
+
+    /** PERF12 (owner 2026-11-23: "Look at the latest diagnostics and see if anything can be improved"): cut-short loads, loops, the quieter journal, the attach beacon, the extension version. */
+    @Test fun perf12TheDiagnosticsSayWhatReallyHappened() {
+        val td = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("a load that ends without success and without an engine load error is cut short, not failed", td.contains("val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt") && td.contains("tab.gecko.loadErrorAt = android.os.SystemClock.uptimeMillis()"))
+        assertTrue("the live diagnostics do not count `cut=1` as a failure", source("core/src/main/kotlin/app/kestrel/core/livediag/DiagStats.kt").contains("m.groupValues[5] != \"1\""))
+        assertTrue("the old consumers still see ok=false", source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").contains("ok=\$ok\" + (if (!ok && cut) \" cut=1\" else \"\")"))
+        assertTrue("a loop of one site in one tab is named (normal tabs only: PageTimes.start returns before it for a private tab)", source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").contains("loop.hit(key, host, l.startedAt)") && source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").indexOf("if (priv) { open.remove(key); return }") < source("app/src/main/kotlin/app/kestrel/browser/diag/PageTimes.kt").indexOf("loop.hit(key"))
+        assertTrue("the extension version the engine runs is logged against the one wanted", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"ext-version\", \"installed=\${ext.metaData.version} wanted=1.0.\${bridge.salt}\""))
+        assertTrue("the attach beacon is sent before the test and logged as page-seen", source("geckoapp/src/main/assets/kestrel-shields/pagetime.js").contains("{ k: 'fc', n: fl.length, a: [] }") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"filepick\", \"page-seen\""))
+    }
+
+    /** PERF16 (owner 2026-11-23: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): security decisions are told in `sec` lines, for normal tabs only. */
+    @Test fun perf16SecurityDecisionsAreToldInSecLinesForNormalTabsOnly() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("one helper, nothing for a private tab", act.contains("internal fun sec(tab: Tab?, event: String, detail: String) { if (tab != null && !tab.isPrivateTab) Health.log(\"sec\", event, detail) }"))
+        assertTrue("pop-ups, https fallbacks", act.contains("sec(tab, \"popup-blocked\"") && act.contains("sec(tab, \"https-unavailable\""))
+        val td = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("https upgrades, certificate errors, permission questions (not the autoplay ones)", td.contains("a.sec(tab, \"https-upgraded\"") && td.contains("a.sec(tab, \"cert-error\"") && td.contains("a.sec(tab, \"perm-asked\"") && td.contains("perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE"))
+        assertTrue("the sec layer reaches the live diagnostics and is never thinned", source("core/src/main/kotlin/app/kestrel/core/livediag/DiagScrub.kt").contains("\"win\", \"sec\",") && source("core/src/main/kotlin/app/kestrel/core/livediag/DiagJournal.kt").contains("|^sec |"))
+        assertTrue("the digest starts with the focus report", source("tools/diag_digest.py").contains("def focus_report(batches):") && source("tools/diag_digest.py").contains("    focus_report(batches)\n"))
+    }
+
+    /** PERF17 (owner 2026-11-24: "Do the lazy restore fix if it is logical and what major browsers do. ... Animations on websites are laggy ... Cloudflare tests for anti bots are extremely slow"). */
+    @Test fun perf17LazyStartAfterALongBreakAndTheMeasuresForAnimationsAndBotChecks() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the time the app was left is stamped when it pauses (a time only)", act.contains("prefs.lastLeftAt = System.currentTimeMillis()"))
+        val restore = body(act, "    private fun restore(session: Session?, saved: Bundle?,")
+        assertTrue("restore asks the rule with: the switch, the break, the address, started-by-link, fresh start, left-on-Home", restore.contains("LazyStart.applies(prefs.lazyStart, away, sel.url, launch != null, saved == null, sel.showHome)"))
+        assertTrue("a waiting tab uses the Home path (AQ1): no engine session, nothing loads", restore.contains("sel.showHome = true; sel.lazyStart = true"))
+        assertTrue("the start-up cover is skipped for it", act.contains("LazyStart.applies(prefs.lazyStart, LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis()), sel.url, false, freshStart, sel.homeOverPage)") && act.contains("\"early-cover-skipped\", \"lazy start\""))
+        assertTrue("the Continue line is bound from the UI refresh and the flag is cleared once the page shows", act.contains("home.bindContinue(if (t != null && t.lazyStart && t.showHome) LazyStart.label(t.title, t.url) else null)") && act.contains("if (t != null && t.lazyStart && !t.showHome) t.lazyStart = false"))
+        assertTrue("the tap loads the page like Back from Home does", body(act, "    internal fun continueLazy() {").contains("t.lazyStart = false; t.showHome = false") && act.contains("home.onContinue = { continueLazy() }"))
+        assertTrue("Settings can turn it off", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.lazyStart) { prefs.lazyStart = it }"))
+        assertTrue("on by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var lazyStart: Boolean get() = bool(\"lazy_start\", true)"))
+        val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
+        assertTrue("the frame window is one 2.5 s sample after the load and skipped for a hidden page", pt.contains("document.hidden) return;") && pt.contains(">= 2500") && pt.contains("setTimeout(cadence, 100)"))
+        assertTrue("the bot-check marker looks at the title and the check's own elements, never at the jsd script every protected site loads", pt.contains("just a moment|attention required") && pt.contains("challenge-stage") && !pt.contains("script[src*=\"/cdn-cgi/challenge-platform"))
+        assertTrue("the numbers reach the live diagnostics line", act.contains("PageTimingLine.build(host, v, lag, sl, ctx, fm, m.optInt(\"ch\", 0), m.optLong(\"chs\", -1L))") && source("core/src/main/kotlin/app/kestrel/core/livediag/PageTimingLine.kt").contains("\" fm=\""))
+    }
+
+    /** PERF20 (owner 2026-11-24: "as fast as possible utilizing as much ram as possible for speed within reason for a low ram tablet"). */
+    @Test fun perf20TheEngineHearsAndroidsMemorySignalsOnlyThroughTheGate() {
+        val eng = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt")
+        assertTrue("the runtime is created with the gating context", eng.contains("GeckoRuntime.create(EngineTrimGate.install(ctx), settings)"))
+        val gate = source("geckoapp/src/main/kotlin/app/kestrel/browser/EngineTrimGate.kt")
+        assertTrue("one place decides, with the core rule", gate.contains("TrimGate.decide(prefs.holdFalseTrims, level, avail, mi.lowMemory, since, heldAt.size)"))
+        assertTrue("anything unexpected passes the signal on, as before", gate.contains("return true          // anything unexpected"))
+        val ctx = source("app/src/main/kotlin/app/kestrel/browser/mem/TrimGateContext.kt")
+        assertTrue("the system's own low-memory call is never held", ctx.contains("override fun onLowMemory() { inner.onLowMemory() }"))
+        assertTrue("an engine kill is stamped so signals pass for 6 hours", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("prefs.lastEngineKillAt = System.currentTimeMillis()"))
+        assertTrue("on by default, with a Settings switch", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var holdFalseTrims: Boolean get() = bool(\"hold_false_trims\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.holdFalseTrims) { prefs.holdFalseTrims = it }"))
+    }
+
+    /** PERF21 (owner 2026-11-24: "The animations on this page are very laggy and make the entire site laggy. They also each have a play button, which is incorrect for in site animations"). */
+    @Test fun perf21DecorativeClipsGetNoBarAndPlayOnlyOnScreenTwoAtATime() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val vf = source(dir + "vfind.js")
+        assertTrue("one definition of a decorative clip: silent, looping, no controls of its own", vf.contains("v.loop && (v.muted || v.defaultMuted) && !v.controls") && vf.contains("decorative: decorative"))
+        assertTrue("the bar is never drawn over one", source(dir + "videobar.js").contains("if (VF.decorative && VF.decorative(v)) { if (!late) report('deco', 'bar'); return; }"))
+        val dc = source(dir + "decoclips.js")
+        assertTrue("one at a time (alpha103 uploads: two still dropped 40 to 99 % of their frames) and none while the page scrolls", dc.contains("max: 1") && dc.contains("scrollMs: 450") && dc.contains("function hold(v)"))
+        assertTrue("only clips that already play are governed, and only after the app said so", dc.contains("r.dc === true") && dc.contains("window.addEventListener('playing'"))
+        assertTrue("a page that fights it is left alone", dc.contains("list.length > T.tries") && dc.contains("free.set(v, 1)"))
+        assertTrue("it is declared in the manifest like the other video scripts", source(dir + "manifest.json").contains("\"decoclips.js\""))
+        assertTrue("the flag reaches the page and the Settings row turns it off", source(dir + "background.js").contains("dc: told && (f & 4096) !== 0") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("or (if (prefs().limitClips) 4096 else 0)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("prefs.limitClips) { prefs.limitClips = it }"))
+        assertTrue("on by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var limitClips: Boolean get() = bool(\"limit_clips\", true)"))
+    }
+
+    /** PERF22 (owner 2026-11-24: "do even more deep research ... best possible speed ... low ram and weak cpus ... my hardware ... Android 10 go"; research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF by default, reversible, recorded in uploads. */
+    @Test fun perf22ThreeEngineExperimentsAreOffByDefaultAndGoThroughTheOverrideGrammar() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        for ((fn, key) in listOf("labDither" to "lab_dither", "labBytecode" to "lab_bytecode", "labGcPar" to "lab_gcpar"))
+            assertTrue("$fn is a switch that defaults to OFF", prefs.contains("var $fn: Boolean get() = bool(\"$key\", false)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("an experiment that is also in gecko-prefs.txt REPLACES its line (no duplicate YAML key)", gp.contains("yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx)))"))
+        assertTrue(gp.contains("if (p.labDither) add(\"gfx.webrender.dithering=false\")") && gp.contains("if (p.labBytecode) add(\"dom.script_loader.bytecode_cache.strategy=-1\")") && gp.contains("if (p.labGcPar) add(\"javascript.options.mem.gc_parallel_marking=true\")"))
+        val sv = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("all three are in Settings", sv.contains("prefs.labDither) { prefs.labDither = it") && sv.contains("prefs.labBytecode) { prefs.labBytecode = it") && sv.contains("prefs.labGcPar) { prefs.labGcPar = it"))
+        val bk = source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt")
+        assertTrue("and in a backup", bk.contains("Spec(\"lab_dither\", T.BOOL)") && bk.contains("Spec(\"lab_bytecode\", T.BOOL)") && bk.contains("Spec(\"lab_gcpar\", T.BOOL)"))
+        assertTrue("the report script compares page loads by them", source("tools/diag_digest.py").contains("'lab_dither', 'lab_bytecode', 'lab_gcpar'"))
+    }
+
+    /** PERF24 (owner 2026-11-24: "Switching between tabs has to reload sites and this is slow"): the Settings number limits the REGULAR tabs, private tabs do not count against it, the cheapest tab to bring back sleeps first. */
+    @Test fun perf24TheTabSleepRuleCountsRegularTabsAgainstTheSettingAndSparesTheHeavyOnes() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val enforce = body(act, "    private fun enforceLiveLimit(max: Int = liveBudget()) {")
+        assertTrue("one plan decides: total from memory, regular from the Settings number", enforce.contains("LiveBudget.sleepPlan(") && enforce.contains("max, LiveBudget.regularCap(prefs.tabsKeptCount))") && enforce.contains("it.reloadMs"))
+        assertTrue("the memory rule no longer lets a fixed Settings number override it", act.contains("LiveBudget.memoryLimit(avail, am?.isLowRamDevice != false, mi.lowMemory)"))
+        assertTrue("the tab remembers what its last load cost", source("app/src/main/kotlin/app/kestrel/browser/web/Tab.kt").contains("var reloadMs = 0L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("if (success && tookMs > 0L) tab.reloadMs = tookMs"))
+        assertTrue("a private tab is still never put to sleep", source("core/src/main/kotlin/app/kestrel/core/tabs/LiveBudget.kt").contains("fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate"))
+    }
+
+    /** PERF25 (owner 2026-11-24: "When i go to the parlayapi site in brave browser, it is smooth"; research/BRAVE_SMOOTH.md): a hardware drawing TRIAL that can never trap the person in a browser that will not start. */
+    @Test fun perf25TheHardwareDrawingTrialIsOffByDefaultExcludesCpuDrawingAndSwitchesItselfOff() {
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("the trial is OFF by default and limited to 0..1 (trial 2 was measured on the tablet in the first Auto-tune run: 3.5x the processor time and WebGL broken, so it is gone; a saved 2 reads as 1)", prefs.contains("var drawTrial: Int get() = sp.getInt(\"draw_trial\", 0).coerceIn(0, 1); set(v) = put(\"draw_trial\", v.coerceIn(0, 1))"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("its engine prefs come from the pure rule, and CPU drawing is not written while a trial runs", gp.contains("DrawTrial.lines(p.drawTrial)") && gp.contains("DrawTrial.overrides(p.drawTrial)") && gp.contains("DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)"))
+        assertTrue("the start guard runs before the config is written, once per process", gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") in 1 until gp.indexOf("var yaml = yaml(text, sweep") && gp.contains("if (trialGuarded) return") && gp.contains("DrawTrial.startFailed(trial, p.drawTrialStart)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("a steady start takes the mark away (after the steady time, or when the app is left after its first picture) and an early page-process crash ends the trial", act.contains("DrawTrial.STABLE_MS") && act.contains("drawTrialSteadyNow(\"left after its first picture\")") && act.contains("DrawTrial.crashEndsTrial(prefs.drawTrial"))
+        assertTrue("the first picture of the engine starts the steady timer", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("a.drawTrialComposited()"))
+        assertTrue("it is in Settings (Off first) and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Hardware drawing trial (experiment)\", listOf(\"Off: as now\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"draw_trial\", T.INT, 0, 2)"))
+        assertTrue("the Diagnostics read-back names the trial's prefs", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.use-optimized-shaders") && source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.draw-calls-for-texture-copy"))
+        assertTrue("the digest compares page loads with and without the trial", source("tools/diag_digest.py").contains("'draw_trial'") && source("tools/diag_digest.py").contains("hardware trial"))
+    }
+
+    /** OPT1 (owner 2026-11-24: "an automated system ... that tries all different experiments and settings ... finds the best speed"; research/OPTIMIZER.md): the wiring that makes Auto-tune safe. */
+    @Test fun opt1AutoTuneIsWiredSoThatNoRunCanLeaveTheOwnerInABrokenOrTestSetting() {
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
+        val guard = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerGuard.kt")
+        assertTrue("the guard asks the pure machine and writes the configuration it returns", guard.contains("RunMachine().onProcessStart(st)") && guard.contains("OptimizerApply.write(Prefs.get(ctx), cfg)") && guard.contains("if (st.status == Status.DONE) return"))
+        val apply = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerApply.kt")
+        assertTrue("only catalog names and keys can be written", apply.contains("it in Catalog.engineNames()") && apply.contains("k in Catalog.settingKeys()") && apply.contains("n in allowed"))
+        val machine = source("core/src/main/kotlin/app/kestrel/core/optimizer/Machine.kt")
+        assertTrue("a closed app pauses the run and boots with the person's own settings; a start that never produced a sample fails the step", machine.contains("the app was closed in the middle of the run") && machine.contains("the app died or hung while starting with this setting") && machine.contains("two starts in a row failed"))
+        val runner = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerRunner.kt")
+        assertTrue("the run never starts with a private tab open, and the upload only goes with the owner's switch and token and never while one is open", runner.contains("PrivateGuard.active()") && runner.contains("!LiveDiag.isEnabled() || !LiveDiag.hasToken()") && source("app/src/main/kotlin/app/kestrel/browser/diag/LiveDiag.kt").substringAfter("fun sendFile(").substringBefore("private class Extras").contains("PrivateGuard.active()"))
+        assertTrue("it stops for a low battery, heat and Battery Saver instead of measuring badly", runner.contains("isPowerSaveMode") && runner.contains("THERMAL_STATUS_SEVERE") && runner.contains("the battery is at"))
+        assertTrue("the benchmark server is loopback only and takes the token first", source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/BenchServer.kt").contains("InetAddress.getByName(\"127.0.0.1\")") && source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/BenchServer.kt").contains("parts[0] != token"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("the screen and the restart trampoline are declared, the trampoline in its own process and not exported", man.contains(".optimizer.OptimizerActivity") && man.contains(".optimizer.RestartActivity") && man.contains("android:process=\":restart\""))
+        assertTrue("Settings has the row (Kestrel G only) and the activity opens it", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Flavor.hasAutoTune") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("override fun openAutoTune()"))
+        val gate = source("geckoapp/src/main/assets/kestrel-shields/gate-main.js")
+        assertTrue("pages on the loopback address (the benchmark pages) are not gated: they cost no mobile data", gate.contains("location.hostname === '127.0.0.1'") && gate.contains("if (LOCAL) d = '0';"))
+        assertTrue("the digest for Claude exists", source("tools/optimizer_digest.py").contains("kestrel-autotune"))
+        assertTrue("the optimizer's engine names are checked against the pinned engine", source("tools/check-gecko-prefs.sh").contains("Auto-tune experiment names it"))
     }
 }

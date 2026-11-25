@@ -30,3 +30,13 @@ kotlin {
 dependencies {
     testImplementation(libs.junit)
 }
+
+// FLK1: a failing test prints its message and stack in the log (the GitHub log of a flaky run used to say only "AssertionError at line N", which hid that it was a 30 s wait that ran out).
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
+}

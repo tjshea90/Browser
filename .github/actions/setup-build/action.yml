@@ -20,5 +20,5 @@ runs:
         install() { "$SDKM" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0" 2>&1 | tr '\r' '\n' | tail -6; }
         # platform 37.0 needs a recent sdkmanager: update the command-line tools once if the first try fails
         install || { "$SDKM" "cmdline-tools;latest" 2>&1 | tr '\r' '\n' | tail -3; install; }
-        [ -d "$ANDROID_HOME/platforms/android-37.0" ] || { echo "::error::platform android-37.0 (GeckoView 160 compiles against API 37) is not installed"; exit 1; }
+        [ -d "$ANDROID_HOME/platforms/android-37.0" ] || { echo "::error::platform android-37.0 (GeckoView 160 and 161 compile against API 37) is not installed"; exit 1; }
         echo "SDK ready: $(ls "$ANDROID_HOME/platforms" | tr '\n' ' ')"

@@ -413,6 +413,342 @@ def video_analysis(batches):
             print('      -> ' + w)
 
 
+def page_got_analysis(batches):
+    """PERF10c: what the PAGE received when a file input changed (`filepick page-got host= n= type= kb= bytes= decode= WxH canvas= reencode= Nms`, one `;`-separated group per file, measured inside the page): names the side at fault for 'I can't attach photos'."""
+    seen = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' filepick page-got ' in e:
+                seen.append(e.split(' filepick page-got ', 1)[1].strip())
+    print('  what the PAGE received (`filepick page-got`, alpha95 or newer): %d attach(es)' % len(seen))
+    for line in seen[-6:]:
+        head, _, rest = line.partition(' type=')
+        first = ('type=' + rest).split(' ; ')[0]
+        kv = dict(re.findall(r'(\w+)=(\S+)', first))
+        dec, canvas, enc, kb = kv.get('decode', '-'), kv.get('canvas', '-'), kv.get('reencode', '-'), kv.get('kb', '?')
+        if kb == '0':
+            v = 'the page\'s file is EMPTY: the engine\'s copy of the pick was cut short'
+        elif dec == 'failed':
+            v = 'the engine could NOT decode the picture it gave the page (copy or engine at fault)'
+        elif canvas in ('refused', 'transparent', 'flat') or enc in ('refused', 'empty'):
+            v = 'the engine\'s canvas refused or returned a blank / flat picture (fingerprint protection or the graphics driver): sites cannot re-encode the picture before the upload'
+        elif dec == 'ok' and canvas == 'ok' and enc.startswith('ok'):
+            v = 'the file and the engine are fine: claude.ai (or its server) refused it'
+        else:
+            v = 'not a decodable picture or not tried (decode %s, canvas %s, reencode %s)' % (dec, canvas, enc)
+        print('      %s | %s -> %s' % (head.strip(), first, v))
+
+
+def focus_report(batches):
+    """PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): five sections, each with its key numbers and a plain verdict
+    (OK / WATCH / BAD, the threshold is printed), built only from what the tablet already sends. Read this first; the older sections below are the detail. Verdicts are first guesses: judge them, do not relay them blind."""
+    import statistics
+    ev = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str):
+                ev.append(e)
+    def lines(kind):
+        return [e.split(' ' + kind + ' ', 1)[1] if (' ' + kind + ' ') in e else '' for e in ev if (' ' + kind + ' ') in e or e.endswith(' ' + kind)]
+    def kvs(kind):
+        return [dict(re.findall(r'([\w-]+)=(\S+)', t)) for t in lines(kind)]
+    def num(v, d=-1):
+        try:
+            return int(re.sub(r'[^\d-]', '', str(v)) or d)
+        except ValueError:
+            return d
+    def med(xs):
+        xs = sorted(x for x in xs if x is not None and x >= 0)
+        return xs[len(xs) // 2] if xs else None
+    def verdict(value, ok, watch, unit='', lower_is_better=True, what=''):
+        if value is None:
+            return '  ?     %-44s no data yet' % what
+        good = value <= ok if lower_is_better else value >= ok
+        mid = value <= watch if lower_is_better else value >= watch
+        word = 'OK   ' if good else ('WATCH' if mid else 'BAD  ')
+        return '  %s %-44s %s%s   (OK %s %s%s, WATCH %s %s%s)' % (word, what, value, unit, '<=' if lower_is_better else '>=', ok, unit, '<=' if lower_is_better else '>=', watch, unit)
+    devs = [b['device'] for b in batches if isinstance(b.get('device'), dict)]
+    def dev_med(key):
+        return med([num(d.get(key)) for d in devs if key in d])
+
+    print('\n== FOCUS REPORT (the five things the owner asked the diagnostics to watch; %d upload(s)) ==' % len(batches))
+
+    # ---- 1. speed of the app
+    print('\n-- 1. SPEED OF THE APP --')
+    paints = [int(m.group(1)) for e in ev for m in [re.search(r' start paint cold (\d+) ms', e)] if m]
+    print(verdict(med(paints), 10000, 20000, ' ms', what='cold start to first paint (median)'))
+    print(verdict(dev_med('coldRuntime'), 1500, 3000, ' ms', what='engine ready after start (median)'))
+    addr = [num(k.get('avg')) for k in kvs('win typing-address')]
+    print(verdict(med(addr), 25, 80, ' ms', what='typing in the address bar, mean wait'))
+    sw = kvs('tabs switch-done')
+    live = [num(re.sub(r'ms$', '', k.get('first-frame', '-1'))) for k in sw if k.get('kind') == 'live']
+    rev = [num(re.sub(r'ms$', '', k.get('first-frame', '-1'))) for k in sw if k.get('kind') == 'revive']
+    print(verdict(med(live), 500, 1500, ' ms', what='switch to a live tab, first frame (median)'))
+    print('  info  switches to a SLEEPING tab (page loaded again): %d, median first frame %s ms' % (len(rev), med(rev) if rev else '-'))
+    hib = kvs('tabs hibernate')
+    print('  info  tabs put to sleep: %d (budget of one: %d); engine kills: %d' % (len(hib), sum(1 for h in hib if h.get('max') == '1'), sum(1 for e in ev if ' gecko onKill' in e)))
+    # PERF20 (owner 2026-11-24: "as fast as possible utilizing as much ram as possible ... within reason"): Android's memory signals and what the gate did with them. A critical signal (level 15, or 40 and up) makes the
+    # engine drop its warm caches and compiled script code; this tablet gets them with hundreds of MB free. held = not passed on (a false alarm), sent = passed on (memory short, an engine kill in the last 6 h, ...).
+    crit = [int(m.group(2)) for m in (re.search(r' mem trim level=(\d+) avail=(\d+)MB', e) for e in ev) if m and (int(m.group(1)) == 15 or int(m.group(1)) >= 40)]
+    heldl = [e for e in ev if ' mem trim-held ' in e]
+    sentl = [e for e in ev if ' mem trim-sent ' in e]
+    if crit:
+        print('  info  memory signals: Android sent %d critical ones (level 15 or 40+), median %s MB available at the time, %d of them under 300 MB' % (len(crit), med(crit), sum(1 for a in crit if a < 300)))
+    if heldl or sentl:
+        print('  info  the gate (alpha101+): %d held as false alarms, %d passed on to the engine (reasons: %s)' % (len(heldl), len(sentl), ', '.join('%s x%d' % kv for kv in Counter(re.sub(r'\d+', 'N', (re.search(r'why=(.*)$', e) or [None, '?'])[1] if re.search(r'why=(.*)$', e) else '?') for e in sentl).most_common(3)) or 'none passed on'))
+    else:
+        print('  info  the gate (alpha101+): no held / passed-on lines yet')
+    print(verdict(dev_med('memAvailMb'), 450, 300, ' MB', lower_is_better=False, what='free memory (median of the uploads)'))
+    print(verdict(dev_med('cpuParentAvg'), 40, 70, ' %', what='parent process CPU, average (one core = 100)'))
+    print(verdict(dev_med('jankFrames'), 60, 200, '', what='slow screen frames per upload (median)'))
+
+    # ---- 2. page loading speed
+    print('\n-- 2. PAGE LOADING SPEED --')
+    timing = kvs('page timing')
+    fcp = [num(t.get('fcp')) for t in timing]
+    load = [num(t.get('load')) for t in timing]
+    print(verdict(med(fcp), 2500, 6000, ' ms', what='first contentful paint (median of %d loads)' % len(timing)))
+    print(verdict(med(load), 6000, 15000, ' ms', what='load finished (median)'))
+    def alpha_of(b):
+        m = re.search(r'alpha(\d+)', str(b.get('app', '')))
+        return int(m.group(1)) if m else 0
+    # only an upload from alpha96 on says `cut=1` for a load that was cut short: older ok=false lines mix redirects and taps with real failures and are not counted as failures here
+    loaded = [e for b in batches if alpha_of(b) >= 96 for e in b.get('events', []) if isinstance(e, str) and ' page loaded ' in e]
+    cut = sum(1 for e in loaded if ' ok=false cut=1' in e)
+    fail = sum(1 for e in loaded if ' ok=false' in e and ' cut=1' not in e)
+    print(verdict(round(100.0 * fail / len(loaded), 1) if loaded else None, 5, 15, ' %', what='real load failures (%d of %d from alpha96 on; %d cut short)' % (fail, len(loaded), cut)))
+    per = {}
+    for e in ev:
+        if ' page timing ' in e:
+            m = re.search(r'host=(\S+)', e)
+            if m:
+                kv = dict(re.findall(r'([\w-]+)=(-?\d+)', e))
+                per.setdefault(m.group(1), []).append(kv)
+    worst = sorted(((med([num(k.get('fcp')) for k in v]), h, len(v)) for h, v in per.items() if len(v) >= 2 and med([num(k.get('fcp')) for k in v]) is not None), reverse=True)[:4]
+    for f, h, n in worst:
+        print('  info  slowest first paint: %-26s %s ms (%d loads)' % (h[:26], f, n))
+    # PERF17c (owner 2026-11-24: "Animations on websites are laggy"): the page's own frame callbacks in the 2.5 s after the load (fm=frames/gaps>50ms/gaps>100ms/longest gap); the share of LATE frames is the lag, frames a second is the rate the engine
+    # really draws at. Split by the drawing settings of the upload, so Software drawing against Hardware and Calmer redrawing (30) against 60 are judged on numbers.
+    def fm_vals(lines_):
+        out_ = []
+        for t in lines_:
+            p = str(t.get('fm', '')).split('/')
+            if len(p) == 4 and all(x.lstrip('-').isdigit() for x in p) and int(p[0]) > 0:
+                out_.append(tuple(int(x) for x in p))
+        return out_
+    fmv = fm_vals(timing)
+    if fmv:
+        print(verdict(round(med([100.0 * v[1] / v[0] for v in fmv]), 1), 10, 30, ' %', what='PAGE ANIMATION: late frames (over 50 ms) after the load, %d pages' % len(fmv)))
+        print('  info  frame callbacks a second after the load: median %s (60 = the engine keeps up, 30 = the Calmer redrawing rate or a busy page); longest gap median %s ms' % (round(med([v[0] / 2.5 for v in fmv]), 1), med([v[3] for v in fmv])))
+        groups = {}
+        for b in batches:
+            s = b.get('settings') or {}
+            vals = fm_vals([parse_timing(e) or {} for e in b.get('events', []) if isinstance(e, str) and ' page timing ' in e and ' fm=' in e])
+            trial = str(s.get('draw_trial') or '0')
+            key = 'drawing=%s redraw=%s' % (('hardware trial %s' % trial) if trial not in ('0', '') else ('software' if s.get('lab_soft') == 'true' else 'hardware/default'), '30/s' if s.get('lab_fps30') == 'true' else '60/s')
+            groups.setdefault(key, []).extend(vals)
+        for key, vals in sorted(groups.items()):
+            if len(vals) >= 3:
+                print('  info    %-36s %3d pages: late frames median %s %%, %s frames a second' % (key, len(vals), round(med([100.0 * v[1] / v[0] for v in vals]), 1), round(med([v[0] / 2.5 for v in vals]), 1)))
+    else:
+        print('  info  PAGE ANIMATION: no frame-cadence numbers yet (fm= appears in uploads from alpha100)')
+    backs = kvs('back press')
+    loaded_back = [k for k in backs if k.get('kind') in ('kept', 'cache', 'network')]
+    if loaded_back:
+        print('  info  Back to a real page: %d, kept by the engine (instant) %d, from cache %d, from network %d' % (len(loaded_back), sum(1 for k in loaded_back if k.get('kind') == 'kept'),
+              sum(1 for k in loaded_back if k.get('kind') == 'cache'), sum(1 for k in loaded_back if k.get('kind') == 'network')))
+    loops = lines('page loop')
+    if loops:
+        print('  WATCH a site was loaded again and again in one tab %d time(s): %s' % (len(loops), loops[0][:100]))
+
+    # ---- 3. video playback
+    print('\n-- 3. VIDEO PLAYBACK --')
+    dropped = dev_med('framesDropped'); shown = dev_med('framesShown')
+    vq = kvs('video quality')
+    fr = sum(num(v.get('frames'), 0) for v in vq); dr = sum(num(v.get('dropped'), 0) for v in vq)
+    print(verdict(round(100.0 * dr / fr, 1) if fr else None, 2, 8, ' %', what='dropped frames (%d of %d frames, %d samples)' % (dr, fr, len(vq))))
+    stalls = [e for e in ev if ' player stall' in e or ' video stall' in e or ' inline stats' in e and 'stall(s)' in e]
+    print('  info  stalls reported: %d; video errors: %d (%s)' % (len(stalls), sum(1 for e in ev if ' video error ' in e),
+          ', '.join('%s x%d' % kv for kv in Counter(re.search(r'code=(\d+)', e).group(1) for e in ev if ' video error ' in e and re.search(r'code=(\d+)', e)).most_common(3)) or 'none'))
+    ho = [k for k in kvs('video hand-over')]; hd = [e for e in ev if ' video hand-declined' in e]
+    print('  info  hand-overs to Kestrel\'s own player: %d taken, %d declined; format policy said no %d time(s)' % (len(ho), len(hd), sum(1 for e in ev if ' video codec-no ' in e)))
+
+    # PERF21 (owner 2026-11-24: laggy page animations, a play bar over in-site clips): what the clip limiter and the no-bar rule did (counters of the newest uploads)
+    cnt = {}
+    for b in batches[-4:]:
+        for l in b.get('snapshot', []):
+            if isinstance(l, str) and l.startswith('Counters:'):
+                for k, v in re.findall(r'([\w.]+)=(\d+)', l):
+                    cnt[k] = max(cnt.get(k, 0), int(v))
+    if any(k.startswith('videoclips.deco.') for k in cnt):
+        print('  info  decorative page clips (alpha102+): no bar on %d taps, %d parked for being too many, %d parked out of sight, %d played again' % (
+            cnt.get('videoclips.deco.bar', 0), cnt.get('videoclips.deco.cap', 0), cnt.get('videoclips.deco.off', 0), cnt.get('videoclips.deco.back', 0)))
+    else:
+        print('  info  decorative page clips (alpha102+): no numbers yet')
+
+    # ---- 4. page compatibility
+    print('\n-- 4. PAGE COMPATIBILITY --')
+    errs = [e for e in ev if ' page error ' in e]
+    print('  info  page error lines: %d; real failed loads: %d; cut short: %d' % (len(errs), fail, cut))
+    shields_off = Counter(re.search(r'engine etp (\S+) off', e).group(1) for e in ev if re.search(r' engine etp (\S+) off', e))
+    shields_off.pop('?', None); shields_off.pop('private', None)
+    if shields_off:
+        print('  info  sites the owner runs with Shields DOWN (a sign Shields broke them or slowed them): ' + ', '.join('%s x%d' % kv for kv in shields_off.most_common(6)))
+    # PERF17d (owner 2026-11-24: "Cloudflare tests for anti bots are extremely slow"): pages that were a bot check (ch=1 full page, ch=2 a widget inside a page). A full-page check that was LEFT (pt=1, before the 45 s cap) took `at` ms on the page.
+    chk1 = [t for t in timing if str(t.get('ch')) == '1']
+    chk2 = [t for t in timing if str(t.get('ch')) == '2']
+    if chk1 or chk2:
+        cleared = [num(t.get('at')) for t in chk1 if str(t.get('pt')) == '1' and 0 < (num(t.get('at')) or 0) < 44000]
+        stuck = [t for t in chk1 if str(t.get('pt')) == '1' and (num(t.get('at')) or 0) >= 44000]
+        print('  info  bot checks: %d full-page (left after a median %s s on the page; %d still showing after 45 s), %d check widgets inside pages; sites: %s' % (
+            len(chk1), round(med(cleared) / 1000.0, 1) if cleared else '-', len(stuck), len(chk2), ', '.join(sorted(set(str(t.get('host', '?')) for t in chk1 + chk2))[:5])))
+        if cleared:
+            print(verdict(round(med(cleared) / 1000.0, 1), 8, 20, ' s', what='full-page bot check: time on the page (median of %d)' % len(cleared)))
+    else:
+        print('  info  bot checks: none seen in these uploads (a marker for them is in alpha100 and later)')
+    pops = len(lines('sec popup-blocked'))
+    print('  info  pop-ups and forced redirects blocked: %d; file attaches: %d (page-got ok %d, failed %d)' % (pops, len(lines('filepick copied')),
+          sum(1 for t in lines('filepick page-got') if 'decode=ok' in t), sum(1 for t in lines('filepick page-got') if 'decode=failed' in t)))
+    sf = [e for e in ev if ' sitefixes running' in e]
+    print('  info  Mozilla site fixes running: %s' % ('yes (%s)' % re.search(r'v=(\S+)', sf[-1]).group(1) if sf and re.search(r'v=(\S+)', sf[-1]) else 'not seen in these uploads'))
+
+    # ---- 5. privacy and security
+    print('\n-- 5. PRIVACY AND SECURITY --')
+    blocked = [num(re.search(r'blocked=(\d+)', e).group(1)) for e in loaded if re.search(r'blocked=(\d+)', e)]
+    print('  info  ad and tracker requests blocked on page loads: %d over %d loads (%.1f a page)' % (sum(blocked), len(blocked), (sum(blocked) / len(blocked)) if blocked else 0.0))
+    up = len(lines('sec https-upgraded')); fb = len(lines('sec https-unavailable')); cert = lines('sec cert-error')
+    print('  info  addresses upgraded to https: %d; https not available (fell back or asked): %d; certificate errors: %d%s' % (up, fb, len(cert), (' (e.g. ' + cert[0][:60] + ')') if cert else ''))
+    perm = Counter(re.search(r'kind=(\S+)', t).group(1) for t in lines('sec perm-asked') if re.search(r'kind=(\S+)', t))
+    print('  info  permission questions from pages: %s' % (', '.join('%s x%d' % kv for kv in perm.most_common()) or 'none'))
+    print('  info  engine Safe Browsing blocks: %d; downloads refused: %d; Shields ext version: %s' % (sum(1 for e in ev if ' page safebrowsing' in e),
+          sum(1 for e in ev if ' download auto-refused' in e or ' download lookalike-refused' in e), (lines('shields ext-version') or ['not seen'])[-1][:40]))
+    masked = [re.search(r'masked so far (\d+), live-diagnostic sends held back (\d+)', l) for b in batches for l in b.get('snapshot', []) if 'safety net' in l]
+    masked = [m for m in masked if m]
+    if masked:
+        print('  info  private tabs: names masked %s, sends held back %s (newest upload)' % (masked[-1].group(1), masked[-1].group(2)))
+    if fail and fail / max(1, len(loaded)) > 0.15:
+        print('  WATCH many loads failed: compatibility or network, see the PAGE COMPATIBILITY section')
+
+
+def tab_analysis(batches):
+    """PERF15: tab switching. `tabs hibernate tab= live= max= avail=` (a tab was put to sleep: its next switch loads the page again), `tabs switch-done tab= kind=live|revive first-frame=Nms` (how long the switch took to the first frame) and the engine kills."""
+    hib, sw, kills, trims = [], [], 0, 0
+    for b in batches:
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            if ' tabs hibernate ' in e:
+                kv = dict(re.findall(r'(\w+)=(\S+)', e.split(' tabs hibernate ', 1)[1]))
+                hib.append(kv)
+            elif ' tabs switch-done ' in e:
+                kv = dict(re.findall(r'([\w-]+)=(\S+)', e.split(' tabs switch-done ', 1)[1]))
+                sw.append(kv)
+            elif ' gecko onKill' in e:
+                kills += 1
+    print('\n== TABS (switching: %d switch(es) measured, %d tab(s) put to sleep, %d engine kill(s)) ==' % (len(sw), len(hib), kills))
+    if hib:
+        mx = Counter(r.get('max', '?') for r in hib)
+        av = sorted(int(re.sub(r'\D', '', r.get('avail', '0')) or 0) for r in hib)
+        print('  put to sleep with a budget of: ' + ', '.join('%s tab(s) x%d' % kv for kv in mx.most_common()) + '; free memory then (MB): ' + ', '.join(str(a) for a in av[:12]))
+        if any(r.get('max') == '1' for r in hib):
+            print('      -> a budget of ONE tab means the tablet thought memory was short: each switch to another tab loads its page again (research/TAB_SWITCH.md)')
+    for kind in ('live', 'revive'):
+        ms = sorted(int(re.sub(r'\D', '', r.get('first-frame', '0')) or 0) for r in sw if r.get('kind') == kind)
+        if ms:
+            print('  switch to a %s tab: %d, median first frame %d ms, worst %d ms' % ('LIVE (alive)' if kind == 'live' else 'SLEEPING (loaded again)', len(ms), ms[len(ms) // 2], ms[-1]))
+
+
+def setting_ab(batches):
+    """PERF14: the uploads carry the owner's changed settings AND the pages' own load timing, so a setting can be judged by the numbers instead of by feel: for each watched setting, per site with at least 2 timed loads on each side, the median first contentful paint and load time with the setting ON against OFF (a setting that was never changed counts as OFF)."""
+    WATCH = ['lab_soft', 'draw_trial', 'lab_fps30', 'lab_draw', 'lab_dither', 'lab_bytecode', 'lab_gcpar', 'hold_false_trims', 'limit_clips', 'lazy_start', 'scroll_feel', 'lab_font', 'tabs_kept', 'instant_back']
+    import statistics
+    rows = []
+    for b in batches:
+        st = b.get('settings', {}) or {}
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' page timing ' in e:
+                hm = re.search(r'host=(\S+)', e)
+                if not hm:
+                    continue
+                kv = dict(re.findall(r'(\w+)=(-?\d+)', e))
+                rows.append((st, hm.group(1), kv))
+    print('\n== SETTING A/B (page timing split by the owner\'s settings; medians in ms; only sites with 2+ loads on both sides) ==')
+    shown = 0
+    seen_split = {}
+    for key in WATCH:
+        vals = sorted({st.get(key, 'default') for st, _, _ in rows})
+        if len(vals) < 2:
+            continue
+        base = 'default' if 'default' in vals else vals[0]
+        for v in vals:
+            if v == base:
+                continue
+            per = {}
+            for st, host, kv in rows:
+                side = st.get(key, 'default')
+                if side not in (base, v):
+                    continue
+                per.setdefault(host, {base: [], v: []})[side].append(kv)
+            lines = []
+            for host, d in sorted(per.items(), key=lambda x: -len(x[1][base]) - len(x[1][v])):
+                if len(d[base]) < 2 or len(d[v]) < 2:
+                    continue
+                def med(side, k):
+                    xs = [int(x[k]) for x in d[side] if k in x and int(x[k]) >= 0]
+                    return statistics.median(xs) if xs else None
+                lines.append('    %-26s fcp %s -> %s | load %s -> %s  (%d / %d loads)' % (host[:26], med(base, 'fcp'), med(v, 'fcp'), med(base, 'load'), med(v, 'load'), len(d[base]), len(d[v])))
+            if lines:
+                shown += 1
+                sig = tuple(tuple(sorted(l.split('(')[-1].replace(' loads)', '').split(' / '))) for l in lines)   # (the same loads, either way round)
+                if sig in seen_split:
+                    print('  %s: %s -> %s  (the same loads as %s: these settings were changed together, so the numbers cannot tell them apart)' % (key, base, v, seen_split[sig]))
+                    continue
+                seen_split[sig] = key
+                print('  %s: %s -> %s' % (key, base, v))
+                for ln in lines[:8]:
+                    print(ln)
+    if not shown:
+        print('  (no setting has two sides with enough loads yet)')
+
+
+def back_analysis(batches):
+    """PERF13: what Back did on the tablet (`back press kind= dir= loc= show= paint= y= to= left=`, normal tabs only): how many were instant, how long the others took, how often the place was missed, and what the engine said when the page was left (`left=`)."""
+    rows = []
+    for b in batches:
+        for e in b.get('events', []):
+            if isinstance(e, str) and ' back press ' in e:
+                r = dict(re.findall(r'(\w+)=(\S+)', e.split(' back press ', 1)[1]))
+                r['_missed'] = ' MISSED' in e
+                rows.append(r)
+    print('\n== BACK (what Back did on the tablet: %d press(es) in normal tabs) ==' % len(rows))
+    if not rows:
+        print('  (no `back press` lines yet)')
+        return
+    kinds = Counter(r.get('kind', '?') for r in rows)
+    print('  kinds: ' + ', '.join('%s x%d' % kv for kv in kinds.most_common()) + '   (other = Back inside a single-page app: no page load, the site handles it)')
+    loaded = [r for r in rows if r.get('kind') in ('cache', 'network', 'kept')]
+    def num(r, k):
+        try:
+            return int(r.get(k, -1))
+        except ValueError:
+            return -1
+    shows = sorted(num(r, 'show') for r in loaded if num(r, 'show') >= 0)
+    paints = sorted(num(r, 'paint') for r in loaded if num(r, 'paint') >= 0)
+    if loaded:
+        print('  page loads: %d, kept (instant) %d; median pageshow %s ms, median first paint %s ms; place missed %d of %d measured' % (
+            len(loaded), sum(1 for r in loaded if r.get('kind') == 'kept'), shows[len(shows) // 2] if shows else '-', paints[len(paints) // 2] if paints else '-',
+            sum(1 for r in loaded if r['_missed'] and r.get('kind') != 'kept'), sum(1 for r in loaded if '/' in r.get('y', '') and r.get('kind') != 'kept')))   # (a page the engine KEPT is where it was; its saved place is only a hint)
+        words = Counter(r.get('left', '?') for r in loaded)
+        print('  what the engine said when the page was LEFT: ' + ', '.join('%s x%d' % kv for kv in words.most_common()) + '   (+stop = the link tap cancelled the page\'s unfinished loads first, PERF14)')
+        lefts = Counter(r.get('left', '?').split('+')[0] for r in loaded)
+        if lefts.get('refused-loading'):
+            print('      -> pages were left before they finished loading: the engine cannot keep an unfinished page (research/INSTANT_BACK.md section 4 item 1)')
+        if lefts.get('refused-loaded'):
+            print('      -> finished pages were refused: something blocks the cache (open requests, a video player, an opener, no-store): research/INSTANT_BACK.md section 4 item 2')
+        if lefts.get('kept') and not any(r.get('kind') == 'kept' for r in loaded):
+            print('      -> the engine said it KEPT the page when it was left, yet Back loaded it again: the cache was flushed in between (a memory trim of 15 / 80 reaches the engine) or the tab was put to sleep')
+
+
 def filepick_analysis(batches):
     """IMG1: what the files picked for a page looked like to Android (`filepick picked type= kb= size=WxH decodes= ext= freeMb=`): says whether a file or the page is to blame for a refused upload."""
     rows = []
@@ -424,6 +760,7 @@ def filepick_analysis(batches):
             elif isinstance(e, str) and ' filepick picked-failed ' in e:
                 rows.append({'failed': e.split(' filepick picked-failed ', 1)[1].strip()[:40]})
     print('\n== FILE PICKS (what the files attached to pages looked like to Android; %d file(s)) ==' % len(rows))
+    page_got_analysis(batches)
     if not rows:
         print('  (no `filepick picked` lines yet: needs alpha87 or newer and one attached file in a normal tab)')
         return
@@ -594,6 +931,7 @@ def main(argv):
         print('\n== INTEGRITY: cannot be proven here (no git history: --dir or no origin/main). Use list_commits path=diag on tjshea90/Kestrel-Private. ==')
     for x in problems:
         print('  FILE PROBLEM: ' + x)
+    focus_report(batches)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
@@ -612,6 +950,9 @@ def main(argv):
     load_analysis(batches, r)
     video_analysis(batches)
     filepick_analysis(batches)
+    back_analysis(batches)
+    setting_ab(batches)
+    tab_analysis(batches)
     typing_analysis(batches)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')

@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench layout</title><script src="common.js"></script>
+<style>.row{display:flex;flex-wrap:wrap;gap:2px;margin:2px}.cell{width:60px;height:18px;padding:1px;border:1px solid #888;font:10px sans-serif;overflow:hidden}.wide .cell{width:90px}.grid{display:grid;grid-template-columns:repeat(4,1fr)}</style></head>
+<body><div id="root"></div>
+<script>
+// Page layout: a 4,000-node tree, style changes that force a new layout, read back. layout_ms = median of 3 passes.
+K.run('layout', function () {
+  var F = K.fast ? 0.15 : 1, root = document.getElementById('root'), rows = (200 * F) | 0 || 10, cells = 20;
+  for (var r = 0; r < rows; r++) { var row = document.createElement('div'); row.className = 'row' + (r % 3 === 0 ? ' grid' : ''); for (var c = 0; c < cells; c++) { var d = document.createElement('div'); d.className = 'cell'; d.textContent = r + ':' + c; row.appendChild(d); } root.appendChild(row); }
+  var times = [], sink = 0;
+  for (var p = 0; p < 3; p++) {
+    var a = K.now();
+    for (var k = 0; k < 20; k++) { root.classList.toggle('wide'); for (var i = 0; i < root.children.length; i += 3) root.children[i].style.margin = (k % 4) + 'px'; sink += root.offsetHeight; }
+    times.push(K.now() - a);
+  }
+  return { layout_ms: K.round(K.median(times)), nodes: rows * cells + rows, sink: sink & 1 };
+});
+</script></body></html>

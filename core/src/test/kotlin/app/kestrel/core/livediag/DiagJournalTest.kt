@@ -64,14 +64,28 @@ class DiagJournalTest {
         fill(j, 50, kind = "gecko onKill")
         fill(j, 50, kind = "page loaded")
         fill(j, 50, kind = "ui late-beat")
-        fill(j, 50, kind = "mem trim")
+        fill(j, 50, kind = "gecko onCrash")
         val c = j.cut(600)
         assertEquals(5, c.lines.count { it.contains("video quality") })
         assertEquals(195, c.thinned)
         assertEquals(50, c.lines.count { it.contains("gecko onKill") })
         assertEquals(50, c.lines.count { it.contains("page loaded") })
         assertEquals(50, c.lines.count { it.contains("late-beat") })
-        assertEquals(50, c.lines.count { it.contains("mem trim") })
+        assertEquals(50, c.lines.count { it.contains("gecko onCrash") })
+    }
+
+    /** PERF12: the alpha95 night upload lost 602 lines; 170 of the 600 it kept were routine memory trims of level 20 and dropped tab pictures, kinds whose NAME looks like trouble. */
+    @Test fun aRoutineTrimAndADroppedPictureAreThinnedButARealMemoryTrimIsKept() {
+        val j = DiagJournal(800, 5)
+        for (i in 0 until 30) j.add("mem trim", "+${i}.0s mem trim level=20 avail=450MB thr=144MB low=false trim=20@0s")
+        for (i in 0 until 30) j.add("tabs thumb-dropped", "+${i}.0s tabs thumb-dropped tab=7 moved=false loading=true")
+        j.add("mem trim", "+40.0s mem trim level=15 avail=90MB thr=144MB low=true trim=15@0s")
+        j.add("mem trim", "+41.0s mem trim level=80 avail=60MB thr=144MB low=false trim=80@0s")
+        val c = j.cut(600)
+        assertEquals(5 + 2, c.lines.count { it.contains("mem trim") })
+        assertEquals(5, c.lines.count { it.contains("thumb-dropped") })
+        assertEquals(25 + 25, c.thinned)
+        assertEquals(false, DiagJournal.important("mem trim")); assertEquals(true, DiagJournal.important("page loop")); assertEquals(true, DiagJournal.important("gecko onKill"))
     }
 
     @Test fun theRealSpamNoLongerPushesTheNewsOut() {
@@ -128,6 +142,26 @@ class DiagJournalTest {
         a.mergeFrom(b)
         assertTrue(a.kindCounts().size <= 3)           // 2 named + "other kinds"
         assertEquals(1, a.sites().size)
+    }
+
+    /** PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): bookkeeping lines are kept to a few examples, the five areas' lines are not. */
+    @Test fun bookkeepingLinesAreKeptToAFewExamplesAndSecurityLinesAreNeverThinned() {
+        val j = DiagJournal(800, 40)
+        fill(j, 100, kind = "gecko first-composite")
+        fill(j, 100, kind = "win focus")
+        fill(j, 100, kind = "tabs look-saved")
+        fill(j, 100, kind = "sec cert-error")
+        fill(j, 100, kind = "tabs switch-done")
+        fill(j, 100, kind = "video quality")
+        val c = j.cut(800)
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("first-composite") })
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("win focus") })
+        assertEquals(DiagJournal.BOOKKEEPING_KEEP, c.lines.count { it.contains("look-saved") })
+        assertEquals("a security line is never thinned", 100, c.lines.count { it.contains("sec cert-error") })
+        assertEquals("a tab switch time stays at the usual number", 40, c.lines.count { it.contains("switch-done") })
+        assertEquals(40, c.lines.count { it.contains("video quality") })
+        assertTrue(DiagJournal.bookkeeping("gecko size")); assertTrue(!DiagJournal.bookkeeping("page timing")); assertTrue(!DiagJournal.bookkeeping("engine etp"))
+        assertTrue("the sec layer may be journalled", DiagPolicy.allows("sec", "https-upgraded"))
     }
 }
 

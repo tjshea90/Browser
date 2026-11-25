@@ -53,6 +53,21 @@
         android:theme="@style/Theme.Kestrel"
         tools:targetApi="33">
 
+        <!-- OPT1: the Auto-tune screen (own GeckoView, own session) and the trampoline that restarts the whole app for it (own process, ends itself) -->
+        <activity
+            android:name=".optimizer.OptimizerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
+            android:exported="false"
+            android:launchMode="singleTask" />
+        <activity
+            android:name=".optimizer.RestartActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:process=":restart"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"

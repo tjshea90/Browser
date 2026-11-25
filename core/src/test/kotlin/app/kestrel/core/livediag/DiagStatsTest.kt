@@ -57,4 +57,16 @@ class DiagStatsTest {
         assertEquals(1L, t.count("gecko onKill")); assertEquals(7000, t.sites().single().medianDoneMs)
         t.reset(); assertTrue(t.isEmpty()); assertFalse(t.save().contains("K\t"))
     }
+
+    /** PERF12 (owner 2026-11-23): the digest said 19 of 44 amazon and 15 of 37 google loads "failed": most were loads cut short by a redirect or a tap. `cut=1` is a load, not a failure. */
+    @Test fun aLoadThatWasCutShortIsALoadButNotAFailure() {
+        val st = DiagStats()
+        st.observe("page", "loaded", loaded("www.google.com", 900, 4000, ok = false) + " cut=1")
+        st.observe("page", "loaded", loaded("www.google.com", 900, 4000, ok = false) + " cut=1")
+        st.observe("page", "loaded", loaded("www.google.com", -1, 900, ok = false))
+        st.observe("page", "loaded", loaded("www.google.com", 800, 3000, ok = true))
+        val g = st.sites().first { it.site == "www.google.com" }
+        assertEquals(4, g.loads)
+        assertEquals("only the load without `cut=1` is a failure", 1, g.failed)
+    }
 }

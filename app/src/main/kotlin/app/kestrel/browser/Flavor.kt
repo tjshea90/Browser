@@ -20,6 +20,7 @@ object Flavor {
     /** The engine view reports pull-down gestures (Gecko build only): Settings shows the "Pull down to refresh" row. */
     @JvmField var hasPullRefresh = false
 
+
     /** Video and social embeds can wait for a tap (Gecko build only: the built-in extension does it): Shields and Settings show the "Embeds wait for a tap" switch. */
     @JvmField var hasEmbedWait = false
 
@@ -49,4 +50,6 @@ object Flavor {
 
     /** The engine's network switches (DNS over HTTPS, HTTP/3) can be changed live (Gecko build): Settings shows the "Network lab" rows. */
     @JvmField var hasNetworkLab = false
+    /** OPT1: the Auto-tune screen exists (Kestrel G only: it drives the Firefox engine). */
+    @JvmField var hasAutoTune = false
 }

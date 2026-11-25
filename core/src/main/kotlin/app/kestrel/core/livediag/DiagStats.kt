@@ -67,7 +67,7 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
         if (s == null) { if (sites.size >= maxSites) return; s = Site(); sites[site] = s }
         val paint = m.groupValues[2].toLong(); val done = m.groupValues[3].toLong(); val ok = m.groupValues[4] == "true"
         s.n++
-        if (!ok) s.failed++
+        if (!ok && m.groupValues[5] != "1") s.failed++           // PERF12: `cut=1` = a load that was cut short (redirect hop, tap away, Stop), not a failed one
         if (done >= 0) { s.add(done); if (done > s.worst) s.worst = done }
         if (paint >= 0) { s.paintSum += paint; s.paintN++ }
     }
@@ -152,6 +152,6 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
         private val TIMING_LOAD = Regex("""\bload=(-?\d+)""")
         private val TIMING_LAG = Regex("""\blag=(-?\d+)/(-?\d+)/(-?\d+)""")
         private val TIMING_RN = Regex("""\brn=(\d+)""")
-        private val LOADED = Regex("""host=(\S+) paint=(-?\d+)ms done=(-?\d+)ms blocked=\d+ visit=\d+ ok=(true|false)""")
+        private val LOADED = Regex("""host=(\S+) paint=(-?\d+)ms done=(-?\d+)ms blocked=\d+ visit=\d+ ok=(true|false)(?: cut=(1))?""")
     }
 }

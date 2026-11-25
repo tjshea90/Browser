@@ -361,7 +361,7 @@ function vcxText() {
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
   // gt (ANS53, flag 1024: videos start only when pressed): an app that did not answer (not ready, a bridge error) leaves the gate CLOSED: the person's rule is the default (review of the gate, finding 6: that used to open everything)
-  function answer(f, told) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: !told || (f & 1024) !== 0, ho: told && (f & 2048) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
+  function answer(f, told) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: !told || (f & 1024) !== 0, ho: told && (f & 2048) !== 0, dc: told && (f & 4096) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f, true));
   return askCfg(host).then(function () { var g = cfgFlags.get(host); return answer(g || 0, g !== undefined); });
@@ -388,7 +388,23 @@ onMsg(function (m, sender) {
     send({ k: 'pt', p: tabTop.get(tabId) || '', nt: ptC(m.nt) % 4, dns: ptN(m.dns, 6e5), con: ptN(m.con, 6e5), tls: ptN(m.tls, 6e5), fb: ptN(m.fb, 6e5), ttfb: ptN(m.ttfb, 6e5),
       dcl: ptN(m.dcl, 6e5), load: ptN(m.load, 6e5), fcp: ptN(m.fcp, 6e5), lcp: ptN(m.lcp, 6e5), rn: ptC(m.rn), rc: ptC(m.rc), kb: ptC(m.kb), r1: ptC(m.r1), r3: ptC(m.r3), rsum: ptN(m.rsum, 1e7),
       h2: ptC(m.h2), h1: ptC(m.h1), h3: ptC(m.h3), js: ptC(m.js), css: ptC(m.css), img: ptC(m.img), xhr: ptC(m.xhr), oth: ptC(m.oth),
-      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl }).catch(function () {});
+      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl,
+      fm: (m.fm && m.fm.length === 4) ? [ptC(m.fm[0]), ptC(m.fm[1]), ptC(m.fm[2]), ptN(m.fm[3], 6e5)] : null, ch: (+m.ch === 1 || +m.ch === 2) ? +m.ch : 0, chs: ptN(m.chs, 6e5) }).catch(function () {});
+    return undefined;
+  }
+  if (m.k === 'fc') { // PERF10c: pagetime.js (top frame) says what the page received when a file input changed: a few numbers and fixed words, all checked here, never a name
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var fcN = function (x, hi) { x = +x; return (x >= 0 && x <= hi) ? Math.round(x) : -1; };
+    var fcMg = { png: 1, jpeg: 1, gif: 1, webp: 1, avif: 1, heic: 1, bmp: 1, pdf: 1, other: 1, none: 1 };
+    var fcA = [], fcI;
+    if (m.a && m.a.length) for (fcI = 0; fcI < m.a.length && fcA.length < 3; fcI++) {
+      var fcE = m.a[fcI];
+      if (!fcE || typeof fcE !== 'object') continue;
+      var fcT = String(fcE.t === undefined || fcE.t === null ? '' : fcE.t).toLowerCase();
+      fcA.push({ t: /^[a-z0-9]+\/[a-z0-9.+-]{1,40}$/.test(fcT) ? fcT : (fcT === '' ? 'none' : 'odd'), kb: fcN(fcE.kb, 1e7), mg: fcMg[fcE.mg] === 1 ? fcE.mg : 'other',
+        dec: fcN(fcE.dec, 3), w: fcN(fcE.w, 1e5), h: fcN(fcE.h, 1e5), px: fcN(fcE.px, 4), enc: fcN(fcE.enc, 4), ek: fcN(fcE.ek, 1e7), ms: fcN(fcE.ms, 6e5) });
+    }
+    send({ k: 'fc', p: tabTop.get(tabId) || '', n: fcN(m.n, 9999), a: fcA }).catch(function () {});   // (a: [] = the beacon: a file arrived, the test has not finished yet)
     return undefined;
   }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
@@ -1338,8 +1354,8 @@ onMsg(function (m, sender) {
 onMsg(function (m, sender) {
   if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
-  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' ? m.e : '';
-  var a = /^(play|pause|seek|mute|full|played|skipped|none)$/.test(String(m.a || '')) ? String(m.a) : '';
+  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' || m.e === 'deco' ? m.e : '';
+  var a = /^(play|pause|seek|mute|full|played|skipped|none|bar|cap|off|back|scroll)$/.test(String(m.a || '')) ? String(m.a) : '';
   var n = Math.max(0, Math.min(99, m.n | 0));                    // (turn.js: how many videos a turn of the screen paused)
   if (e) send({ k: 'vbk', e: e, a: a, n: n, p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
@@ -1368,6 +1384,19 @@ onMsg(function (m, sender) {
 onMsg(function (m, sender) {
   if (!m || m.k !== 'bf' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   send({ k: 'bf', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, nt: String(m.nt || '').slice(0, 20), ts: Math.max(0, m.ts | 0), y: Math.max(0, Math.round(m.y) || 0) }).catch(function () {});
+  return undefined;
+});
+
+// PERF14: does the person want Instant Back (Settings > Instant Back, the app's 7th answer field)? content.js asks once per page and keeps the answer, because the stop of a leaving page must be decided in the click itself.
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'bkm' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  return Promise.resolve(bkMode ? 1 : 0);
+});
+
+// PERF13: the engine's own verdict at the moment a page is left (content.js `pagehide`, top frame): kept by the back/forward cache (ps 1) or refused (0), and how far the page had loaded (rs 0 loading, 1 interactive, 2 complete). Numbers and the address.
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'ph' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  send({ k: 'ph', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, rs: Math.max(0, Math.min(2, m.rs | 0)), st: m.st ? 1 : 0 }).catch(function () {});
   return undefined;
 });
 

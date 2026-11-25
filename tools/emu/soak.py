@@ -3680,6 +3680,102 @@ class Soak:
         self.record({"kind": "tb", "name": "previews-copy-tabs", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("tb scene")
 
+    def opt_stacks(self, pkg):
+        """Asks the app's main process for the stack of every thread (kill -3 writes them to the log) and prints the main thread and the benchmark thread: where a silent run sits."""
+        pids = self.adb.sh("pidof %s" % pkg, timeout=20).split()
+        if not pids:
+            say("opt: stacks: the app has no process at all")
+            return
+        mark = self.log.size()
+        say("opt: stacks of pid %s (silent run)" % pids[0])
+        self.adb.run("root", timeout=30); time.sleep(3)
+        say("opt: kill -3 says: %r" % self.adb.sh("kill -3 %s 2>&1" % pids[0], timeout=20)[:160])
+        time.sleep(6)
+        lines = [ln.rstrip() for ln in self.log.since(mark)]
+        shown = 0
+        for i, ln in enumerate(lines):
+            if re.search(r'"(main|bench-suite|GeckoThread|Binder:[^"]*)" prio=', ln) and shown < 4:
+                shown += 1
+                for l2 in lines[i:i + 26]:
+                    say("   stack: " + l2[l2.find(":", 30) + 1:][:200] if ":" in l2[30:] else "   stack: " + l2[:200])
+        if not shown:
+            say("opt: stacks: no thread dump reached the log (%d new lines)" % len(lines))
+
+    def opt_round(self):
+        """OPT1 (research/OPTIMIZER.md): Auto-tune END TO END on the real engine, the short plan (debug builds only: three experiments, fast pages). It proves what no unit test can: the loopback server and the benchmark
+        pages through the real engine and the real extension, an engine restart that comes back by itself (the trampoline), the guard that writes the start configuration, a restart-needing setting that REACHES the
+        engine (the read-back), samples that make a decision, and the results file. The lab does not press anything: `am start ... --es auto quick` starts the run, the app does the rest."""
+        pkg = self.a.pkg
+        self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
+        self.adb.sh("run-as %s sh -c 'for f in files/optimizer/*; do rm -f $f; done'" % pkg, timeout=30)
+        lm = self.log.size()
+        say("opt: am start says: %s" % self.adb.sh("am start -n %s/app.kestrel.browser.MainActivity --es auto_tune quick" % pkg, timeout=60).strip()[:300].replace("\n", " | "))
+        t0 = time.time(); result = ""; last_state = ""; seen_lines = 0; last_change = time.time(); dumps = 0
+        while time.time() - t0 < 17 * 60:
+            time.sleep(20)
+            result = self.adb.sh("run-as %s cat files/optimizer/last.json" % pkg, timeout=30)
+            if '"kind":"kestrel-autotune"' in result:
+                break
+            st = self.adb.sh("run-as %s cat files/optimizer/state.txt" % pkg, timeout=30)
+            # a live timeline in the console (its text is the only thing that survives a failed job): every opt line, stalls and crashes, as they arrive
+            allx = [ln for ln in self.log.since(lm) if re.search(r"KestrelHealth.*( opt |ui |stall|STALL|crash|anr|scroll-feel)|KestrelRestart|FATAL EXCEPTION|ANR in|am_anr|am_proc_died.*kestrel", ln)]
+            for ln in allx[seen_lines:seen_lines + 40]:
+                say("   live: " + ln.strip()[:240])
+            if len(allx) > seen_lines:
+                last_change = time.time()
+            seen_lines = min(len(allx), seen_lines + 40)
+            cur = [l for l in st.splitlines() if l.startswith(("cursor|", "status|", "bootMark|", "taken|"))]
+            if cur != last_state:
+                say("opt state: %s" % " ".join(cur)); last_state = cur; last_change = time.time()
+            # nothing at all after 100 s (no state file, no 'opt' line from the app): the run never started - stop waiting and show why
+            if time.time() - t0 > 100 and not st.strip() and not health_events(self.log.since(lm), "opt"):
+                break
+            # silent for 3 minutes: the app's own threads say where it sits (SIGQUIT = every thread's stack into the log); a second silence of 3 more minutes ends the wait instead of burning the full 17
+            if time.time() - last_change > 180:
+                self.opt_stacks(pkg)
+                dumps += 1
+                last_change = time.time()
+                if dumps >= 2:
+                    say("opt: silent for 6 minutes, two stack dumps taken: stopping the wait")
+                    break
+        if '"kind":"kestrel-autotune"' not in result:
+            tail = [ln for ln in self.log.since(lm) if re.search(r"OptimizerActivity|OptimizerRunner|RestartActivity|AndroidRuntime|FATAL EXCEPTION|Permission Denial|Unable to find explicit|ActivityTaskManager.*(START|Displayed|Exception)|KestrelHealth.*(opt|life)", ln)]
+            say("opt: the run did not start or finish; %d relevant log lines, the last 70 follow" % len(tail))
+            for ln in tail[-70:]:
+                say("   " + ln.strip()[:260])
+            say("opt: state file now: %r" % (self.adb.sh("run-as %s ls -la files/optimizer" % pkg, timeout=30)[:400]))
+        ev = health_events(self.log.since(lm), "opt")
+        kinds = {}
+        for e in ev:
+            kinds[e["ev"]] = kinds.get(e["ev"], 0) + 1
+        rows = []
+        j = None
+        try:
+            j = json.loads(result) if '"kind":"kestrel-autotune"' in result else None
+        except ValueError:
+            j = None
+        if j is None:
+            self.issue("high", "opt", "Auto-tune did not finish in 17 minutes (events seen: %s)" % kinds, shot=True)
+            rows.append({"case": "finished", "ok": False, "file": "no last.json; events %s" % kinds})
+        else:
+            dec = {d["id"]: d for d in j.get("decisions", [])}
+            rows.append({"case": "finished", "ok": j.get("status") == "DONE", "file": "status %s %s" % (j.get("status"), j.get("note"))})
+            for need in ("scroll0", "gcpar", "fps30"):
+                d = dec.get(need)
+                ok = d is not None and d.get("verdict") != "FAILED" and not str(d.get("why", "")).startswith("skipped")
+                rows.append({"case": "experiment " + need, "ok": ok, "file": (d or {}).get("verdict", "missing") + ": " + str((d or {}).get("why", ""))[:120]})
+                if not ok:
+                    self.issue("high", "opt", "the %s experiment did not run to a verdict: %s" % (need, (d or {}).get("why", "missing")), shot=False)
+            n_samples = sum(len(s.get("samples", [])) for s in j.get("steps", []))
+            rows.append({"case": "samples", "ok": n_samples >= 8, "file": "%d samples" % n_samples})
+            rows.append({"case": "restart that came back", "ok": kinds.get("restart", 0) >= 1 and kinds.get("sample", 0) >= 8, "file": "restarts %d, samples %d, guard %d" % (kinds.get("restart", 0), kinds.get("sample", 0), kinds.get("guard", 0))})
+            if kinds.get("restart", 0) < 1:
+                self.issue("high", "opt", "no engine restart happened in the whole run (gcpar and fps30 need one)", shot=False)
+            self.adb.sh("run-as %s cat files/optimizer/last.json > /dev/null" % pkg, timeout=30)
+        pids = self.ph.pids()
+        self.main_pid = pids[0] if pids else None
+        self.record({"kind": "opt", "name": "auto-tune-quick", "status": "ok" if all(r["ok"] for r in rows) else "failed", "results": rows, "opt_events": kinds, "opt_json": (result or "")[:6000]})
+
     def lastrun_round(self):
         """CR1c on the real engine: the app is ended the way Android ends it for memory (kill -9 of the main process, nothing runs in it any more) once while it is in front and once while it is in the
         background, and the Diagnostics of the NEXT start must say which one it was (core: app/diag/LastRun.kt). Also reads the file the app keeps (files/last-run.txt) after the first kill."""
@@ -4589,7 +4685,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "back", "new", "tb", "new2"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "opt", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "back", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4669,6 +4765,8 @@ def main():
             s.tb_scene()                                     # (TP1 / UC1 / MT1: the right preview on every tab, the Copy button of the address bar, the tab tray of the mini panel)
         if a.suite == "new2":
             s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
+        if a.suite == "opt":
+            s.opt_round()                                    # (OPT1: Auto-tune end to end: the short plan, a restart that comes back, the results file)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite in ("ro", "em"):

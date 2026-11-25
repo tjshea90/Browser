@@ -213,4 +213,32 @@ class BackLabTest {
         assertTrue(lab.stats.line(), lab.stats.line().endsWith("(instant Back: 2 pages that forbid caching were made cacheable)"))
         lab.stats.reset(); assertEquals("Back: no presses yet", lab.stats.line())
     }
+
+    /** PERF13 (owner 2026-11-23: "other browsers can immediately go back"): the engine's verdict when the page was left is said in the press line, so the next upload names why a Back was not instant. */
+    @Test fun theLineSaysWhatTheEngineDecidedWhenThePageWasLeft() {
+        val lines = ArrayList<String>(); val lab = BackLab { lines += it }
+        lab.pageHide(B, persisted = false, readyState = 2)
+        press(lab); lab.pageshow(1_500L, B, persisted = false, navType = "back_forward", transferSize = 0, y = 10); lab.finish(4_000L)
+        lab.pageHide(B, persisted = false, readyState = 1)
+        press(lab, at = 5_000L); lab.pageshow(6_500L, B, persisted = false, navType = "back_forward", transferSize = 0, y = 10); lab.finish(9_000L)
+        lab.pageHide(B, persisted = true, readyState = 2)
+        press(lab, at = 10_000L); lab.pageshow(10_030L, B, persisted = true, navType = "back_forward", transferSize = 0, y = 10); lab.finish(14_000L)
+        assertTrue(lines[0], lines[0].endsWith(" left=refused-loaded"))
+        assertTrue(lines[1], lines[1].endsWith(" left=refused-loading"))
+        assertTrue(lines[2], lines[2].endsWith(" left=kept"))
+        val none = ArrayList<String>(); val b = BackLab { none += it }
+        press(b, url = "https://never-left.test/"); b.finish(2_000L)
+        assertTrue(none[0], none[0].endsWith(" left=?"))
+    }
+
+    /** PERF14: when the person's link tap cancelled the page's unfinished loads before leaving, the verdict says so, so the next upload shows whether the stop made the pages kept. */
+    @Test fun theVerdictSaysWhenThePageWasStoppedBeforeItWasLeft() {
+        val lines = ArrayList<String>(); val lab = BackLab { lines += it }
+        lab.pageHide(B, persisted = true, readyState = 2, stopped = true)
+        press(lab); lab.pageshow(1_030L, B, persisted = true, navType = "back_forward", transferSize = 0, y = 10); lab.finish(4_000L)
+        lab.pageHide(B, persisted = false, readyState = 2, stopped = true)
+        press(lab, at = 5_000L); lab.pageshow(6_500L, B, persisted = false, navType = "back_forward", transferSize = 0, y = 10); lab.finish(9_000L)
+        assertTrue(lines[0], lines[0].endsWith(" left=kept+stop"))
+        assertTrue(lines[1], lines[1].endsWith(" left=refused-loaded+stop"))
+    }
 }
