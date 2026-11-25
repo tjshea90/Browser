@@ -36,7 +36,7 @@ class World(
     fun measure(c: Config, n: Int): Sample {
         val on = active(c)
         val gain = on.sumOf { effects[it.id] ?: 0.0 }
-        val rng = Random(c.canonical().hashCode().toLong() * 31 + n)
+        val rng = Random(mix(c.canonical().hashCode().toLong(), n.toLong()))
         val out = HashMap<String, Double>()
         for (m in Metrics.balanced) {
             val dir = if (m.higherIsBetter) 1.0 else -1.0
@@ -45,6 +45,13 @@ class World(
         out[Metrics.COMPAT] = base.getValue(Metrics.COMPAT) - (if (on.any { it.id in compatBreak }) 2 else 0)
         out[Metrics.MEM] = base.getValue(Metrics.MEM) + on.sumOf { memDelta[it.id] ?: 0.0 } + rng.nextGaussian() * 5
         return Sample(out)
+    }
+
+    /** Java's Random gives nearly the same first numbers for neighbouring seeds (n, n+1): two samples of one configuration would then share their noise and the test would measure that, not the tool. Splitmix64 spreads them. */
+    private fun mix(a: Long, b: Long): Long {
+        var z = a * -7046029254386353131L + b * 7046029254386353131L + -4658895280553007687L
+        z = (z xor (z ushr 30)) * -4658895280553007687L; z = (z xor (z ushr 27)) * -7723592293110705685L
+        return z xor (z ushr 31)
     }
 
     companion object { val BASE_SETTINGS = mapOf("draw_trial" to 0, "lab_fps30" to 0, "lab_dither" to 0, "lab_bytecode" to 0, "lab_gcpar" to 0, "scroll_feel" to 1, "limit_clips" to 1) }

@@ -65,9 +65,9 @@ class OptimizerPartsTest {
     }
 
     @Test fun configsCompareAsText() {
-        val a = Config(mapOf("x.y" to "1", "a.b" to "true"), mapOf("scroll_feel" to 0))
+        val a = Config(mapOf("x.y" to "1", "a.b" to "true"), mapOf("zz_live_key" to 0))     // a key that is not an experiment's boot setting: every catalog setting now needs a restart
         assertEquals(a, Config.parse(a.canonical()))
-        assertEquals("p:a.b=true;p:x.y=1;s:scroll_feel=0", a.canonical())
+        assertEquals("p:a.b=true;p:x.y=1;s:zz_live_key=0", a.canonical())
         assertEquals("p:a.b=true;p:x.y=1", a.enginePart())
         assertEquals(Config(), Config.parse(""))
     }
