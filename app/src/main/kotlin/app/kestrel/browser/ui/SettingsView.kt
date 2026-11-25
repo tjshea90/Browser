@@ -192,7 +192,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
 
         if (app.kestrel.browser.Flavor.hasAutoTune) {
             section("Auto-tune")
-            button("Auto-tune: find the best settings for this tablet", "Tries each speed setting one by one with fixed test pages, keeps only what is proven better and tells you what it kept. About an hour; plug the tablet in. You can pause or stop, and your own settings come back. The results can go to Claude if diagnostics sending is on.") { l.openAutoTune() }
+            button("Auto-tune (experimental): find the best settings for this tablet", "First version, not yet run on a real tablet. Tries each speed setting one by one with fixed test pages, keeps only what is proven better and tells you what it kept. About an hour; it restarts Kestrel several times, so plug the tablet in. You can pause or stop, and your own settings come back; if anything goes wrong, close Kestrel and open it again: it starts with your own settings. The results can go to Claude if diagnostics sending is on.") { l.openAutoTune() }
         }
 
         if (app.kestrel.browser.Flavor.hasNetworkLab) {
