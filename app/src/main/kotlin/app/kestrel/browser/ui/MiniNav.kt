@@ -96,6 +96,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun navGeometryChanged(g: IntArray?) {}
         /** A short tick on every key press (the system's touch feedback setting still applies; a tablet without a vibrator has none). */
         fun navKeyHaptics(): Boolean = true
+        /**
+         * The Swoop keyboard (the owner's own system keyboard, a separate app; docs/KEYBOARD-LINK.md): [open] true opens it floating over the page for the text field that has focus (else the address bar),
+         * false puts it away. Returns true when it did; false (the default) = Swoop is not the chosen keyboard, or the person switched this off in Settings: the panel's own keys are used.
+         */
+        fun navSwoop(open: Boolean): Boolean = false
     }
 
     private val model = MiniKeyboardModel()
@@ -141,16 +146,19 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var learnedText: String? = null      // the text whose words were already handed to the keyboard's memory (closing after Enter must not count them twice)
     /** The keyboard is open and its keys go into a text field of the page. */
     val typesIntoPage: Boolean get() = keyboardShowing && pageField != null
+    private var swoopOpenings = 0
     private var fieldOpenings = 0; private var addressOpenings = 0; private var fieldSent = 0; private var fieldEnters = 0; private var lastFieldLabel = "-"
 
     /** What menu > Diagnostics shows for typing into page fields: whether the keyboard found a field, what kind it was, how much went in. */
     fun fieldLine(): String =
-        if (fieldOpenings + addressOpenings == 0) "Mini keyboard in page fields: not opened yet this run"
+        if (fieldOpenings + addressOpenings == 0) "Mini keyboard in page fields: not opened yet this run" + (if (swoopOpenings > 0) " (Swoop opened $swoopOpenings times from the bar)" else "")
         else "Mini keyboard in page fields: opened $fieldOpenings times with a page field focused (last: $lastFieldLabel; $fieldSent characters sent, Enter pressed $fieldEnters times) and $addressOpenings times for the address bar"
 
     /** The panel is shown (sliding in counts as shown). */
     var isOpen = false; private set
     var keyboardShowing = false; private set
+    /** The bar opened Swoop (the system keyboard, floating over the page) instead of the panel's own keys: it is the keyboard typed on, until the bar is tapped again. */
+    var swoopUp = false; private set
 
     /** False hides the panel altogether (full-screen video; Settings can switch the feature off). */
     var available = true
@@ -195,6 +203,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     /** The Back key / gesture: closes the keyboard first. True when it did something. */
     fun onBackPressed(): Boolean {
+        swoopUp = false                       // Android's Back closes the system keyboard before the app sees it: nothing is left to close here
         if (!keyboardShowing) return false
         closeKeyboard()
         return true
@@ -243,7 +252,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val hidden = -(panelTopPx() + panel.measuredHeight).toFloat()
             if (animate) slide(if (wasVisible) panel.translationY else hidden, 0f, DecelerateInterpolator(2f)) {} else panel.translationY = 0f
         } else {
-            if (keyboardShowing) closeKeyboard()
+            if (keyboardShowing || swoopUp) closeKeyboard()
             val hidden = -(panelTopPx() + panel.height.coerceAtLeast(panel.measuredHeight)).toFloat()
             if (animate) slide(panel.translationY, hidden, AccelerateInterpolator(1.4f)) { panel.visibility = GONE; panel.translationY = 0f }
             else { panel.visibility = GONE; panel.translationY = 0f }
@@ -252,7 +261,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     fun openKeyboard() {
-        if (!isOpen || keyboardShowing) return
+        if (!isOpen || keyboardShowing || swoopUp) return
+        if (l.navSwoop(true)) { swoopUp = true; swoopOpenings++; barMode(); return }       // Swoop is the chosen keyboard: it floats over the page, the typing goes through Android's own path (and into Swoop's one memory)
         val f = l.navPageField()              // a text field of the page has focus: the keys go there, from an empty text (the address is not selected)
         pageField = f; fieldIdentity = f?.identity ?: 0; learnedText = null
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label } else addressOpenings++
@@ -268,6 +278,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     fun closeKeyboard() {
+        if (swoopUp) { swoopUp = false; l.navSwoop(false); barMode(); return }
         if (!keyboardShowing) return
         confirmGlide()
         if (pageField != null) learnFromText()     // typed into a page field: there is no Go to wait for
@@ -286,7 +297,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     /** The bar's description says where the keys go. */
     private fun barMode() {
-        bar.contentDescription = if (!keyboardShowing) "Address. Tap to type a new one." else if (pageField != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
+        bar.contentDescription = if (swoopUp) "Typing with the Swoop keyboard. Tap to put it away." else if (!keyboardShowing) "Address. Tap to type a new one." else if (pageField != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
         bar.invalidate()
     }
 
@@ -852,14 +863,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun display(url: String) = url.removePrefix("https://").removePrefix("http://").removePrefix("www.").removeSuffix("/")
 
-        fun tap() { flash(); if (keyboardShowing) closeKeyboard() else openKeyboard() }
+        fun tap() { flash(); if (keyboardShowing || swoopUp) closeKeyboard() else openKeyboard() }
 
         override fun onDraw(c: Canvas) {
             val w = width.toFloat(); val h = height.toFloat(); val r = context.dpf(6f)
             box.set(0f, 0f, w, h)
             box.inset(context.dpf(0.5f), context.dpf(0.5f))
             fill.color = if (lit) (pal.accent and 0x00FFFFFF) or 0x66000000 else 0xFF0A1218.toInt()
-            line.color = if (lit || keyboardShowing) pal.accent else pal.deep
+            line.color = if (lit || keyboardShowing || swoopUp) pal.accent else pal.deep
             c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
             val pad = context.dpf(10f)
             var avail = (w - 2 * pad).coerceAtLeast(1f)
@@ -868,6 +879,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 val tw0 = tag.measureText("page")
                 c.drawText("page", w - pad - tw0, (h - (tag.fontMetrics.ascent + tag.fontMetrics.descent)) / 2f, tag)
                 avail = (avail - tw0 - context.dpf(8f)).coerceAtLeast(1f)
+            }
+            if (swoopUp) { // the keys are Swoop's, over the page: a small tag says so
+                tag.color = pal.accent
+                val tw1 = tag.measureText("Swoop")
+                c.drawText("Swoop", w - pad - tw1, (h - (tag.fontMetrics.ascent + tag.fontMetrics.descent)) / 2f, tag)
+                avail = (avail - tw1 - context.dpf(8f)).coerceAtLeast(1f)
             }
             val raw = shownText()
             val fm = text.fontMetrics
@@ -915,7 +932,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { flash(); isPressed = true }
-                MotionEvent.ACTION_UP -> { isPressed = false; if (inside(e)) { if (keyboardShowing) closeKeyboard() else openKeyboard() } }
+                MotionEvent.ACTION_UP -> { isPressed = false; if (inside(e)) { if (keyboardShowing || swoopUp) closeKeyboard() else openKeyboard() } }
                 MotionEvent.ACTION_CANCEL -> isPressed = false
             }
             return true
@@ -1352,10 +1369,24 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             trailPaint.strokeWidth = context.dpf(2.5f); trailPaint.color = (pal.accentHi and 0x00FFFFFF) or ((240 * alpha).toInt() shl 24); c.drawPath(trail, trailPaint)
         }
 
-        private fun leftTheKey(x: Float, y: Float): Boolean {
-            val b = downBox ?: return false
-            val slop = pitch() * GLIDE_SLOP
-            return x < b.left - slop || x > b.right + slop || y < b.top - slop || y > b.bottom + slop
+        /** Owner, 2026-11-17 (Swoop N5, copied here): a glide starts as soon as the finger has really moved ([GLIDE_START_DP] from where it went down), not only after it left its key. */
+        private fun movedFar(x: Float, y: Float): Boolean {
+            if (gn == 0) return false
+            val dx = x - gx[0]; val dy = y - gy[0]; val s = context.dpf(GLIDE_START_DP)
+            return dx * dx + dy * dy > s * s
+        }
+
+        /**
+         * Owner, 2026-11-17 (Swoop M9, copied here): "always glide unless I am clearly only pressing one key". A touch is a tap only when every point of it stayed on the key it went down on (plus
+         * [TAP_MARGIN_PITCH] of a key width for a thumb that rolls) or the whole path is shorter than [MIN_GLIDE_PITCHES]. Before, a quick swipe to the NEXT key ("as", "it", "no") was shorter than 1.2 pitches,
+         * counted as a tap and typed one letter.
+         */
+        private fun stayedOnKey(k: KeySpec?): Boolean {
+            if (k == null) return true
+            val b = boxOf(k) ?: return pathPitches() < MIN_GLIDE_PITCHES
+            val m = pitch() * TAP_MARGIN_PITCH
+            for (i in 0 until gn) if (gx[i] < b.left - m || gx[i] > b.right + m || gy[i] < b.top - m || gy[i] > b.bottom + m) return pathPitches() < MIN_GLIDE_PITCHES
+            return true
         }
 
         val isGliding: Boolean get() = gliding
@@ -1384,7 +1415,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun endGlide() {
             gliding = false; armed = false
-            if (pathPitches() < MIN_GLIDE_PITCHES) { // a tap that slid a little: the key it went down on
+            if (stayedOnKey(glideDown)) { // a tap that slid a little (the finger never left its own key): the key it went down on
                 val k = glideDown
                 gn = 0; glideDown = null; invalidate()
                 if (k?.key != null) { light(k); onKey?.invoke(k.key!!) }
@@ -1458,7 +1489,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     if (stripDown >= 0) return true
                     if (armed) { // a letter: nothing happens until the finger leaves its key (a glide) or lifts (a tap)
                         addMotion(e)
-                        if (!gliding && leftTheKey(e.x, e.y)) beginGlide()
+                        if (!gliding && movedFar(e.x, e.y)) beginGlide()
                         if (gliding) { invalidate(); maybePreview() }
                         return true
                     }
@@ -1582,10 +1613,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val KEYS_H_DP = 161
         /** The strip of guesses above the keys (glide typing on). */
         const val STRIP_H_DP = 30
-        /** A finger that leaves the key it went down on by this many pitches has started a glide. */
-        const val GLIDE_SLOP = 0.18f
-        /** A path shorter than this (in key pitches) is a tap that slid a little, not a glide. */
-        const val MIN_GLIDE_PITCHES = 1.2f
+        /** A finger that has moved this far (dp) from where it went down has started a glide (Swoop N5). */
+        const val GLIDE_START_DP = 5f
+        /** A path shorter than this (in key pitches) is a tap that slid a little, not a glide (Swoop M9: was 1.2, which made a quick swipe to the next key type one letter). */
+        const val MIN_GLIDE_PITCHES = 0.45f
+        /** A path that never strays further than this (key widths) outside the key it started on is a tap. */
+        const val TAP_MARGIN_PITCH = 0.22f
         const val TRAIL_FADE_MS = 260L
         const val NO_WORD_MS = 1500L
         /** The live guess while gliding: at most this often, and only after this many new touch points. */

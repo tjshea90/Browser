@@ -239,8 +239,23 @@ browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   if (d.statusCode === 304) { rv.c304++; if (rvT !== undefined) rv.ms304 += Math.max(0, Math.round(d.timeStamp - rvT)); }
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
 }), { urls: ['http://*/*', 'https://*/*'] });
-// content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
+// LAB5 (research/LAB5_EXTENSION.md row 1): ONE runtime.onMessage listener for the whole file. Firefox deserialises every message and clones `sender` once per REGISTERED listener, and a page with many frames
+// sends several messages each; the 24 handlers below used to be 24 listeners. They register through onMsg() now; the single listener calls every handler (each begins with its own `m.k` test, so nothing
+// changed for them) and answers with the first value that is not undefined (a Promise, true or an object), exactly what separate listeners gave when only one of them answers a message.
+// A handler that throws must not silence the others (they were separate listeners before): the error is logged and the loop goes on.
+var msgHandlers = [];
+function onMsg(fn) { msgHandlers.push(fn); }
 browser.runtime.onMessage.addListener(function (m, sender) {
+  var out;
+  for (var i = 0; i < msgHandlers.length; i++) {
+    var r;
+    try { r = msgHandlers[i](m, sender); } catch (e) { try { console.error(e); } catch (e2) { /* nothing more to do */ } r = undefined; }
+    if (out === undefined && r !== undefined) out = r;
+  }
+  return out;
+});
+// content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
+onMsg(function (m, sender) {
   if (!m || m.k !== 'jserr' || !sender || !sender.tab) return undefined;
   var L = pageLog.get(sender.tab.id);
   if (!L || L.errs.length >= 12) return undefined;
@@ -317,7 +332,7 @@ function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3
   if (f !== undefined) return Promise.resolve(answer(f, true));
   return askCfg(host).then(function () { var g = cfgFlags.get(host); return answer(g || 0, g !== undefined); });
 }
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m) return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   if (m.k === 'guard') {
@@ -372,7 +387,7 @@ guardState = 'page guard: declared in the manifest (page world, every frame, fro
 var slState = 'scriptlets: starting', slPages = 0, slCalls = 0, slBad = 0, slEarlyPages = 0;
 var slEarlySet = 0, slEarlyAsks = 0, slEarlyFail = '';
 var slFailed = false;      // the library itself could not be registered: nothing below is worth doing
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'sl' || !sender || !sender.tab) return undefined;
   var p = String(m.r || '').split(':'); // "<calls run>:<calls that threw>:<1 = before the page's first script>" (only what is new since the last report of that document)
   slCalls += parseInt(p[0], 10) || 0; slBad += parseInt(p[1], 10) || 0;
@@ -535,7 +550,7 @@ function embedGate(d, page, host) {
   countBlock(page, 3);
   return { redirectUrl: browser.runtime.getURL('embed.html') + '#' + encodeURIComponent(url) };
 }
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'embed-allow') return undefined;
   var u = String(m.u || '');
   // only OUR placeholder page may ask, and only for a web address
@@ -629,7 +644,7 @@ var cssCache = new Map(), cssWait = new Map();
 var CSS_TTL = 60000, CSS_MAX = 200;
 var cssGen = 0; // the app's list generation as of the last page configuration (0 = not loaded yet)
 function noteGeneration(g) { g = g > 0 ? g : 0; if (g !== cssGen) { cssGen = g; cssCache.clear(); slReset(); } }
-browser.runtime.onMessage.addListener(function (m) {
+onMsg(function (m) {
   if (!m || m.k !== 'css' || !m.h) return undefined;
   var key = (m.top ? 't|' : 'f|') + m.h; // the top document and an iframe of the same host get different CSS
   var hit = cssCache.get(key);
@@ -652,7 +667,7 @@ browser.runtime.onMessage.addListener(function (m) {
 
 // AD1b-4: the procedural cosmetic rules of a host (a page whose CSS carries the /*kp*/ marker asks once). Cached like the CSS (60 s) so frames of one host share one question.
 var procCache = new Map(), procWait = new Map();
-browser.runtime.onMessage.addListener(function (m) {
+onMsg(function (m) {
   if (!m || m.k !== 'proc' || !m.h) return undefined;
   var hit = procCache.get(m.h);
   if (hit !== undefined && Date.now() - hit.at < CSS_TTL) return Promise.resolve(hit.text);
@@ -670,7 +685,7 @@ browser.runtime.onMessage.addListener(function (m) {
 
 // D2: the top document of a page whose CSS starts with the marker sends the classes and ids it holds, in small batches, and gets back only the generic selectors that can match them. Not cached
 // (every batch is different); the app answers from an index in memory and the page's own Shields switches decide there.
-browser.runtime.onMessage.addListener(function (m) {
+onMsg(function (m) {
   if (!m || m.k !== 'gen' || !m.h || !m.t || !m.t.length) return undefined;
   var t = m.t.length > 400 ? m.t.slice(0, 400) : m.t;
   return send({ k: 'gen', h: m.h, t: t }).then(function (r) { return (typeof r === 'string') ? r : ''; }, function () { return ''; });
@@ -898,7 +913,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
 }, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
-browser.runtime.onMessage.addListener(function (m) {
+onMsg(function (m) {
   if (!m || m.k !== 'vid' || !m.u) return undefined;
   // RX3-V1: what the element is for (content.js factsOf): small whole numbers, clamped here again because the message comes from a web page's frame
   function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
@@ -912,7 +927,7 @@ browser.runtime.onMessage.addListener(function (m) {
 
 // AY2 (owner message 39): the content script saw a long press on OPEN space; the app shows its navigation panel under the finger. The message names the page the tab is on (a frame never names the page by
 // its own address), nothing else.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'os') return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   var page = (tabId >= 0 && tabTop.get(tabId)) || String(m.p || '');
@@ -922,7 +937,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // RX3-G3: the assist of a player inside a frame. The content script of the PARENT frame decided (from the owner's own press) and names the place inside the iframe and the iframe's address; this relays
 // to that ONE frame of the tab (a unique child of the sender: by address, or the only child), whose own content script plays its video or presses through. Nothing the page says is relayed.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'assist' || !sender || !sender.tab || !(sender.tab.id >= 0)) return undefined;
   var tabId = sender.tab.id, from = sender.frameId | 0, pm = frameParent.get(tabId), fd = frameDoc.get(tabId);
   var x = Math.round(m.x), y = Math.round(m.y);
@@ -940,21 +955,21 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 });
 
 // EY-1: the page's scroll place from the content script (top frame), for the app's saved view of the page. A number and the page address; nothing else.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'scroll' || typeof m.y !== 'number' || !isFinite(m.y) || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   send({ k: 'scroll', y: Math.max(0, Math.round(m.y)), p: String(m.p || '').slice(0, 600) }).catch(function () {});
   return undefined;
 });
 
 // RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (content.js, top frame). The app answers with the place as text, or "" when nothing is armed for that page.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'bk' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   return send({ k: 'bk', p: String(m.p || '').slice(0, 600) }).then(function (r) { return typeof r === 'string' ? r : ''; }, function () { return ''; });
 });
 
 // RX3-Y2 / RX3-G7: the YouTube ad skipper (youtube.js; w 'y') and the one for other players (players.js; w 'p') report NUMBERS: ads seen, skipped, skip buttons pressed, overlays closed, dialogs removed, jumps, give-ups and the last problem in a few words. Never an address.
 // The page of the tab goes along so that the app can drop the report of a private tab.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   skipReports++; markStats();
@@ -966,7 +981,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // YS1: seekbar.js (a tap on a video player's progress bar) reports NUMBERS: taps on a bar, how many the page answered itself, how many the script answered, how many it left alone, taps on a thin wide element inside a player that it did not know (u) with the element's tag and first class name (n: letters, digits and - _ . only), and the last reason in a few words.
 // The page of the tab goes along so that the app can drop the report of a private tab. Never an address.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'sbk' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
@@ -977,7 +992,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 // VC1 / LP1 (owner message 44): a tap or long press that lands inside a FRAME (the ad overlays of Google IMA lie over a player and take every touch) is invisible to the page above it. The frame's script says
 // how big the frame is (it cannot see its own element); the top frame's script looks for a video that a frame of that size lies over (vfind.js covered()) and answers {video: true|false}. Only frames
 // ask (frameId > 0), only the top frame (frameId 0) is asked, sizes are clamped. Nothing about the page leaves the tab.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'ft' || !sender || !sender.tab || !(sender.frameId > 0)) return undefined;
   var w = m.w | 0, h = m.h | 0;
   if (w < 40 || h < 30 || w > 5000 || h > 5000 || !browser.tabs || typeof browser.tabs.sendMessage !== 'function') return Promise.resolve({ video: false });
@@ -989,7 +1004,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 });
 
 // LAB2: a DEBUG build (flag 256 in the guard answer) asks every page for a page-health probe (vfind.js probe()): numbers only, clamped; the page of the tab goes along so that the app drops a private tab's.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'probe' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   function n(v) { v = v | 0; return v > 0 ? Math.min(v, 9999999) : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
@@ -999,7 +1014,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // VP1 (owner message 49): player.js (the frame that has a full-screen film under Kestrel's own controls) tells the film's state (`vst`) and the taps on the picture (`vtap`): numbers only, clamped. The app
 // answers with JSON: what the controls want done (c), whether they are shown (s), on = 0 when the controls are not Kestrel's here; the answer goes back to the frame that asked, so there is no second channel.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || (m.k !== 'vst' && m.k !== 'vtap') || !sender || !sender.tab) return undefined;
   function n(v, lo, hi) { v = +v; return (v >= lo && v <= hi) ? v : lo; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
@@ -1013,7 +1028,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // ANS54e (owner message 54): the page gate asks whether Kestrel's own player takes the film the person pressed (content.js checked the numbers and the address). The app answers {h: 1} when it started its own player; the top
 // page of the tab and the frame the film is in (the document of an embedded player) go along so that the app can pick the stream THAT frame asked for. No answer, or anything else: {h: 0}, the page plays the film itself.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vhand' || !sender || !sender.tab) return undefined;
   function n(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : ''), frame = sender.frameId === 0 ? '' : docOf(sender.url);
@@ -1026,7 +1041,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 });
 
 // FB4: turn.js (top frame only) tells the viewport the engine gave a full-screen page, in device pixels: numbers only, clamped; the app compares it with its view and gives the engine a real size change when they differ.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vpt' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 20000 ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
@@ -1037,7 +1052,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 // VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full); FB2: turn.js reports a
 // turn of the screen (e 'turn', a = played | skipped | none, n = videos). Numbers
 // and a few words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' ? m.e : '';
@@ -1049,7 +1064,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // RX4-M0a: content.js reports how a playing video did since its last look: frames shown, dropped, corrupted, seconds, picture size (numbers only). The top page of the tab goes along so that the app can drop the
 // numbers of a private tab; the address of the video itself never leaves the page.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vq' || !sender || !sender.tab) return undefined;
   function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
@@ -1058,7 +1073,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 });
 
 // RX4-M0e: content.js (top frame, only while the Settings switch "Measure scrolling on real pages" is on, flag 32) reports one scroll burst as numbers: frames, gaps over 50 ms, gaps over 100 ms, the longest gap.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'sg' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
@@ -1067,7 +1082,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 });
 
 // RX3-BK1: what kind of show a Back / Forward was (content.js, top frame): kept by the engine or loaded again, what the page's file cost, where the page was. Numbers and the address; nothing else.
-browser.runtime.onMessage.addListener(function (m, sender) {
+onMsg(function (m, sender) {
   if (!m || m.k !== 'bf' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   send({ k: 'bf', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, nt: String(m.nt || '').slice(0, 20), ts: Math.max(0, m.ts | 0), y: Math.max(0, Math.round(m.y) || 0) }).catch(function () {});
   return undefined;
@@ -1075,7 +1090,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 
 // EX-15: the page's content script names an origin the owner is likely to open next (a link the finger touches, a top search result); the app decides (switch, private tab, Data saver, rate) and opens
 // the connection through the engine. Nothing is fetched here. The message names the page so the app can tell a private tab from a normal one.
-browser.runtime.onMessage.addListener(function (m) {
+onMsg(function (m) {
   if (!m || m.k !== 'warm' || typeof m.o !== 'string' || m.o.indexOf('https://') !== 0) return undefined;
   send({ k: 'warm', o: m.o.slice(0, 300), p: String(m.p || '').slice(0, 600), w: m.w === 'result' ? 'result' : 'touch' }).catch(function () {});
   return undefined;

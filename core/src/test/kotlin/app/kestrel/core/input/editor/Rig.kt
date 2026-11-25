@@ -5,18 +5,26 @@ import org.junit.Assert.assertTrue
 
 /** A controller wired to a [FakeEditor], with the checks every test shares. [sync] delivers every queued selection report. */
 class Rig(text: String = "", sel: Int = text.length, multiline: Boolean = true,
-          kind: FieldKind = FieldKind.TEXT, action: Int = ImeActions.UNSPECIFIED, noEnter: Boolean = false, noSuggestions: Boolean = false, noLearn: Boolean = false, caps: Int = 0) {
+          kind: FieldKind = FieldKind.TEXT, action: Int = ImeActions.UNSPECIFIED, noEnter: Boolean = false, noSuggestions: Boolean = false, noLearn: Boolean = false, caps: Int = 0,
+          /** The editor reports INSIDE each call (an editor in the keyboard's own process on Android 10): see [FakeEditor.inlineSink]. */
+          inlineReports: Boolean = false) {
     val ed = FakeEditor(text, sel, multiline)
     val c = InputController(ed)
     var foreign = 0; private set        // selection reports the controller judged NOT to be its own
     var firstForeignInfo: String? = null; private set
 
-    init { c.startInput(FieldInfo(kind, action, noEnter, noLearn, noSuggestions, caps, sel, sel)) }
+    init {
+        c.startInput(FieldInfo(kind, action, noEnter, noLearn, noSuggestions, caps, sel, sel))
+        if (inlineReports) ed.inlineSink = { u -> deliver(u) }
+    }
 
-    fun deliverOne(): Boolean {
-        val u = ed.updates.removeFirstOrNull() ?: return false
+    private fun deliver(u: IntArray) {
         val believed = "${c.selStart}-${c.selEnd}"; val queued = ed.updates.size
         if (!c.onSelectionUpdate(u[0], u[1], u[2], u[3])) { foreign++; if (firstForeignInfo == null) firstForeignInfo = "report sel ${u[0]}-${u[1]} comp ${u[2]}-${u[3]} but the keyboard believed $believed (queued behind it: $queued; composing='${c.composing}'; expected [${c.pendingForTest()}])" }
+    }
+    fun deliverOne(): Boolean {
+        val u = ed.updates.removeFirstOrNull() ?: return false
+        deliver(u)
         return true
     }
     fun sync() { while (deliverOne()) { } }
