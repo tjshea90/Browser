@@ -5,6 +5,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.exoplayer.ExoPlayer
 import app.kestrel.core.media.QualityLabel
+import app.kestrel.core.media.SiblingQualities
 
 /**
  * ANS53d / ANS60c (owner messages 53 and 60: "put the video quality controls in the regular player size when it is not in full screen. Right now I can only select quality in full screen"): the quality list of
@@ -18,7 +19,13 @@ class PlayerQuality(
     private val remembered: () -> Int,
     private val remember: (Int) -> Unit,
     private val say: (String, String) -> Unit,
+    /** PERF5b: plays another list of the same film (the screen swaps the source and keeps the position and the play state). */
+    private val switchTo: ((SiblingQualities.Alt) -> Unit)? = null,
 ) {
+    /** PERF5b (owner 2026-11-22: "with the kestrel player running it there is no video quality selection at all"): the other qualities of this film when the site gives ONE single-picture list per quality (pornhub); empty otherwise. */
+    var alts: List<SiblingQualities.Alt> = emptyList(); private set
+    /** The address of the list that plays now (changes at a switch). */
+    var currentUrl = ""; private set
     /** The picture the person picked (null = Automatic). */
     var chosen: QualityLabel.Rung? = null; private set
     /** The tallest picture Automatic may choose (both sides at most 16:9 of it: see [PlayerFactory.applyCap]). */
@@ -46,6 +53,34 @@ class PlayerQuality(
     }
 
     /**
+     * PERF5b: tells the player the other qualities of the film ([list], made by [SiblingQualities.alternates]; fewer than two = none) and that [url] is the one asked for. Call after [begin]. Returns the list to START with
+     * when it is not [url] (the biggest quality that fits the size cap: 720p in the full-screen screen, 480p in a small box, or what the person picked last time), else null.
+     */
+    fun setAlts(list: List<SiblingQualities.Alt>, url: String): SiblingQualities.Alt? {
+        currentUrl = url
+        alts = if (list.size >= 2) list else emptyList()
+        if (alts.isEmpty()) return null
+        val first = SiblingQualities.startFor(alts, capH)
+        say("siblings", "${alts.size} qualities of this film: ${alts.joinToString(" | ") { "${QualityLabel.pClass(it.w, it.h)}p" }}; start with ${first?.let { "${QualityLabel.pClass(it.w, it.h)}p" } ?: "the page's own"} (cap ${capH}p)")
+        if (first == null || first.url == url) return null
+        currentUrl = first.url
+        return first
+    }
+
+    /**
+     * PERF8a (owner 2026-11-22: "there are no quality controls in full screen"): the film's other lists became known AFTER the player started (a film handed over a moment after a press, before the finder had read the
+     * other lists). Takes them in when they are lists of THIS film (the one that plays is among them). true = there is a choice now (the quality button shows).
+     */
+    fun updateAlts(list: List<SiblingQualities.Alt>): Boolean {
+        if (list.size < 2) return alts.size >= 2
+        if (alts.size >= list.size) return true                                               // (nothing new: the lists it has are as many)
+        if (currentUrl.isNotEmpty() && list.none { it.url == currentUrl }) return alts.size >= 2   // another film
+        alts = list
+        say("siblings", "${alts.size} qualities of this film (found after the start): ${alts.joinToString(" | ") { "${QualityLabel.pClass(it.w, it.h)}p" }}; playing ${alts.firstOrNull { it.url == currentUrl }?.let { "${QualityLabel.pClass(it.w, it.h)}p" } ?: "the page's own"}")
+        return true
+    }
+
+    /**
      * The stream said what it offers: the pictures, biggest first. true = there is more than one to choose from (a plain file offers one: nothing to choose, no button). A picture the page's list asked for is
      * applied here, the moment the stream offers it.
      */
@@ -66,11 +101,12 @@ class PlayerQuality(
             if (idx >= 0) { wanted = null; applyRung(p, rowsNow[idx].first, rowsNow[idx].second); say("pick-applied", "the page's pick ${QualityLabel.text(w)} -> ${QualityLabel.text(rowsNow[idx].first)}") }
         }
         say("tracks", "$distinct picture(s) on offer: ${QualityLabel.rows(rowsNow.map { it.first }).joinToString(" | ") { QualityLabel.text(it) }}")
-        return distinct >= 2
+        return distinct >= 2 || alts.size >= 2            // PERF5b: several lists of the film are a choice too
     }
 
     /** The rows of the list: Automatic first, then every picture the stream offers (one row per distinct text), a picture this tablet cannot play smoothly greyed out. */
     fun rows(p: ExoPlayer): List<QualitySheet.Row> {
+        if (alts.size >= 2 && QualityLabel.rows(rowsNow.map { it.first }).size < 2) return altRows()          // PERF5b: the choice is between lists, not between pictures of one list
         val rows = ArrayList<QualitySheet.Row>()
         val nowFmt = p.videoFormat
         val now = QualityLabel.now(if (nowFmt != null) QualityLabel.Rung(nowFmt.width, nowFmt.height, nowFmt.frameRate, 0L) else null)
@@ -85,8 +121,34 @@ class PlayerQuality(
         return rows
     }
 
+    /** PERF5b: Automatic, then one row per quality of the film (biggest first); the one that plays is marked. */
+    private fun altRows(): List<QualitySheet.Row> {
+        val rows = ArrayList<QualitySheet.Row>()
+        val now = alts.firstOrNull { it.url == currentUrl }
+        rows.add(QualitySheet.Row("Automatic", if (chosen == null && now != null) "now ${QualityLabel.pClass(now.w, now.h)}p" else "the player picks, at most ${capH}p", chosen == null, true, null))
+        for (a in alts) rows.add(QualitySheet.Row("${QualityLabel.pClass(a.w, a.h)}p", "", chosen != null && a.url == currentUrl, true, a))
+        return rows
+    }
+
+    /** PERF5b: play [a] (the person's pick, or Automatic's choice): the screen swaps the source at the same second. */
+    private fun switchAlt(a: SiblingQualities.Alt) {
+        if (a.url == currentUrl) return
+        currentUrl = a.url
+        try { switchTo?.invoke(a); say("quality-switch", "${QualityLabel.pClass(a.w, a.h)}p, another list of the same film") } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }
+    }
+
     /** The person picked [row]: that picture for this film (a track override) and its size class as the cap, remembered for the next films; Automatic lifts the override. */
     fun pick(p: ExoPlayer, row: QualitySheet.Row) {
+        val alt = row.tag as? SiblingQualities.Alt
+        if (alt != null) {                                                       // PERF5b: another list of the film
+            val cls = QualityLabel.pClass(alt.w, alt.h)
+            chosen = QualityLabel.Rung(alt.w, alt.h, 0f, 0L); remember(cls); capH = cls
+            PlayerFactory.applyCap(p, capH)
+            if (!priv) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = "${cls}p" }
+            say("quality", "${cls}p (another list of the same film)")
+            switchAlt(alt)
+            return
+        }
         val rung = row.tag as? QualityLabel.Rung
         try {
             val b = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
@@ -101,6 +163,7 @@ class PlayerQuality(
             }
             p.trackSelectionParameters = b.build()
             PlayerFactory.applyCap(p, capH)
+            if (rung == null && alts.size >= 2) SiblingQualities.startFor(alts, capH)?.let { switchAlt(it) }      // PERF5b: Automatic = the biggest list that fits the cap
             if (!priv) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = if (rung == null) "Automatic" else QualityLabel.text(rung) }
             say("quality", if (rung == null) "Automatic" else row.title)
         } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }

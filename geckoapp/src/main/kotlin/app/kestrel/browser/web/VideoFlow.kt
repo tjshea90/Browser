@@ -136,7 +136,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (t.loading && tries < 6) { Io.main.postDelayed({ lookNow(t, tries + 1) }, 2_000); return }
         lookPending.remove(t.id)
         if (t.isNewTab || t.loading) return
-        for (c in t.media.streamsToLook(3)) {
+        for (c in t.media.streamsToLook(LOOKS_PER_PAGE)) {       // PERF8a: a film that comes as one list per quality (pornhub: four) has all its lists read at once, so the quality choices are known
             val n = looks[t.id] ?: 0
             if (n >= LOOKS_PER_PAGE) break
             if ((c.kind != MediaKind.HLS && c.kind != MediaKind.DASH) || !lookedKeys.add(c.key)) continue
@@ -174,6 +174,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
         if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
         if (!drm && durationMs >= WebHandOver.FILM_MS) lateHandOver(t, c)       // ANS54e: a film-length stream the sniffer saw right after a press that was refused for want of one
+        offerSiblings(t)                                                       // PERF8a: the other qualities of the film Kestrel's player plays, if it only now knows them
         Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size} playing=${t.media.primary()?.let { (it.durationMs / 1000).toString() + "s" } ?: "none"}")
     }
 
@@ -341,7 +342,7 @@ class VideoFlow(private val a: BrowserActivity) {
         try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may not have a media session (it is silent): then nothing is playing sound */ }
         a.sheet.dismiss()
         if (!tab.isPrivateTab) Health.log("video", "native-play", "${if (target.cand?.kind == MediaKind.HLS) "HLS" else "file"} cap ${target.maxH}")
-        NativePlayerActivity.launch(a, target.url, headers, 0L, target.maxH, tab.isPrivateTab, target.w, target.h)
+        NativePlayerActivity.launch(a, target.url, headers, 0L, target.maxH, tab.isPrivateTab, target.w, target.h, alts = if (target.cand?.kind == MediaKind.HLS) siblingsOf(tab, target.url) else emptyList())
     }
 
     // ---- ANS53d.2 (owner message 53: "put a setting for video quality in the player controls for as many videos as possible"; research/ANS53_DESIGN.md): the quality list of a film that plays in the PAGE. The page's own
@@ -383,6 +384,37 @@ class VideoFlow(private val a: BrowserActivity) {
             // ANS55: a MASTER list is the film (the early look read it as one; before that the address may say master), a bare list is one rendition (the picture, the sound, the subtitles: Brightcove / Yahoo)
             WebHandOver.Known(it.url, it.kind, it.durationMs, !it.drm && !it.decoy, it.master || (!it.looked && WebHandOver.looksLikeMaster(it.url)), it.lastSeenAt)
         }
+
+    /**
+     * PERF5b (owner 2026-11-22: "with the kestrel player running it there is no video quality selection at all"): the other qualities of the film [url] when the site gives ONE single-picture list per quality (pornhub: the
+     * page switches quality by loading another list). The finder's own lists of this page that are the SAME film (same length, one picture each, other sizes: core SiblingQualities); empty when there is nothing to choose.
+     */
+    private fun siblingsOf(tab: Tab, url: String): List<app.kestrel.core.media.SiblingQualities.Alt> {
+        val all = tab.media.usable().filter { it.kind == MediaKind.HLS && !it.drm && !it.decoy && it.url !in children }.mapNotNull { c ->
+            val r = masterRungs[c.key] ?: return@mapNotNull null
+            app.kestrel.core.media.SiblingQualities.Known(c.url, c.durationMs, r.map { it.w to it.h }.filter { it.first > 0 && it.second > 0 }.distinct(), c.lastSeenAt)
+        }
+        val chosen = all.firstOrNull { it.url == url } ?: return emptyList()
+        return app.kestrel.core.media.SiblingQualities.alternates(chosen, all)
+    }
+
+    /**
+     * PERF8a (owner 2026-11-22: "there are no quality controls in full screen"): a film that was handed over a moment after a press starts before the finder has read the other lists of the film, so the player came up with
+     * no quality choice. When a list has been read, the player that is up (full screen or inside the page, of THIS tab) is given the film's lists, and its quality button shows. UI thread.
+     */
+    private fun offerSiblings(tab: Tab) {
+        if (tab !== a.current) return
+        val full = NativePlayerActivity.live?.get()
+        val u1 = full?.currentFilmUrl().orEmpty()
+        if (full != null && u1.isNotEmpty()) { val l = siblingsOf(tab, u1); if (l.size >= 2) full.offerAlts(l) }
+        if (a.inline.active && a.inline.tabOrNull === tab && a.inline.url.isNotEmpty()) { val l = siblingsOf(tab, a.inline.url); if (l.size >= 2) a.inline.view.offerAlts(l) }
+    }
+
+    /** PERF8a: the person pressed play and the film was not known yet: read the playlists the finder has found NOW (it waits 3 s after a find to see the page settle), so the film moves to Kestrel's player about two seconds sooner. */
+    private fun lookAsap(tab: Tab) { Io.main.post { if (a.current === tab) { lookPending.remove(tab.id); lookNow(tab, 6) } } }
+
+    /** PERF5b: the address the last film played under, for [u]: any quality of the film that played counts as it (so "press play again" continues where the person stopped whichever quality the page asks for now). */
+    private fun lastFor(u: String): String = if (u in NativePlayerActivity.lastAlts) u else NativePlayerActivity.lastUrl
 
     /** The page's gate asks whether Kestrel's own player takes the film the person pressed: true = it has been started (or is up already), the page keeps its element closed. */
     fun handOver(m: JSONObject): Boolean {
@@ -427,7 +459,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val adWhy = when {
             d == null -> null
             tab.media.find(d.url)?.decoy == true -> "the finder marked this file as an advertisement or decoration"
-            !tab.isPrivateTab && WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+            !tab.isPrivateTab && WebHandOver.playedThrough(d.url, lastFor(d.url), NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
                 if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt) -> "Kestrel's player played this clip to its end a moment ago (an advertisement the page has to see finished)"
             else -> null
         }
@@ -436,15 +468,17 @@ class VideoFlow(private val a: BrowserActivity) {
         if (d == null) {
             // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
             if (why != WebHandOver.Why.LATE) lastRefused = if (WebHandOver.keepForLate(el, why, mode) && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
+            if (why != WebHandOver.Why.LATE && WebHandOver.keepForLate(el, why, mode)) lookAsap(tab)                       // PERF8a
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.ad) "an advertisement plays in the page's player" else if (WebHandOver.looksLikeAdAddress(el.src)) "the address names an advertisement" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
         if (a.inline.active && a.inline.url == d.url) { if (!tab.isPrivateTab) WebHandStats.repeats++; a.lastPressAt = 0L; return true }   // ANS55f: the same film is up inside the page already
         val seed = tab.media.find(d.url) ?: MediaCandidate(d.url, d.kind, "", -1, tab.url, frame, System.currentTimeMillis())
+        val alts = if (d.kind == MediaKind.HLS) siblingsOf(tab, d.url) else emptyList()          // PERF5b: the film's other qualities (one list each) for the quality button of Kestrel's player
         val headers = MediaHeaders.sets(seed, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
         try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may have no media session */ }
         // pressed again on the same page (Back from Kestrel's player, play once more): it continues where the person stopped, not from the page's own start (RAM only, never for a private tab)
-        val startMs = if (tab.isPrivateTab) d.startMs else WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+        val startMs = if (tab.isPrivateTab) d.startMs else WebHandOver.resumeMs(d.startMs, d.url, lastFor(d.url), NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
             if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt)
         if (!tab.isPrivateTab) {
             when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }
@@ -456,10 +490,10 @@ class VideoFlow(private val a: BrowserActivity) {
         if (a.prefs.webInline && geometry == null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !tab.isPrivateTab) Health.log("inline", "not-inline", "the page told no box (a film in a frame, or the question carried no numbers): full-screen player")
         if (a.prefs.webInline && geometry != null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !a.isFullscreenOf(tab)) {
             val box = a.inline.boxFor(geometry)
-            if (box != null && a.inline.start(tab, d.url, headers, startMs, geometry, box)) { a.lastPressAt = 0L; return true }
+            if (box != null && a.inline.start(tab, d.url, headers, startMs, geometry, box, alts)) { a.lastPressAt = 0L; return true }
             if (!tab.isPrivateTab) Health.log("inline", "not-inline", if (box == null) "the box cannot be placed (frame, fixed or scrolling box, zoomed page, small or off screen): full-screen player; page box ${geometry.w.toInt()}x${geometry.h.toInt()} at ${geometry.x.toInt()},${geometry.y.toInt()}, visual viewport scale ${"%.3f".format(geometry.vvScale)} width ${geometry.vvW.toInt()}, scroll ${geometry.pageX.toInt()},${geometry.pageY.toInt()}, follows ${geometry.follows}, view ${a.inline.viewSize()}" else "the inline player did not start: full-screen player")
         }
-        NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
+        NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true, alts = alts)
         a.lastPressAt = 0L
         if (a.isFullscreenOf(tab)) a.exitFullscreenFromControls()                  // a film that was full screen in the page: the page's full screen ends, Kestrel's player takes the screen
         return true

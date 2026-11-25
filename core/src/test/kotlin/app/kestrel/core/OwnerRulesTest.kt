@@ -492,7 +492,7 @@ class OwnerRulesTest {
         assertTrue("the pictures come from the film's master playlist and a pick starts Kestrel's own player at the page's second with that picture", flow.contains("PageQuality.rungs(master.variants)") && flow.contains("fun pageFilm(tab: Tab): PageFilm?") && flow.contains("NativePlayerActivity.launch(a, c.url, headers, startMs, 720, tab.isPrivateTab, tab.gecko.pictureW, tab.gecko.pictureH, rung, rung == null)"))
         assertTrue("the controls draw the button only while the film offers a choice, and tell the activity where the film is", ctl.contains("view.showQuality = qualityAvailable()") && ctl.contains("override fun onQuality()") && ctl.contains("qualityPressed(v.timeS, v.lengthS)"))
         assertTrue("the activity opens the list over the controls, closes it first on Back, and a tap on the sheet is not a tap on the picture", act.contains("qualitySheet.show(\"Quality\"") && act.contains("if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }") && ctl.contains("fun controlAt(wx: Float, wy: Float): Boolean = sheetOpen() ||"))
-        assertTrue("a pick from the page's list wins over the remembered cap and is matched against what the stream really offers", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt").let { it.contains("pick != null -> QualityLabel.pClass(pick.w, pick.h)") && it.contains("QualityLabel.nearest(w, rowsNow.map { it.first })") } && np.contains("fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false)"))
+        assertTrue("a pick from the page's list wins over the remembered cap and is matched against what the stream really offers", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt").let { it.contains("pick != null -> QualityLabel.pClass(pick.w, pick.h)") && it.contains("QualityLabel.nearest(w, rowsNow.map { it.first })") } && np.contains("fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false, alts: List<SiblingQualities.Alt> = emptyList())"))
     }
 
     // ANS55f (owner message 55: "Can the player be inside the website so the video plays but I still see the website around it?"): Kestrel's own player over the page's own video box (research/ANS55_INLINE_PLAYER.md)
@@ -643,7 +643,7 @@ class OwnerRulesTest {
         assertTrue("the film of a frame is a MASTER list (the newest film-length one); a bare list only when it is the only one and never a late one", coreHand.contains("internal fun filmOf(known: List<Known>, why: Why)") && coreHand.contains("val masters = hls.filter { it.master }") && coreHand.contains("maxWithOrNull(compareBy<Known>({ it.seenAt }") && coreHand.contains("hls.size == 1 && why != Why.LATE"))
         assertTrue("the app tells the rules which lists are masters (read as one, or named master before it is read) and when the page asked last", flow.contains("it.master || (!it.looked && WebHandOver.looksLikeMaster(it.url)), it.lastSeenAt") && flow.contains("c.master = true") && flow.contains("if (why != WebHandOver.Why.LATE) lastRefused"))
         assertTrue("a film that plays 7 s with no first picture goes back to the page", np.contains("now - playingSince > 7_000L") && np.contains("fail(\"no picture:"))
-        assertTrue("a film pressed again continues where Kestrel's player stopped (RAM only, never for a private tab)", flow.contains("WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl") && flow.contains("if (tab.isPrivateTab) d.startMs") && np.contains("if (priv) lastUrl = \"\" else { lastUrl = shownUrl"))
+        assertTrue("a film pressed again continues where Kestrel's player stopped (RAM only, never for a private tab)", flow.contains("WebHandOver.resumeMs(d.startMs, d.url, lastFor(d.url)") && flow.contains("if (tab.isPrivateTab) d.startMs") && np.contains("if (priv) { lastUrl = \"\"; lastAlts = emptyList() } else { lastUrl = shownUrl"))
     }
 
     /** ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): no advertisement goes to Kestrel's player, and a clip it played to its end is not handed over a second time. */
@@ -653,7 +653,7 @@ class OwnerRulesTest {
         assertTrue("the gate tells the app when the page's player is in an ad state (class names only) and the question carries it as `a`", gate.contains("function adNow(el)") && gate.contains("'jw-flag-ads'") && gate.contains("'vjs-ad-playing'") && gate.contains("'ima-ad-container'") && gate.contains("a: adNow(el) ? 1 : 0"))
         assertTrue("content.js and background.js pass the bit on as 0 or 1 only", content.contains("a: q.a === 1 ? 1 : 0") && bg.contains("a: m.a === 1 ? 1 : 0"))
         val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
-        assertTrue("the app reads the bit into the element, asks the finder about the file, and breaks the loop with the clip Kestrel's player played to its end", flow.contains("m.optInt(\"a\") == 1)") && flow.contains("tab.media.find(d.url)?.decoy == true") && flow.contains("WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl"))
+        assertTrue("the app reads the bit into the element, asks the finder about the file, and breaks the loop with the clip Kestrel's player played to its end", flow.contains("m.optInt(\"a\") == 1)") && flow.contains("tab.media.find(d.url)?.decoy == true") && flow.contains("WebHandOver.playedThrough(d.url, lastFor(d.url)"))
         val core = source("core/src/main/kotlin/app/kestrel/core/media/WebHandOver.kt")
         assertTrue("the pure rule: an ad state or an ad address is never handed over (the long film of the frame is, when known), a short list under an ad state is the ad", core.contains("val adLike = el.ad || looksLikeAdAddress(direct.url)") && core.contains("adLike -> null") && core.contains("if (el.ad && !filmLong) null"))
     }
@@ -678,6 +678,53 @@ class OwnerRulesTest {
         assertEquals("the background script registers ONE runtime.onMessage listener (the browser clones every message once per registered listener)", 1, Regex("browser\\.runtime\\.onMessage\\.addListener\\(").findAll(bg).count())
         val storage = source("app/src/main/kotlin/app/kestrel/browser/diag/StorageInfo.kt")
         assertTrue("the cold-start cache purge does not walk cache2/entries (10-40k files)", storage.contains("d.name == \"entries\" && d.parentFile?.name == \"cache2\""))
+    }
+
+    /** PERF5b (owner 2026-11-22: "with the kestrel player running it there is no video quality selection at all"): a site that gives one list per quality (pornhub) gets a quality list in Kestrel's player, in both screens. */
+    @Test fun perf5bKestrelsPlayerOffersTheOtherQualitiesOfTheSameFilm() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("the hand-over, the inline player and the sheet's play all pass the film's other lists", flow.contains("private fun siblingsOf(tab: Tab, url: String)") && flow.contains("a.inline.start(tab, d.url, headers, startMs, geometry, box, alts)") && flow.contains("fromPage = true, alts = alts)") && flow.contains("siblingsOf(tab, target.url)"))
+        val pq = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt")
+        assertTrue("the quality button shows for several lists, the rows are Automatic + one per quality, a pick swaps the list", pq.contains("return distinct >= 2 || alts.size >= 2") && pq.contains("private fun altRows()") && pq.contains("switchTo?.invoke(a)") && pq.contains("SiblingQualities.startFor(alts, capH)"))
+        assertTrue("the full-screen screen and the player inside the page start with the quality that fits the cap and swap the source at the same second", source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("quality.setAlts(alts, url)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("q.setAlts(alts, url)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt").contains("val newSource: (String) -> MediaSource"))
+        assertTrue("the lines of the qualities are written only for a person's own tab (PlayerQuality.say is silent for a private tab)", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("private fun say(event: String, text: String) { if (!priv) Health.log"))
+    }
+
+    /** PERF8 (owner 2026-11-22, after alpha92): the quality list reaches a player that started before the film's other lists were known, a declined press reads the playlists at once, a stuck circle of a paused video is calmed and reported, and the graphics prefs are logged. */
+    @Test fun perf8LateQualityListCalmedCircleAndGraphicsPrefLine() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("the finder offers the film's lists to the player that is up, after every look, for this tab only", flow.contains("private fun offerSiblings(tab: Tab)") && flow.contains("offerSiblings(t)") && flow.contains("if (tab !== a.current) return") && flow.contains("full.offerAlts(l)") && flow.contains("a.inline.view.offerAlts(l)"))
+        assertTrue("a declined press that waits for its film reads the playlists now, and a pass reads up to six", flow.contains("lookAsap(tab)") && flow.contains("streamsToLook(LOOKS_PER_PAGE)"))
+        val pq = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt")
+        assertTrue("lists found late are taken in only when the one that plays is among them (the same film)", pq.contains("fun updateAlts(list: List<SiblingQualities.Alt>): Boolean") && pq.contains("list.none { it.url == currentUrl }"))
+        assertTrue("both players have offerAlts and the full-screen screen keeps a weak reference to itself", source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("fun offerAlts(list: List<SiblingQualities.Alt>)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt").contains("live = java.lang.ref.WeakReference(this)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt").contains("fun offerAlts("))
+        val manifest = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        assertTrue("calm.js runs in every frame at document_idle with the same exclusions as the other page scripts", manifest.contains("\"calm.js\"") && manifest.substringAfter("\"calm.js\"").substringBefore("}").contains("\"document_idle\""))
+        val calm = source("geckoapp/src/main/assets/kestrel-shields/calm.js")
+        assertTrue("it only touches a PAUSED, never played video of 240x135 or more without controls, and only an infinite animation, and it is taken off when the video plays", calm.contains("!v.paused || v.ended || v.controls || v.currentTime > 1") && calm.contains("r.width < 240 || r.height < 135") && calm.contains("ct.iterations !== Infinity") && calm.contains("document.addEventListener('playing', function () { uncalm(); }, true)"))
+        assertTrue("its report is ASCII, cut to 160, only with code 98, logged by the app for a person's own tab only", source("geckoapp/src/main/assets/kestrel-shields/background.js").contains("+m.c === 98 ? String(m.x || '').replace(") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("if (code == 98) { Health.log(\"video\", \"calm\"") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("if (tab.isPrivateTab || app.kestrel.core.livediag.SensitiveSites.isSensitive(host)) return@post"))
+        assertTrue("the engine's graphics prefs are logged once after the start", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("fun logDrawPrefs()") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("GeckoEngine.logDrawPrefs()"))
+    }
+
+    /** PERF9 (owner 2026-11-22: "I pressed play again and it did the loading animation for about 1 second then stopped and it never played"): a tap that hits no control of a held script player asks Kestrel's player first, and the calm mark is labelled as a play button. */
+    @Test fun perf9ATapOnAHeldScriptPlayersPictureAsksFirstAndTheCalmMarkIsAPlayButton() {
+        val gate = source("geckoapp/src/main/assets/kestrel-shields/gate-main.js")
+        assertTrue("a tap on a held script player (a MediaSource or no source, not a loop, not on a control) asks the app first", gate.contains("else if (hand && !el.controls && el.paused && !el.loop && (rec(el).hasSrc || !(el.currentSrc || el.src)) && !interactive(target, el)) {") && gate.contains("function interactive(t, el)"))
+        val calm = source("geckoapp/src/main/assets/kestrel-shields/calm.js")
+        assertTrue("the mark says Play video and is a button, and what the page had is put back", calm.contains("t.setAttribute('aria-label', 'Play video'); t.setAttribute('role', 'button');") && calm.contains("if (c.label === null) c.el.removeAttribute('aria-label')"))
+        assertTrue("the new gate test has its own file (handover.test.js is near the 60 s limit)", java.io.File("../web-tests/handover2.test.js").exists() || java.io.File("web-tests/handover2.test.js").exists())
+    }
+
+    /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
+    @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
+        assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false"))
+            assertTrue("drawLines writes $name", gp.contains(name))
+        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (!p.labDraw) \"\""))
+        assertTrue("the person can switch it off in Settings", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
+        assertTrue("it is part of a backup", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
+        assertTrue("the pref check reads the names GeckoPrefs.kt writes", source("tools/check-gecko-prefs.sh").contains("GeckoPrefs.kt"))
     }
 
     /** LAB7 (owner: "If there is a way to make the install and updates take even longer, but the browser run faster, do it."): Android compiles an app at install only the methods its profile marks HOT. */

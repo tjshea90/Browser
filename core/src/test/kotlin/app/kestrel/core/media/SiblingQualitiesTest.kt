@@ -32,6 +32,17 @@ class SiblingQualitiesTest {
         assertEquals("an unknown length is never matched", 0, SiblingQualities.alternates(k("https://c.example/u.m3u8", 0, 1280 to 720), listOf(k("https://c.example/v.m3u8", 0, 640 to 360))).size)
     }
 
+    @Test fun theStartingQualityIsTheBiggestThatFitsTheSmoothSizeElseTheSmallest() {
+        val alts = listOf(SiblingQualities.Alt("u1080", 1920, 1080), SiblingQualities.Alt("u720", 1280, 720), SiblingQualities.Alt("u480", 854, 480), SiblingQualities.Alt("u240", 426, 240))
+        assertEquals("the full-screen screen starts at 720p", "u720", SiblingQualities.startFor(alts, 720)?.url)
+        assertEquals("a small box starts at 480p", "u480", SiblingQualities.startFor(alts, 480)?.url)
+        assertEquals("a remembered pick of 1080p is honoured", "u1080", SiblingQualities.startFor(alts, 1080)?.url)
+        assertEquals("nothing fits: the smallest", "u240", SiblingQualities.startFor(alts.filter { it.h >= 480 }.map { SiblingQualities.Alt(it.url, it.w, it.h) } + SiblingQualities.Alt("u240", 426, 240), 100)?.url)
+        assertEquals("a portrait picture is judged by its shorter side", "p", SiblingQualities.startFor(listOf(SiblingQualities.Alt("p", 720, 1280), SiblingQualities.Alt("q", 1080, 1920)), 720)?.url)
+        assertEquals("one list or none: nothing to choose", null, SiblingQualities.startFor(alts.take(1), 720))
+        assertEquals(null, SiblingQualities.startFor(emptyList(), 720))
+    }
+
     @Test fun theLinesRoundTripAndAHostileLineIsDropped() {
         val alts = listOf(SiblingQualities.Alt("https://c.example/a.m3u8?x=1|2", 1280, 720), SiblingQualities.Alt("https://c.example/b.m3u8", 426, 240))
         val back = SiblingQualities.decode(SiblingQualities.encode(alts))

@@ -27,7 +27,8 @@ import app.kestrel.browser.Flavor
  */
 object PlayerFactory {
     /** [settled]: set by the caller at the first picture; from then on a failed load is retried longer (RVW3 PB1, [RetryAfterPicture]). */
-    class Built(val player: ExoPlayer, val source: MediaSource, val settled: AtomicBoolean = AtomicBoolean(false))
+    class Built(val player: ExoPlayer, val source: MediaSource, val settled: AtomicBoolean = AtomicBoolean(false), val newSource: (String) -> MediaSource = { source })
+    // (PERF5b: [newSource] builds the source of ANOTHER address of the same film, with the same request headers, load policy and settings, for a switch of quality)
 
     /**
      * RVW3 PB1: Media3 tries a failed load three times (waits of 0, 1 and 2 s) and then raises a fatal error: a 15-second dropout on the carrier hotspot ended the film in about three seconds. Once a picture has
@@ -51,11 +52,14 @@ object PlayerFactory {
         // RVW3 SC1: HTTP(S) only. DefaultDataSource.Factory would also open file:, content:, asset: and rawresource: addresses, and a playlist the PAGE serves can name any of them as a segment or a key (the cross-protocol
         // redirect above stays: some CDNs send https to http on purpose and a film is not secret; the host of the FIRST address is checked before the player starts, WebHandOver.hostRefused)
         val data: DataSource.Factory = http
-        val item = MediaItem.fromUri(url)
         val settled = AtomicBoolean(false)
         val policy = RetryAfterPicture(settled)
-        val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
-            else ProgressiveMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
+        val sourceOf = { u: String ->
+            val item = MediaItem.fromUri(u)
+            if (isHls(u)) HlsMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item) as MediaSource
+            else ProgressiveMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item) as MediaSource
+        }
+        val source: MediaSource = sourceOf(url)
         // hardware decoders first (a software one only when nothing else decodes the format); no extension decoders (software FFmpeg / AV1 on four A53 cores is not a plan)
         val selector = MediaCodecSelector { mime, secure, tunneling -> MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.hardwareAccelerated && !it.softwareOnly) 0 else 1 } }
         val renderers = DefaultRenderersFactory(ctx).setEnableDecoderFallback(true).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF).setMediaCodecSelector(selector)
@@ -68,7 +72,7 @@ object PlayerFactory {
         val meter = bandwidthMeter(ctx)
         // WAKE_MODE_NETWORK: while it plays the player holds a Wi-Fi lock (and a CPU wake lock) so that the Wi-Fi chip does not drop into power save between two segments (WAKE_LOCK is in the manifest)
         val p = ExoPlayer.Builder(ctx, renderers).setLoadControl(load).setBandwidthMeter(meter).setWakeMode(C.WAKE_MODE_NETWORK).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
-        return Built(p, source, settled)
+        return Built(p, source, settled, sourceOf)
     }
 
     // ONE meter for the whole run (like ExoPlayer's own singleton): what the first film measured is the next film's first guess, instead of the fixed one

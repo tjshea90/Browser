@@ -49,6 +49,18 @@ object GeckoPrefs {
         if (p.labSpec > 0) { append("  dom.speculation_rules.enabled: true\n"); append("  dom.speculation_rules.prefetch.dry_run: ").append(p.labSpec == 1).append('\n') }
     }
 
+    /**
+     * PERF7c (owner 2026-11-22, two screenshots: horizontal bands of text missing on claude.ai, the pornhub loading circle cut at the bottom; research/PAINT_GLITCH.md): the shortcuts of the engine's graphics
+     * renderer (WebRender) that redraw or upload only PART of a frame or a texture. A driver that gets one of them wrong leaves exactly such bands undrawn. "Safe drawing" turns them off: whole clears, one
+     * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh).
+     */
+    internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = if (!p.labDraw) "" else buildString {
+        append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
+        append("  gfx.webrender.batched-texture-uploads: false\n")
+        append("  gfx.webrender.max-partial-present-rects: 0\n")
+        append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+    }
+
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
     @Synchronized fun writeConfig(ctx: Context): String { // (the config warm-up thread of GeckoEngine.prewarmConfig and the UI thread both call it)
         val text = try { ctx.assets.open("gecko-prefs.txt").bufferedReader().use { it.readText() } } catch (e: Exception) { "" }
@@ -56,7 +68,7 @@ object GeckoPrefs {
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
-        var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx))
+        var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
         app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.moz_log")?.takeIf { LOG_SPEC.matches(it) }?.let {

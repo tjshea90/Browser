@@ -2010,7 +2010,7 @@ test('VD1: what the gate held, what the format policy refused and what failed ar
   assert.equal(c.length, 1);
   assert.equal(c[0].p, PAGE); assert.equal(c[0].s, 1); assert.equal(c[0].f, 2); assert.equal(c[0].w, 'avc 60fps b');
   h.message({ k: 'verr', c: 4, ns: 3, rs: 0, s: 'blob', f: 1, e: 'v' }, 1, undefined, 0);
-  h.message({ k: 'verr', c: 98, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q', pa: 5, b: 99 }, 1, undefined, 2);
+  h.message({ k: 'verr', c: 77, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q', pa: 5, b: 99 }, 1, undefined, 2);
   await tick(10);
   const e = h.of('verr');
   assert.equal(e.length, 2);
@@ -2019,6 +2019,12 @@ test('VD1: what the gate held, what the format policy refused and what failed ar
   assert.equal(e[1].c, 0); assert.equal(e[1].ns, 0); assert.equal(e[1].rs, 0); assert.equal(e[1].s, 'none'); assert.equal(e[1].f, 0); assert.equal(e[1].e, 'v', 'an address, a wild number or a letter is never passed on');
   h.message({ k: 'verr', c: 99, ns: 2, rs: 0, s: 'http', f: 1, e: 'v', pa: 1, b: 3 }, 1, undefined, 3);
   await tick(10);
+  h.message({ k: 'verr', c: 98, ns: 2, rs: 0, s: 'none', f: 1, e: 'v', x: 'circle div.sp 58x58 in a paused video 480x270, div.box overflow=hidden cutBottom=3 \u00e9\u0001' + 'z'.repeat(300) }, 1, undefined, 4);
+  h.message({ k: 'verr', c: 4, ns: 2, rs: 0, s: 'none', f: 1, e: 'v', x: 'not for other codes' }, 1, undefined, 5);
+  await tick(10);
+  const calm = h.of('verr').filter((x) => x.c === 98);
+  assert.equal(calm.length, 1, 'code 98 = calm.js turned a stuck circle into a play mark is passed on'); assert.ok(calm[0].x.indexOf('circle div.sp 58x58') === 0 && calm[0].x.length <= 160 && !/[^\x20-\x7e]/.test(calm[0].x), 'ASCII, cut to 160: ' + calm[0].x.length);
+  assert.ok(h.of('verr').filter((x) => x.c === 4).every((x) => x.x === ''), 'the text travels only with code 98');
   const st = h.of('verr').filter((x) => x.c === 99);
   assert.equal(st.length, 1, 'code 99 = stuck loading is passed on'); assert.equal(st[0].pa, 1); assert.equal(st[0].b, 3); assert.equal(st[0].ns, 2);
   for (let i = 0; i < 20; i++) h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, 1, undefined, 0);
