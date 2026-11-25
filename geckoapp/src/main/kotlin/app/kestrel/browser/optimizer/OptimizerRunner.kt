@@ -2,6 +2,7 @@ package app.kestrel.browser.optimizer
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.Context
 import android.content.Intent
 import android.os.BatteryManager
 import android.os.Build
@@ -291,8 +292,11 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     private fun measure() {
         val gen = generation
         pageDied = false
-        // the emulator's quick run: the WebGL page only in the very first sample (it hangs the lab's software drawing; once is enough to prove the recovery, every sample would only cost time)
-        val withGl = !fastPages() || state?.let { it.cursor == 0 && it.taken == 0 } == true
+        // WebGL on its own page. NOT in the emulator lab's quick run (lab v8-v11: creating a WebGL context there wedges the emulator's drawing for good, the app's screen thread sits inside a native draw call and the emulator's system
+        // follows, the run is lost). On a real device it runs, and once it has hung in a run it is skipped for the rest of that run (one restart is enough to learn it).
+        val runId = state?.runId ?: ""
+        val glPrefs = ctx.getSharedPreferences("optimizer_run", Context.MODE_PRIVATE)
+        val withGl = !fastPages() && glPrefs.getString("gl_hung_run", "") != runId
         Thread({
             // binder calls (battery, process list) stay OFF the screen thread: a system service that answers late must never freeze the run (lab v5: the screen thread went silent right after the second sample)
             val why = pauseReason()
@@ -311,7 +315,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
                 if (gen != generation) return@Thread
                 val optional = p in optionalPages
                 when {
-                    r == null -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl hung; ") } else { ok = false; notes.append("$p timed out; ") }; wedged = true; Health.log("opt", "wedged", "$p never answered: the engine restarts before the next sample") }
+                    r == null -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl hung; "); glPrefs.edit().putString("gl_hung_run", runId).apply() } else { ok = false; notes.append("$p timed out; ") }; wedged = true; Health.log("opt", "wedged", "$p never answered: the engine restarts before the next sample") }
                     r.err.isNotEmpty() -> { if (optional) { metrics[Metrics.GL] = 0.0; notes.append("webgl: ${r.err.take(40)}; ") } else { ok = false; notes.append("$p: ${r.err}; ") } }
                     else -> { metrics.putAll(r.m); if (r.note.isNotEmpty()) notes.append(r.note).append("; ") }
                 }
