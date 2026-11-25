@@ -27,9 +27,6 @@ class RestartActivity : Activity() {
         Process.killProcess(Process.myPid())
     }
 
-    /** A process that was killed is still listed (as a zombie) until the system has reaped it: only a missing entry or state Z / X counts as gone. */
-    private fun alive(pid: Int): Boolean = try {
-        val f = java.io.File("/proc/$pid/stat")
-        if (!f.exists()) false else { val st = f.readText(); val state = st.substring(st.lastIndexOf(')') + 2).firstOrNull(); state != 'Z' && state != 'X' }
-    } catch (e: Exception) { false }
+    /** A killed process is still listed until it has really finished exiting (its threads may still be tearing down, the system hears of the death only then): only a missing /proc entry counts as gone. */
+    private fun alive(pid: Int): Boolean = try { java.io.File("/proc/$pid").exists() } catch (e: Exception) { false }
 }
