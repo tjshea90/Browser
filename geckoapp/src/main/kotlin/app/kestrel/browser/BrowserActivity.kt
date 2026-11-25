@@ -1551,7 +1551,7 @@ open class BrowserActivity : Activity(), DockListener {
         val savedY = t.scrollByUrl.get(url)
         val why = if (t.isPrivateTab) "" else backLab.notKeptWhy(url)
         val notKept = why.isNotEmpty()
-        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=${why.ifEmpty { "no" }}")
+        Health.log("tabs", "back-arm", "tab=${t.id} to=${if (t.isPrivateTab) "private tab" else UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=${why.ifEmpty { "no" }}")
         // a second Back within two seconds: the engine's history index has not moved yet, so the page this one leads to is not known from here - show nothing rather than the wrong picture
         val now = SystemClock.uptimeMillis()
         val rapid = now < backBusyUntil
@@ -1573,7 +1573,7 @@ open class BrowserActivity : Activity(), DockListener {
         val now = SystemClock.uptimeMillis()
         if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
         lastLeaveShotAt = now
-        Health.log("tabs", "leave-shot", "tab=${tab.id} from=${UrlParts.hostOf(tab.url)}")
+        Health.log("tabs", "leave-shot", "tab=${tab.id} from=${if (tab.isPrivateTab) "private tab" else UrlParts.hostOf(tab.url)}")
         captureThumb(tab, forBack = true)
     }
 
@@ -2950,8 +2950,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab !== current) return
         // AR1: one very small icon at the bottom middle for one second (a second block keeps it and the newest address wins); a press opens the blocked address in a NEW tab, nothing asked.
         // A forced redirect is opened the same way: the page the owner is on stays where it is.
-        Health.log("guard", "chip-show", "$kind ${UrlParts.hostOf(url) ?: url.take(40)}")
-        blockedChip.show(pal, url) { link -> Health.log("guard", "chip-open", UrlParts.hostOf(link) ?: link.take(40)); val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
+        Health.log("guard", "chip-show", "$kind ${if (tab.isPrivateTab) "private tab" else (UrlParts.hostOf(url) ?: url.take(40))}")   // RVW3 SC7: a private tab's host stays out of the Diagnostics that get pasted
+        blockedChip.show(pal, url) { link -> Health.log("guard", "chip-open", if (tab.isPrivateTab) "private tab" else (UrlParts.hostOf(link) ?: link.take(40))); val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
     }
 
     /**

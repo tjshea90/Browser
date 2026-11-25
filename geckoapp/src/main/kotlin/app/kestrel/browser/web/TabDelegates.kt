@@ -68,14 +68,14 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // (nothing of the page's state is disturbed). The tap report comes through the extension and can arrive a moment after this request: the jump then waits for it, at most JumpGuard.WAIT_MS.
         if (web && request.target == NavigationDelegate.TARGET_WINDOW_NEW) {
             when (a.judgePopup(tab, request.uri)) {
-                app.kestrel.core.guard.PopupGuard.Verdict.STOP -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a new window to ${app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?"}"); a.onPopupBlocked(tab.url, "open", request.uri); return GeckoResult.fromValue(deny) }
+                app.kestrel.core.guard.PopupGuard.Verdict.STOP -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a new window to ${if (tab.isPrivateTab) "private tab" else (app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?")}"); a.onPopupBlocked(tab.url, "open", request.uri); return GeckoResult.fromValue(deny) }
                 app.kestrel.core.guard.PopupGuard.Verdict.WAIT -> return waitForPopupTap(session, request)
                 app.kestrel.core.guard.PopupGuard.Verdict.ALLOW -> {}
             }
         }
         if (web && request.target == NavigationDelegate.TARGET_WINDOW_CURRENT && !request.isDirectNavigation && !request.isRedirect) {
             when (a.judgeJump(tab, request.uri)) {
-                JumpGuard.Verdict.STOP -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a jump to ${app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?"}"); a.onPopupBlocked(tab.url, "redirect", request.uri); return GeckoResult.fromValue(deny) }
+                JumpGuard.Verdict.STOP -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a jump to ${if (tab.isPrivateTab) "private tab" else (app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?")}"); a.onPopupBlocked(tab.url, "redirect", request.uri); return GeckoResult.fromValue(deny) }
                 JumpGuard.Verdict.WAIT -> return waitForTap(session, request)
                 JumpGuard.Verdict.ALLOW -> {}
             }
@@ -94,7 +94,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 when {
                     v == app.kestrel.core.guard.PopupGuard.Verdict.WAIT && !timedOut -> app.kestrel.browser.Io.main.postDelayed(this, 15)
                     v == app.kestrel.core.guard.PopupGuard.Verdict.ALLOW -> decideLoad(session, request).accept({ r -> result.complete(r) }, { _ -> result.complete(allow) })
-                    else -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a new window to ${app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?"} (no tap report in time)"); a.onPopupBlocked(tab.url, "open", request.uri); result.complete(deny) }
+                    else -> { app.kestrel.browser.diag.Health.log("guard", "app-wall", "stopped a new window to ${if (tab.isPrivateTab) "private tab" else (app.kestrel.core.url.UrlParts.hostOf(request.uri) ?: "?")} (no tap report in time)"); a.onPopupBlocked(tab.url, "open", request.uri); result.complete(deny) }
                 }
             }
         }

@@ -50,6 +50,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
 
     var host: Listener? = null
     private val main = Handler(Looper.getMainLooper())
+    private val recovery = PlayerRecovery(main) { e, t -> say(e, t) }     // RVW3 PB1: a link that drops in the middle of a film is tried again, the film does not end
     private val surface = SurfaceView(ctx).apply { setZOrderMediaOverlay(true) }   // above the engine's own surface (a regular one), still below the window's own views
     private val controls = PlayerControlsView(ctx).apply { inline = true }
     private var player: ExoPlayer? = null
@@ -109,6 +110,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val ticker = object : Runnable {
         override fun run() {
             sample()
+            player?.let { pl -> if (pl.playWhenReady && pl.playbackState != Player.STATE_ENDED && pl.playbackState != Player.STATE_IDLE) app.kestrel.browser.download.DownloadController.filmPlaying() }   // RVW3 PB3
             if (player != null) main.postDelayed(this, if (model.shown) 250L else 1000L)
         }
     }
@@ -146,12 +148,13 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             q.begin(p, capH, null, false)                                                                            // Automatic, at most capH (480 in a small box) unless the person picked a size before
             controls.showQuality = false
             p.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) { sample() }
+                override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) recovery.onReady(); sample() }
                 override fun onPlayerError(error: PlaybackException) {
                     if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = "error ${error.errorCodeName}" }
                     say("error", "${error.errorCodeName}: ${error.message.orEmpty().take(120)}")
                     sample()
                     if (firstPictureAt == 0L) stop("failed before the first picture", failed = true)         // ANS54e rule: the page's own player takes the film
+                    else if (recovery.onError(built.player, error)) sample()                                              // RVW3 PB1: the ring, not "stopped", while a try waits
                 }
                 override fun onVideoSizeChanged(size: VideoSize) {
                     if (size.width > 0 && size.height > 0) {
@@ -173,6 +176,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                 override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
                     if (firstPictureAt == 0L) {
                         firstPictureAt = SystemClock.uptimeMillis()
+                        built.settled.set(true)                                // RVW3 PB1: from now on a failed load is retried longer (PlayerFactory)
                         val ms = firstPictureAt - startedAt
                         if (!priv) NativePlayerStats.firstPictureMs = ms
                         say("first-picture", "the first picture came $ms ms after the start")
@@ -206,7 +210,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         val p = player ?: return
         player = null
         quality = null; controls.showQuality = false
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun); recovery.stop(); app.kestrel.browser.download.DownloadController.filmStopped()
         gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
         try { meter?.finish(p) } catch (e: Throwable) { /* gone */ }
@@ -279,7 +283,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             timeS = p.currentPosition / 1000.0, lengthS = lengthS, bufferedS = p.bufferedPosition / 1000.0,
             paused = !p.playWhenReady, ended = state == Player.STATE_ENDED, muted = muted, volume = if (muted) 0 else 100, rate = p.playbackParameters.speed.toDouble(),
             ready = when (state) { Player.STATE_READY, Player.STATE_ENDED -> 4; Player.STATE_BUFFERING -> 2; else -> 0 }, mse = false, live = live,
-            width = size.width, height = size.height, atMs = SystemClock.uptimeMillis(), ack = ack, error = p.playerError != null))
+            width = size.width, height = size.height, atMs = SystemClock.uptimeMillis(), ack = ack, error = p.playerError != null && !recovery.pending))
         controls.update(model.view())
     }
 
@@ -289,7 +293,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         val p = player ?: return
         try {
             when (c.a) {
-                "play" -> { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0L); pausedByEdge = false; p.play() }
+                "play" -> { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0L); pausedByEdge = false; recovery.playPressed(p); p.play() }    // RVW3 PB1: Play after an error prepares again
                 "pause" -> { pausedByEdge = false; p.pause() }
                 "seek" -> p.seekTo((c.t * 1000).toLong().coerceAtLeast(0L))
                 "skip" -> {
