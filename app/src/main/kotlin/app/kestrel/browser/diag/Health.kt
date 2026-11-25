@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The evidence layer for "the screen stops updating while I type" (research/FREEZE.md): a timeline ring buffer, counters, a UI-thread stall watchdog,
- * frame-jank counting and a plain-text report for the Diagnostics screen. No network, no telemetry: the owner copies or shares the text by hand.
+ * frame-jank counting and a plain-text report for the Diagnostics screen. The ring itself has no network: the owner copies the text by hand, OR (owner decision 2026-11-21, LD1) the live diagnostics send a SCRUBBED copy to the
+ * private repo while the master switch in Settings is on (LiveDiag).
  * Everything here is cheap and bounded; the watchdog only runs while the activity is in front.
  */
 object Health {
@@ -72,6 +73,7 @@ object Health {
         if (detail.isNotEmpty()) sb.append(' ').append(detail)
         val line = sb.toString()
         ring.add(line)
+        LiveDiag.observe(layer, event, line)   // LD1: one volatile read when the owner's master switch is off
         if (LastRun.wants(layer, event)) LastRun.note(layer, event, line)   // CR1: the few lines that tell how the last run ended are kept on disk
         if (mirror) android.util.Log.d("KestrelHealth", line)   // DEBUG builds only (the emulator test rig reads `adb logcat -s KestrelHealth`: no menu taps on a slow screen)
     }

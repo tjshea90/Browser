@@ -34,6 +34,8 @@ class Prefs private constructor(ctx: Context) {
     var skipVideoAds: Boolean get() = bool("skip_video_ads", true); set(v) = put("skip_video_ads", v)
     /** YS1: a tap on a video player's progress bar moves the video when the page does not (Kestrel G, seekbar.js). */
     var tapSeek: Boolean get() = bool("tap_seek", true); set(v) = put("tap_seek", v)
+    /** BK10 (Kestrel G): a web page that forbids every cache (`no-store`) is made cacheable for Back, so Back shows it at once; never in a private tab, never for mail, banking, payment, sign-in or account pages (background.js). */
+    var instantBack: Boolean get() = bool("instant_back", true); set(v) = put("instant_back", v)
     /** RX3-B2: AdGuard Tracking Protection (its tracking sections) and HaGeZi Light as two more block lists: more cookie-sync and tracker requests stopped, a few pages may need Shields off for the site. Default ON (owner 2026-11-14). */
     var extraTrackerLists: Boolean get() = bool("extra_tracker_lists", true); set(v) = put("extra_tracker_lists", v)
     /** Kestrel G: refuse windows and tab redirects the user did not ask for (movie-site spam). A site with Shields off is exempt. */
