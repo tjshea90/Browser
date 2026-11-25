@@ -55,9 +55,10 @@ object Catalog {
         Experiment("stylo2", "Two style threads", "Fewer threads fighting for four slow cores.", Group.CPU, listOf(p("layout.css.stylo-threads", "2")), restart = true, prior = 0.3),
         Experiment("nocaptchaobs", "No captcha-frame watchers", "A Mozilla observer that only feeds counters runs inside every captcha and bot-check frame.", Group.CPU, listOf(p("captchadetection.actor.enabled", "false")), restart = true, prior = 0.25),
         Experiment("noformfill", "No password and form-history work", "Kestrel keeps no logins; the engine's per-keystroke form work is not needed.", Group.CPU, listOf(p("signon.rememberSignons", "false"), p("browser.formfill.enable", "false")), restart = true, prior = 0.2),
-        Experiment("scroll0", "Scroll feel: Standard", "The least pre-drawing: less memory and drawing work per scroll.", Group.UI, listOf(Change.Setting("scroll_feel", 0)), restart = false, prior = 0.4),
-        Experiment("scroll2", "Scroll feel: Smoothest", "The most pre-drawing: fewer blank edges while scrolling.", Group.UI, listOf(Change.Setting("scroll_feel", 2)), restart = false, prior = 0.3, memLimitMb = 80),
-        Experiment("clips_free", "No limit on looping clips", "Page clips play as the page wants (the limiter is switched off).", Group.UI, listOf(Change.Setting("limit_clips", 0, true)), restart = false, prior = 0.1),
+        // EVERY experiment starts in a fresh engine process (lab v12: after the first LIVE setting change of a run no benchmark page ever loaded again on the emulator; the engine applies the scroll feel itself when it starts)
+        Experiment("scroll0", "Scroll feel: Standard", "The least pre-drawing: less memory and drawing work per scroll.", Group.UI, listOf(Change.Setting("scroll_feel", 0)), restart = true, prior = 0.4),
+        Experiment("scroll2", "Scroll feel: Smoothest", "The most pre-drawing: fewer blank edges while scrolling.", Group.UI, listOf(Change.Setting("scroll_feel", 2)), restart = true, prior = 0.3, memLimitMb = 80),
+        Experiment("clips_free", "No limit on looping clips", "Page clips play as the page wants (the limiter is switched off).", Group.UI, listOf(Change.Setting("limit_clips", 0, true)), restart = true, prior = 0.1),
         Experiment("proc2", "Second content process", "A second page process for the engine: more memory, possibly less waiting.", Group.MEMORY, listOf(p("dom.ipc.processCount", "2")), restart = true, prior = 0.2, memLimitMb = 140),
     )
 

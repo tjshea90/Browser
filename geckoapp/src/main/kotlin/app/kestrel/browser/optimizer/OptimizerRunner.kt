@@ -307,7 +307,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             for (p in (if (withGl) pages + "gl" else pages)) {
                 if (gen != generation) return@Thread
                 val my = synchronized(this) { ++seq }
-                Io.main.post { currentPage = p; scrollPulses = 0; session?.loadUri(server.url(p, my, if (fastPages()) "&fast=1&lab=1" else "")) }
+                Io.main.post { currentPage = p; scrollPulses = 0; val ss = session; Health.log("opt", "load", "$p session=${ss != null}"); ss?.loadUri(server.url(p, my, if (fastPages()) "&fast=1&lab=1" else "")) }
                 val pageT0 = SystemClock.elapsedRealtime()
                 val r = server.await(p, my, if (fastPages()) minOf(limits.getValue(p), 40_000L) else limits.getValue(p))
                 if (gen != generation) return@Thread

@@ -3718,7 +3718,7 @@ class Soak:
                 break
             st = self.adb.sh("run-as %s cat files/optimizer/state.txt" % pkg, timeout=30)
             # a live timeline in the console (its text is the only thing that survives a failed job): every opt line, stalls and crashes, as they arrive
-            allx = [ln for ln in self.log.since(lm) if re.search(r"KestrelHealth.*( opt |ui |stall|STALL|crash|anr)|KestrelRestart|FATAL EXCEPTION|ANR in|am_anr|am_proc_died.*kestrel", ln)]
+            allx = [ln for ln in self.log.since(lm) if re.search(r"KestrelHealth.*( opt |ui |stall|STALL|crash|anr|scroll-feel)|KestrelRestart|FATAL EXCEPTION|ANR in|am_anr|am_proc_died.*kestrel", ln)]
             for ln in allx[seen_lines:seen_lines + 40]:
                 say("   live: " + ln.strip()[:240])
             if len(allx) > seen_lines:

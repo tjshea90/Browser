@@ -28,8 +28,8 @@ Every experiment = one or more `Change`s: an engine pref (`name=value`, or FLIP 
 | cpu | two style threads | `layout.css.stylo-threads` 2 | yes | layout, animation |
 | cpu | no captcha-frame observers | `captchadetection.actor.enabled` false | yes | JS (compat probe) |
 | cpu | no password / form-history work | `signon.rememberSignons` false, `browser.formfill.enable` false | yes | input |
-| ui | scroll feel Standard / Smoothest | `scroll_feel` 0 / 2 | no | scroll |
-| ui | no limit on looping clips | `limit_clips` false | no | clip arm |
+| ui | scroll feel Standard / Smoothest | `scroll_feel` 0 / 2 | yes (since lab v12) | scroll |
+| ui | no limit on looping clips | `limit_clips` false | yes (since lab v12) | clip arm |
 | memory | second content process | `dom.ipc.processCount` 2 | yes | input p95 with a memory GUARD (+120 MB max) |
 NEVER in the catalog (enforced by a unit test on name patterns): Shields, tracking protection, HTTPS-only / upgrades, fingerprint protection, cookie rules, certificate / security / sandbox prefs, encrypted DNS, Safe Browsing, permissions, anything that sends data. Network-speed experiments (HTTP/3, warm-up connections, buffer sizes) are NOT in v1: the hotspot's noise (+-30 %) is larger than their effect; they stay with the passive A/B in the digest (OPT2).
 
