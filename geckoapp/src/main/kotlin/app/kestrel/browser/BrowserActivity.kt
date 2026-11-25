@@ -2586,6 +2586,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(app.kestrel.browser.diag.CpuMeter.line())
         if (::miniNav.isInitialized) { out.add(miniNav.glideLine()); out.add(miniNav.fieldLine()) }
         out.add(ShieldsBridge.statsLine())
+        out.add(app.kestrel.browser.web.SiteFixes.statusLine())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
@@ -2666,6 +2667,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
+            app.kestrel.browser.web.SiteFixes.settingsChanged(applicationContext) // NL1: the Settings switch follows at once once the first page has started the timer
             miniNav.available = prefs.miniNavToggle && !fullscreenOn
             miniNav.setGlideEnabled(prefs.glideTyping)
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
@@ -3019,6 +3021,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     internal fun pageFinished(tab: Tab, real: Boolean = true) {
         if (tab === current) StartTimeline.mark("stop")
+        if (real && !tab.isPrivateTab && tab.url.startsWith("http")) app.kestrel.browser.web.SiteFixes.afterFirstPage(applicationContext) // NL1: Mozilla's site fixes start 12 s after the first real page, never on the cold-start path
         flushCounters()
         if (real && tab === restoringTab) {
             // the load ended (a page that never reported its first paint must not keep the preview up). The back cover (RX3-BK2) counts the end of the load as the paint and then still waits for the place: it never goes at the end of the load alone
