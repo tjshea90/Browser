@@ -61,6 +61,7 @@ def load_runs(clone, days):
         except Exception:
             j = None
         if isinstance(j, dict) and j.get('kind') == 'kestrel-autotune':
+            runs = [(p, x) for p, x in runs if x.get('run') != j.get('run')]       # the same run sent twice (automatically and by the button) counts once: the newest file wins
             runs.append((path, j))
         else:
             bad += 1
