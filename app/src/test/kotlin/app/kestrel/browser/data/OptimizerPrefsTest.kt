@@ -22,7 +22,7 @@ class OptimizerPrefsTest {
 
     @Test fun everyCatalogSettingKeyCanBeReadAndWrittenWithEveryValueTheCatalogUses() {
         for (k in Catalog.settingKeys().keys) assertNotNull("$k is readable", p.optGet(k))
-        for (e in Catalog.all) for (c in e.settingChanges()) {
+        for (e in Catalog.all.filter { it.id !in Catalog.RETIRED }) for (c in e.settingChanges()) {      // (a retired experiment's value, hardware trial 2, can no longer be stored)
             val before = p.optGet(c.prefKey)!!
             assertTrue("${c.prefKey} is writable", p.optSet(c.prefKey, c.value))
             assertEquals("${e.id}: ${c.prefKey} round-trips", c.value, p.optGet(c.prefKey))

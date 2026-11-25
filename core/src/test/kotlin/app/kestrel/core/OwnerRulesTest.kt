@@ -939,7 +939,7 @@ class OwnerRulesTest {
     /** PERF25 (owner 2026-11-24: "When i go to the parlayapi site in brave browser, it is smooth"; research/BRAVE_SMOOTH.md): a hardware drawing TRIAL that can never trap the person in a browser that will not start. */
     @Test fun perf25TheHardwareDrawingTrialIsOffByDefaultExcludesCpuDrawingAndSwitchesItselfOff() {
         val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
-        assertTrue("the trial is OFF by default and limited to 0..2", prefs.contains("var drawTrial: Int get() = sp.getInt(\"draw_trial\", 0); set(v) = put(\"draw_trial\", v.coerceIn(0, 2))"))
+        assertTrue("the trial is OFF by default and limited to 0..1 (trial 2 was measured on the tablet in the first Auto-tune run: 3.5x the processor time and WebGL broken, so it is gone; a saved 2 reads as 1)", prefs.contains("var drawTrial: Int get() = sp.getInt(\"draw_trial\", 0).coerceIn(0, 1); set(v) = put(\"draw_trial\", v.coerceIn(0, 1))"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
         assertTrue("its engine prefs come from the pure rule, and CPU drawing is not written while a trial runs", gp.contains("DrawTrial.lines(p.drawTrial)") && gp.contains("DrawTrial.overrides(p.drawTrial)") && gp.contains("DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)"))
         assertTrue("the start guard runs before the config is written, once per process", gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") in 1 until gp.indexOf("var yaml = yaml(text, sweep") && gp.contains("if (trialGuarded) return") && gp.contains("DrawTrial.startFailed(trial, p.drawTrialStart)"))
