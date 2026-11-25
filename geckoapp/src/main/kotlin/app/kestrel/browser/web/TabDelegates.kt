@@ -231,11 +231,14 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onCloseRequest(session: GeckoSession) { a.closeTab(tab) }
     override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(tab, fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
-    override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
+    override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.crash"); a.sessionGone(tab, true); scrubCrashReports() }
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab) } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { tab.gecko.painted = true; app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
-    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
+    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false); scrubCrashReports() }
+
+    /** PV1: the engine writes its crash report a moment after the crash: a few seconds later its memory dump is deleted and its details are cut to the ones Diagnostics reads. */
+    private fun scrubCrashReports() { val c = a.applicationContext; app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.diag.CrashNote.scrubEngineReports(c) } }, 15_000L) }
 
     override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
         val h = response.headers
@@ -334,7 +337,11 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
         when (perm.permission) {
             // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
-            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> {
+                // VD1: a site the person allowed to start its videos by themselves (Shields panel) gets a muted start (the page-side gate is open there too); every other site follows the rule as before
+                val siteOk = Shields.effective(a.prefs, UrlParts.hostOf(perm.uri)).autostartVideo
+                return GeckoResult.fromValue(if (siteOk || (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay)) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+            }
             PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE -> return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
             PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> {
                 // Protected video (Widevine through Android's own MediaDrm): only when the device has it and the owner has not turned it off; asked per request because it identifies the tablet to the site's licence server.

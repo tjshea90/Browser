@@ -360,6 +360,7 @@ object GeckoEngine {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", eff.http3, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.dns.disableIPv6", eff.disableIPv6, d)
             networkProfile = eff.text
+            networkProfileCode = if (eff.tunnel) "fast-wifi-tunnel" else if (eff.fastWifi) "fast-wifi" else "standard"
             pagesViaProxy = eff.pagesViaProxy
             // EX-14 (research/REVIEW-EXTERNAL-1.md 3.2): the engine honours `image.http.accept` only when it has a USER value, so this is the one pref set on that branch (and cleared when the profile ends).
             // Without AVIF, CDNs answer WebP / JPEG: bigger files, much less decode work for the four A53 cores; worth it only while bytes are cheap (Fast Wi-Fi).
@@ -369,7 +370,33 @@ object GeckoEngine {
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
 
+    /** PV1: are the engine's malware / phishing lookups paused because a private tab exists? (Diagnostics) */
+    @Volatile var safeBrowsingPaused = false
+
+    /**
+     * PV1 (owner 2026-11-21: nothing sent anywhere from a private tab): the engine's Safe Browsing (SECURITY.md item 8, on by default through Mozilla's own key) asks Google's servers about the hash prefix of an address
+     * whenever a local list matches it, and it does so in a private tab too. While a private tab exists those two lookups are switched off by user-branch overrides of the engine's own switches (`browser.safebrowsing
+     * .malware.enabled`, `.phishing.enabled`; both are read per request); when the last private tab is gone the overrides are cleared and the engine's defaults are back. Regular tabs have no malware / phishing check
+     * in the meantime: a trade the owner's rule makes (the lists keep updating; only the per-address questions stop).
+     */
+    fun pauseSafeBrowsing(on: Boolean) {
+        if (hopToMain { pauseSafeBrowsing(on) }) return
+        try {
+            if (on) {
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("browser.safebrowsing.malware.enabled", false, org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER)
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("browser.safebrowsing.phishing.enabled", false, org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER)
+            } else {
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("browser.safebrowsing.malware.enabled")
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("browser.safebrowsing.phishing.enabled")
+            }
+            safeBrowsingPaused = on
+            app.kestrel.browser.diag.Health.log("engine", "safebrowsing", if (on) "paused: a private tab exists" else "back on: no private tab")
+        } catch (e: Throwable) { app.kestrel.browser.diag.Health.log("engine", "safebrowsing-failed", e.toString().take(80)) }
+    }
+
     /** The profile now in force, in words (Diagnostics and Settings). */
+    /** LD4: the profile in force as one word (standard / fast-wifi / fast-wifi-tunnel) for the live diagnostics' page timing line. */
+    @Volatile var networkProfileCode: String = "standard"
     @Volatile var networkProfile: String = "Standard profile: your own switches apply."
 
     /**

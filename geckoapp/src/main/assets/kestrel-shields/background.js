@@ -196,7 +196,7 @@ function shortUrl(u) {
 }
 function newLog(tabId, url) {
   pageLog.delete(tabId); // a new page: the old lines are history
-  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], hid: [], sent: 0, key: '' });
   if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
   var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
 }
@@ -207,10 +207,10 @@ function reportLater(tabId) {
 function sendReport(tabId) {
   var L = pageLog.get(tabId);
   if (!L || L.sent >= 3) return;
-  var key = L.reqs + '|' + L.nb + '|' + L.failed.length + '|' + L.errs.length;
+  var key = L.reqs + '|' + L.nb + '|' + L.failed.length + '|' + L.errs.length + '|' + L.hid.length;
   if (key === L.key) return; // nothing new since the last one
   L.key = key; L.sent++;
-  send({ k: 'rep', p: L.page, n: L.reqs, nb: L.nb, b: L.blocked, f: L.failed, e: L.errs }).catch(function () {});
+  send({ k: 'rep', p: L.page, n: L.reqs, nb: L.nb, b: L.blocked, f: L.failed, e: L.errs, h: L.hid }).catch(function () {});
 }
 function logBlocked(d) {
   if (d.requestId !== undefined) { blockedIds.add(d.requestId); if (blockedIds.size > 300) blockedIds.delete(blockedIds.values().next().value); }
@@ -255,6 +255,29 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     if (out === undefined && r !== undefined) out = r;
   }
   return out;
+});
+// PERF3c: content.js says how long typed characters waited before the page saw them (numbers only); checked here, the app adds nothing about the page
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'typ' || !sender || !sender.tab) return undefined;
+  var c = function (x, hi) { x = +x; return x >= 0 && x <= hi ? Math.floor(x) : 0; };
+  if (!vhAllow('t|' + sender.tab.id + '|' + (tabTop.get(sender.tab.id) || ''), 6)) return undefined;
+  send({ k: 'typ', p: tabTop.get(sender.tab.id) || '', n: c(m.n, 99999), a: c(m.a, 60000), m: c(m.m, 60000), o: c(m.o, 99999), f: m.f === 1 ? 1 : 0, ra: (+m.ra === -1 ? -1 : c(m.ra, 60000)), rm: c(m.rm, 60000), ro: c(m.ro, 99999) }).catch(function () {});
+  return undefined;
+});
+// GL1: content.js says which of the site's element-hiding rules matched elements on the page ([selector, count, hides 1|0], at most 8): kept in the page log as short words and sent with the page report
+onMsg(function (m, sender) {
+  if (!m || m.k !== 'jhid' || !sender || !sender.tab || !Array.isArray(m.m)) return undefined;
+  var L = pageLog.get(sender.tab.id);
+  if (!L || L.hid.length >= 12) return undefined;
+  for (var i = 0; i < m.m.length && i < 8 && L.hid.length < 12; i++) {
+    var e = m.m[i];
+    if (!Array.isArray(e) || typeof e[0] !== 'string') continue;
+    var c = +e[1];
+    if (!(c >= 1 && c <= 99999)) continue;
+    L.hid.push(e[0].replace(/[\u0000-\u001f]/g, ' ').slice(0, 90) + ' x' + Math.floor(c) + (e[2] === 1 ? '' : ' (style)'));
+  }
+  reportLater(sender.tab.id);
+  return undefined;
 });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
 onMsg(function (m, sender) {
@@ -311,6 +334,15 @@ var guardBlocked = 0;
 // ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
 var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
 // ANS53a / ANS53b: what the page-side gate (gate-main.js) held back and opened, summed over all pages and frames since the extension started ("Videos start only when pressed" in Diagnostics)
+// VD1: the per-PAGE lines about videos (what the gate held, what the format policy refused, what failed) are rationed per tab and page, so a page that keeps failing cannot flood the app
+var vhSent = new Map();
+function vhAllow(key, max) {
+  var n = vhSent.get(key) || 0;
+  if (n >= max) return false;
+  vhSent.set(key, n + 1);
+  if (vhSent.size > 200) vhSent.delete(vhSent.keys().next().value);
+  return true;
+}
 var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0, inherit: 0 };
 function vgtText() {
   if (!vgt.reports && !vgt.inherit) return '';
@@ -344,6 +376,21 @@ onMsg(function (m, sender) {
     send({ k: 'nm', p: tabTop.get(tabId) || '', sh: nmT(m.sh), s: nmN(m.s, 199), e: nmN(m.e, 9999), et: nmT(m.et) }).catch(function () {});
     return undefined;
   }
+  if (m.k === 'pt') { // LD4: pagetime.js (top frame) tells where one page load's time went: numbers and three [host, kind, ms] triples, all checked here; the app adds what only it knows and drops a private tab
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var ptN = function (x, hi) { x = +x; return (x >= 0 && x <= hi) ? Math.round(x) : -1; };
+    var ptC = function (x) { x = +x; return (x >= 0 && x <= 1e5) ? Math.round(x) : 0; };
+    var ptK = { js: 1, css: 1, img: 1, xhr: 1, oth: 1 }, ptSl = [], ptI, ptL = m.lm && m.lm.length === 3 ? m.lm : [0, 0, 0];
+    if (m.sl && m.sl.length) for (ptI = 0; ptI < m.sl.length && ptSl.length < 3; ptI++) {
+      var ptE = m.sl[ptI];
+      if (ptE && typeof ptE[0] === 'string' && /^[a-z0-9.-]{1,60}$/.test(ptE[0]) && ptK[ptE[1]] === 1) ptSl.push([ptE[0], ptE[1], ptN(ptE[2], 6e5)]);
+    }
+    send({ k: 'pt', p: tabTop.get(tabId) || '', nt: ptC(m.nt) % 4, dns: ptN(m.dns, 6e5), con: ptN(m.con, 6e5), tls: ptN(m.tls, 6e5), fb: ptN(m.fb, 6e5), ttfb: ptN(m.ttfb, 6e5),
+      dcl: ptN(m.dcl, 6e5), load: ptN(m.load, 6e5), fcp: ptN(m.fcp, 6e5), lcp: ptN(m.lcp, 6e5), rn: ptC(m.rn), rc: ptC(m.rc), kb: ptC(m.kb), r1: ptC(m.r1), r3: ptC(m.r3), rsum: ptN(m.rsum, 1e7),
+      h2: ptC(m.h2), h1: ptC(m.h1), h3: ptC(m.h3), js: ptC(m.js), css: ptC(m.css), img: ptC(m.img), xhr: ptC(m.xhr), oth: ptC(m.oth),
+      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl }).catch(function () {});
+    return undefined;
+  }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
     if (tabId >= 0 && sender && sender.frameId === 0) { personTap.set(tabId, Date.now()); if (personTap.size > 60) personTap.delete(personTap.keys().next().value); }
     return undefined;
@@ -360,6 +407,9 @@ onMsg(function (m, sender) {
     var gn = Array.isArray(m.n) ? m.n : [], gv = function (i) { var x = +gn[i]; return x >= 0 && x <= 1000000 ? Math.floor(x) : 0; };
     vgt.reports++; vgt.held += gv(0); vgt.opened += gv(1); vgt.play += gv(2); vgt.press += gv(3); vgt.kestrel += gv(4); vgt.deferred += gv(5); vgt.refused += gv(6);
     markStats();
+    // VD1: the same numbers WITH the page (the sums above cannot say which site was held back): only when the gate held or refused something, at most six per tab and page
+    if (tabId >= 0 && gv(0) + gv(5) + gv(6) > 0 && vhAllow('g|' + tabId + '|' + (tabTop.get(tabId) || ''), 6))
+      send({ k: 'vgh', p: tabTop.get(tabId) || '', n: [gv(0), gv(1), gv(2), gv(3), gv(4), gv(5), gv(6)], f: (sender && sender.frameId === 0) ? 1 : 0 }).catch(function () {});
     return undefined;
   }
   if (m.k === 'vcx') { // ANS52g: what the page-side video format policy refused (numbers and one short word; content.js checked them), summed over all pages and frames
@@ -367,6 +417,17 @@ onMsg(function (m, sender) {
     vcx.reports++; vcx.asked += vn(m.a); vcx.size += vn(m.s); vcx.mode += vn(m.m); vcx.fps += vn(m.f);
     vcx.last = String(m.w || '').replace(/[^a-z0-9 x@.]/g, '').slice(0, 30);
     markStats();
+    // VD1: the same answers WITH the page, when something was refused (at most six per tab and page)
+    if (tabId >= 0 && vn(m.s) + vn(m.m) + vn(m.f) > 0 && vhAllow('c|' + tabId + '|' + (tabTop.get(tabId) || ''), 6))
+      send({ k: 'vch', p: tabTop.get(tabId) || '', a: vn(m.a), s: vn(m.s), m: vn(m.m), f: vn(m.f), w: vcx.last }).catch(function () {});
+    return undefined;
+  }
+  if (m.k === 'verr') { // VD1: videoprobe.js says a media element failed: a code, the element's two states and where its file comes from (a kind of source, never an address); checked here, the app adds the site
+    if (tabId < 0) return undefined;
+    var veC = function (x, hi) { x = +x; return x >= 0 && x <= hi ? Math.floor(x) : 0; };
+    var veS = { none: 1, blob: 1, hls: 1, dash: 1, http: 1 };
+    if (!vhAllow('e|' + tabId + '|' + (tabTop.get(tabId) || ''), 8)) return undefined;
+    send({ k: 'verr', p: tabTop.get(tabId) || '', c: (+m.c === 99 ? 99 : veC(m.c, 9)), ns: veC(m.ns, 3), rs: veC(m.rs, 4), s: veS[m.s] === 1 ? m.s : 'none', f: m.f === 1 ? 1 : 0, e: m.e === 'a' ? 'a' : 'v', pa: m.pa === 1 ? 1 : 0, b: veC(m.b, 9) }).catch(function () {});   // c 99 = stuck loading with no error event (videoprobe.js)
     return undefined;
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks

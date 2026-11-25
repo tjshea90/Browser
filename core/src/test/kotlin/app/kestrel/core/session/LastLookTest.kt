@@ -105,4 +105,16 @@ class LastLookTest {
         assertEquals(setOf(7L, 2L, 9L), keep)
         assertEquals(setOf(5L), LastLookRules.keep(5L, emptyMap()))
     }
+
+    @Test fun aPictureTakenBecauseScrollingSettledIsRareAndNeverWhileAVideoPlaysOrBatterySaverIsOn() {
+        assertTrue("it used to be every 4 s", LastLookRules.SETTLED_MIN_GAP_MS >= 6 * LastLookRules.MIN_GAP_MS)
+        assertEquals("video", LastLookRules.settledSkip(videoPlaying = true, powerSave = false))
+        assertEquals("video", LastLookRules.settledSkip(videoPlaying = true, powerSave = true))
+        assertEquals("power", LastLookRules.settledSkip(videoPlaying = false, powerSave = true))
+        assertEquals(null, LastLookRules.settledSkip(videoPlaying = false, powerSave = false))
+        val b = java.io.File("../geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").readText()
+        assertTrue("the scroll-settled capture uses the long gap", b.contains("captureLook(current, \"settled\", LastLookRules.SETTLED_MIN_GAP_MS.toLong())"))
+        assertTrue("and asks the rule", b.contains("LastLookRules.settledSkip(tab.gecko.videoPlaying, powerSaveOn())"))
+        assertTrue("leaving the page keeps its own short age", b.contains("captureLook(current, \"pause\", LastLookRules.LEAVE_MIN_AGE_MS.toLong())"))
+    }
 }

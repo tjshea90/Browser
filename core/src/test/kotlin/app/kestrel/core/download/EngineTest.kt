@@ -404,6 +404,19 @@ class EngineTest {
         assertArrayEquals(data, h.sink(v).bytes)
     }
 
+    /**
+     * For a quarter of a second after the outage was seen the download must never FAIL or end: it waits for the network. The engine asks the dead upstream again every 40 to 80 ms in these tests, so at one instant
+     * the state is WAITING_NETWORK or, during a try, STARTING / RUNNING (a single sample of "still WAITING" flaked in two runs of 2026-11-22 when the machine was busy): both are fine, a failed or finished download is not.
+     */
+    private fun stillOutageNotFailed(h: H, id: Long) {
+        val end = System.nanoTime() + 250_000_000L
+        while (System.nanoTime() < end) {
+            val st = h.view(id)!!.state
+            assertFalse("during the outage the download waits or tries again, it does not end: $st", st.terminal)
+            Thread.sleep(10)
+        }
+    }
+
     @Test(timeout = 60_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
         val data = testBytes(8 * MiB, 25)
         val s = FakeServer(data).also { it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
@@ -413,8 +426,7 @@ class EngineTest {
         h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 2L * MiB }
         s.down = true                                                                 // the upstream dies; the tablet still sees Wi-Fi (net.online stays true)
         h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
-        Thread.sleep(250)
-        assertEquals("still waiting", DlState.WAITING_NETWORK, h.view(id)!!.state)
+        stillOutageNotFailed(h, id)
         s.down = false
         val v = h.completed(id)
         assertArrayEquals(data, h.sink(v).bytes)
@@ -430,8 +442,7 @@ class EngineTest {
         h.await(id, "two connections at work") { it != null && it.connections >= 2 && it.done > 2L * MiB }
         s.down = true                                                                 // the upstream dies for every connection; the tablet still sees the hotspot (net.online stays true)
         h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
-        Thread.sleep(250)
-        assertEquals("still waiting", DlState.WAITING_NETWORK, h.view(id)!!.state)
+        stillOutageNotFailed(h, id)
         s.down = false
         val v = h.completed(id)
         assertArrayEquals(data, h.sink(v).bytes)
