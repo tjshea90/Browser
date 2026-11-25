@@ -48,6 +48,35 @@ class KeyboardFlow(private val a: Activity, private val host: Host) {
         }
     }
 
+    /**
+     * Settings > "Send what the keyboard learned to Swoop" (owner request 17): the export text goes into ONE file in the app's cache, and Swoop's "Add to Swoop" screen is started with an EXPLICIT intent that
+     * grants it read access to that file. Swoop shows what is in it and adds it only after a tap on Import; nothing stays open between the apps (docs/KEYBOARD-LINK.md).
+     */
+    fun handOverToSwoop() {
+        if (host.isPrivateWindow()) { host.say("Open a normal window to send: a private window keeps nothing."); return }
+        val pkg = app.kestrel.browser.SwoopLink.installedPackage(a) ?: run { host.say("The Swoop keyboard is not installed on this device."); return }
+        Io.exec {
+            host.exportText { text ->
+                if (text.isBlank()) { Io.ui { host.say("Nothing to send yet: this keyboard has not learned anything.") }; return@exportText }
+                Io.exec {
+                    try {
+                        val dir = app.kestrel.browser.HandOverProvider.dir(a)
+                        dir.listFiles()?.forEach { it.delete() }                       // only the newest hand-over is ever kept
+                        val f = java.io.File(dir, "kestrel-learned.txt"); f.writeText(text, Charsets.UTF_8)
+                        val uri = app.kestrel.browser.HandOverProvider.uriFor(a, f.name)
+                        val i = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(Intent.EXTRA_STREAM, uri)
+                            setClassName(pkg, app.kestrel.browser.SwoopLink.RECEIVE_ACTIVITY)
+                            clipData = android.content.ClipData.newRawUri("Kestrel keyboard learning", uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        Io.ui { try { a.startActivity(i) } catch (e: Exception) { host.say("This version of Swoop cannot take the file yet: update Swoop.") } }
+                    } catch (e: Exception) { Io.ui { host.say("The file could not be prepared: " + (e.message ?: e.javaClass.simpleName)) } }
+                }
+            }
+        }
+    }
+
     /** Writes [text] as a new file in the Downloads folder and returns the name Android gave it. */
     private fun save(text: String): String {
         val cr = a.contentResolver
