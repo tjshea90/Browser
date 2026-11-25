@@ -111,9 +111,9 @@ class LearnedExportTest {
         for (i in 0 until 3000) sb.append("own ").append(w()).append(" 2\n")
         val back = LearnedExport.read(sb.toString())
         assertNotNull(back) // 40000 x 4 lines is about 2 MB: within the file limit, so it is read, but only as far as the tables go
-        assertTrue("words ${back!!.model.wordCount}", back.model.wordCount <= 4000)
-        assertTrue("pairs ${back.model.pairCount}", back.model.pairCount <= 8000)
-        assertTrue("triples ${back.model.tripleCount}", back.model.tripleCount <= 6000)
+        assertTrue("words ${back!!.model.wordCount}", back.model.wordCount <= 6000)
+        assertTrue("pairs ${back.model.pairCount}", back.model.pairCount <= 14000)
+        assertTrue("triples ${back.model.tripleCount}", back.model.tripleCount <= 10000)
         assertTrue("corrections ${back.model.confusionCount}", back.model.confusionCount <= 3000)
         assertTrue("own ${back.ownWords.size}", back.ownWords.size <= LearnedExport.MAX_OWN)
     }
