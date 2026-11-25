@@ -85,3 +85,25 @@ test('NM1: it runs in the top page only, never in a frame, and a page that says 
   assert.equal((await sentNm(page)).length, 0);
   await page.context().close();
 });
+
+// EM1i (2026-11-19): the REAL doraby title page, rendered in headless Chromium, builds its episode list like this (a javascript: link with data-episode_id, the number and the title in two spans, only
+// spaces between them) and marks the shown episode with class "active". The first version of names.js named the episode but left its title empty.
+const DORABY = (act) => `<center><h1 itemprop="name" class="name">Ozark </h1></center>
+  <div id="seasons" class="dropdown"><button class="btn dropdown-toggle"><span class="season-view">Season 1</span></button><div class="dropdown-menu"><a class="dropdown-item season-item active" data-tab="season1">Season 1</a><a class="dropdown-item season-item" data-tab="season2">Season 2</a></div></div>
+  <ul class="episodes">${[['Sugarwood', 1], ['Blue Cat', 2], ['My Dripping Sleep', 3]].map(([t, n]) => `<li><a href="javascript:void(0)" data-episode_id="${n}" onclick="infoEpisodio(69740,1,${n})" class="${act === n ? 'active' : ''}"><span class="num">Episode ${n}</span>&nbsp;&nbsp;<span>${t}</span></a></li>`).join('')}</ul>`;
+
+test('EM1i: the real doraby episode list (number and title in two spans, no separator) gives the episode AND its title', async () => {
+  const page = await show(DORABY(2));
+  assert.deepEqual(await collect(page), { sh: 'Ozark', s: 1, e: 2, et: 'Blue Cat' });
+  await page.context().close();
+});
+
+test('EM1i: filler after the episode number is never taken as a title', async () => {
+  for (const label of ['Episode 2 of 10', 'Episode 2 (2017)', 'Episode 2 season 1', 'Episode 2 45 min']) {
+    const page = await show(`<h1>Ozark</h1><ul class="episodes"><li class="episode-item active"><a>${label}</a></li></ul>`);
+    const c = await collect(page);
+    assert.equal(c.e, 2, label);
+    assert.equal(c.et, '', label);
+    await page.context().close();
+  }
+});
