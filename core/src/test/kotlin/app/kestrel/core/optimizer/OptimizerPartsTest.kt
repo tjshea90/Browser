@@ -46,6 +46,20 @@ class OptimizerPartsTest {
         assertEquals("one thing much worse even if the total is better", Verdict.REJECT, Decider.decide(noisy, listOf(oneBad, oneBad), metrics, Guards()).verdict)
     }
 
+    @Test fun oneOddSampleCannotRejectASettingButASteadyLossStill() {
+        // the first real run: processor time 13060 ms once and 7770 ms the next time, against 7210 ms in the baselines (gcsmall was rejected for it)
+        fun cpu(v: Double) = Sample(sample().values + (Metrics.CPU to v), true)
+        val base = listOf(cpu(7200.0), cpu(7250.0), cpu(7150.0), cpu(7230.0))
+        assertTrue("one outlier is not a rejection", Decider.decide(base, listOf(cpu(13060.0), cpu(7770.0)), metrics, Guards()).verdict != Verdict.REJECT)
+        assertEquals("a loss in every sample is", Verdict.REJECT, Decider.decide(base, listOf(cpu(25400.0), cpu(25010.0)), metrics, Guards()).verdict)
+    }
+
+    @Test fun aRetiredExperimentExistsInTheCatalogAndIsLeftOutOfAPlan() {
+        assertTrue(Catalog.RETIRED.isNotEmpty() && Catalog.RETIRED.all { Catalog.byId(it) != null })
+        val steps = PlanBuilder.build(Catalog.all, Catalog.RETIRED)
+        assertTrue("hw2 is not planned", steps.none { it.experimentId == "hw2" })
+    }
+
     @Test fun tooFewBaselinesCannotJudge() {
         assertEquals(Verdict.INCONCLUSIVE, Decider.decide(listOf(sample()), listOf(sample(1.3)), metrics, Guards()).verdict)
     }
