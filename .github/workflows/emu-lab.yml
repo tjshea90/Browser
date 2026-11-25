@@ -278,6 +278,7 @@ jobs:
       - name: Keep the ART profile of this run (LAB5b, the methods the app really runs, raw material of a baseline profile)
         if: always() && inputs.suite != 'pack' && inputs.suite != 'sweep' && inputs.suite != 'aot'
         continue-on-error: true
+        timeout-minutes: 4        # a dead emulator (lab opt v10) leaves every adb call waiting for ever and held the whole job, and with it the run's log, for 12+ minutes
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           OUT="$RUNNER_TEMP/lab-out/profile"; mkdir -p "$OUT"
