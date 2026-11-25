@@ -143,7 +143,8 @@ class UserWords(private val cap: Int = 800) {
 }
 
 /** The result of one glide as the keyboard gets it. */
-class GlideResult(val candidates: List<GlideCandidate>, val millis: Long)
+/** [ready] is false when the engine had no word list / key positions yet (the glide could not be decoded at all: "still starting", not "no word fits"). */
+class GlideResult(val candidates: List<GlideCandidate>, val millis: Long, val ready: Boolean = true)
 
 /**
  * The glide engine the keyboard talks to (AT1): it loads the word list, owns the decoder and the person's own words, and does every bit of that on [executor] (ONE thread, so nothing needs a lock
@@ -251,7 +252,7 @@ class GlideTyping(
     fun prepare(k: GlideKeys, habit: FloatArray?, own: UserWords?) {
         executor.execute {
             try {
-                if (decoder == null && habit != null && habit.size == 2) { bx = habit[0]; by = habit[1] } // the saved habit starts the engine; later it keeps what it learned itself
+                if (decoder == null && habit != null && habit.size >= 2) { bx = habit[0]; by = habit[1]; if (habit.size > 2) touchSaved = habit.copyOfRange(2, habit.size) } // the saved habit (and the touch map after it) starts the engine; later it keeps what it learned itself
                 if (main == null && !loading) {
                     loading = true
                     val t0 = System.nanoTime()
@@ -261,8 +262,8 @@ class GlideTyping(
                 }
                 ensurePersonal()
                 keys = k
-                decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
-                previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
+                decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
+                previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal; touchSaved?.let { a -> it.field.fromArray(a) } }
                 ensureDictionary()
                 if (own != null) { ownRef = own; setOwn(own) } else rebuildUserLexicon()
                 ready = main != null
@@ -272,6 +273,8 @@ class GlideTyping(
     }
 
     private var warmed = false
+    /** R20d: the learned touch map (see [TouchField.toArray]), kept here so a new decoder (the keyboard changed size) starts with it; null = nothing learned. */
+    private var touchSaved: FloatArray? = null
 
     /**
      * One glide of "the" is decoded and thrown away while the keyboard opens: the runtime compiles the decoder's hot loops on the first run (and runs them slowly until then), so the person's first
@@ -310,7 +313,7 @@ class GlideTyping(
         val px = xs.copyOf(count); val py = ys.copyOf(count)
         executor.execute {
             val d = decoder; val m = main
-            if (d == null || m == null) { done(GlideResult(emptyList(), 0)); return@execute }
+            if (d == null || m == null) { done(GlideResult(emptyList(), 0, ready = false)); return@execute }
             val t0 = System.nanoTime()
             val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
             val r = try { cleaned(d.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
@@ -335,7 +338,7 @@ class GlideTyping(
             try {
                 val d = previewDecoder; val m = main
                 if (d != null && m != null) {
-                    decoder?.let { d.biasX = it.biasX; d.biasY = it.biasY }
+                    decoder?.let { d.biasX = it.biasX; d.biasY = it.biasY; d.field.copyFrom(it.field) }
                     val t0 = System.nanoTime()
                     val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
                     val r = try { cleaned(d.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
@@ -364,6 +367,24 @@ class GlideTyping(
         }
     }
 
+    /**
+     * R18a: the words to offer in place of [word], which is already in the text ([Alternatives]): the ones whose glide pattern is close to it, ranked with the words before it ([prev2], [prev]) and the word after it
+     * ([next]). [done] is called on a worker thread, unless a newer request (of any kind) has been made by then.
+     */
+    fun alternatives(word: String, prev2: String?, prev: String?, next: String?, limit: Int, done: (List<String>) -> Unit) {
+        val my = suggestSeq.incrementAndGet()
+        previewExecutor.execute {
+            if (my != suggestSeq.get()) return@execute
+            val m = main; val k = keys
+            if (m == null || k == null || !ready) return@execute
+            val t0 = System.nanoTime()
+            val d = dictionary
+            val r = try { Alternatives.find(m, userLex, personal, previewDecoder, k, word, prev2, prev, next, limit + EXTRA_FOR_BLOCKED) { d.isBlocked(it) }.take(limit) } catch (e: Exception) { emptyList() }
+            stats.onSuggested((System.nanoTime() - t0) / 1_000_000)
+            if (my == suggestSeq.get()) done(r)
+        }
+    }
+
     /** What the strip shows is no longer wanted (a glide started, the field changed): an answer on its way is dropped. */
     fun cancelSuggest() { suggestSeq.incrementAndGet() }
 
@@ -386,6 +407,42 @@ class GlideTyping(
             stats.onTypedLearned()
             personalDirty = true
             stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+            if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
+        }
+    }
+
+    /** R18d: [word] began a sentence (the first word of the box, or the first after . ! ? or a new line): the strip learns what this person starts with. */
+    fun learnStart(word: String, weight: Float = 1f) {
+        executor.execute {
+            ensurePersonal(); ensureDictionary()
+            if (dictionary.isBlocked(word.lowercase())) return@execute
+            personal.addStart(word, weight); personalDirty = true
+            if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
+        }
+    }
+
+    /** R18d: an automatic fix was made ([undone] false) or taken back with Backspace ([undone] true): the keyboard gets stricter for a person who undoes many, bolder for one who undoes none ([PersonalModel.autoMarginShift]). */
+    fun learnFix(undone: Boolean) {
+        executor.execute { ensurePersonal(); personal.addFix(undone); personalDirty = true }
+    }
+
+    /**
+     * R18b: how [lower] is written inside a sentence (this person's own habit first, then the built-in names and date words after [prev]); null = as it was typed. Cheap and safe on any thread (the keyboard asks it on the UI thread).
+     */
+    fun caseFormOf(lower: String, prev: String? = null): String? = try { CaseBook.form(lower, personal, prev) } catch (e: Exception) { null }
+
+    /**
+     * R18b: [shown] is the way the person wrote a word inside a sentence (a capital at the start of a sentence says nothing and is never sent here). A capital form counts toward "this word is written with a capital";
+     * a small one only counts for a word whose capital is in question (the keyboard's list has it, or the person wrote it with a capital before). [weight] 2 = the person took the keyboard's capital back.
+     */
+    fun learnCase(shown: String, weight: Float = 1f) {
+        executor.execute {
+            ensurePersonal(); ensureDictionary()
+            val lower = shown.lowercase()
+            if (dictionary.isBlocked(lower)) return@execute
+            if (shown == lower && !(CaseBook.hasBuiltin(lower) || personal.hasCase(lower))) return@execute
+            personal.addCase(shown, weight)
+            personalDirty = true
             if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
         }
     }
@@ -467,7 +524,7 @@ class GlideTyping(
 
     /** What the keyboard has learned, as the text of the export file (see [LearnedExport]), for the Settings export: it is built on the executor's thread and handed to [done] there. [habit] null = the thumb habit the engine holds now. */
     fun exportText(habit: FloatArray?, own: UserWords?, done: (String) -> Unit) {
-        executor.execute { ensurePersonal(); done(LearnedExport.write(personal, habit ?: floatArrayOf(bx, by), own)) }
+        executor.execute { ensurePersonal(); done(LearnedExport.write(personal, habit ?: (floatArrayOf(bx, by) + (touchSaved ?: FloatArray(0))), own)) }
     }
 
     /**
@@ -483,7 +540,8 @@ class GlideTyping(
             personal.mergeFrom(parsed.model)
             for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
             // the thumb habit of a file is taken only while this keyboard has not learned one of its own (what it learned here is newer than any file)
-            if (parsed.habit != null && Math.abs(bx) + Math.abs(by) < 0.01f) { bx = parsed.habit[0]; by = parsed.habit[1]; habitX = bx; habitY = by; decoder?.let { it.biasX = bx; it.biasY = by }; habit(floatArrayOf(bx, by)); keys?.let { stats.onHabit(bx * it.pitch, by * it.pitch) } }
+            if (parsed.touch != null && touchSaved == null) { touchSaved = parsed.touch; decoder?.field?.fromArray(parsed.touch); previewDecoder?.field?.fromArray(parsed.touch); habit(floatArrayOf(bx, by) + parsed.touch) }
+            if (parsed.habit != null && Math.abs(bx) + Math.abs(by) < 0.01f) { bx = parsed.habit[0]; by = parsed.habit[1]; habitX = bx; habitY = by; decoder?.let { it.biasX = bx; it.biasY = by }; habit(floatArrayOf(bx, by) + (touchSaved ?: FloatArray(0))); keys?.let { stats.onHabit(bx * it.pitch, by * it.pitch) } }
             setOwn(own)
             personalDirty = true
             stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
@@ -507,7 +565,8 @@ class GlideTyping(
         executor.execute {
             personal.clear(); personalDirty = false; lastPrint = null; deletedPrint = null; deletedGuess = null; stats.onLearned(0, 0, 0, 0)
             userLex = null; bx = 0f; by = 0f; habitX = 0f; habitY = 0f
-            decoder?.let { it.biasX = 0f; it.biasY = 0f }
+            decoder?.let { it.biasX = 0f; it.biasY = 0f; it.field.clear() }
+            previewDecoder?.field?.clear(); touchSaved = null
             stats.onHabit(0f, 0f)
             try { savePersonal("") } catch (e: Exception) { /* nothing left to save */ }
             done()
@@ -527,7 +586,8 @@ class GlideTyping(
             bx = d.biasX; by = d.biasY; habitX = bx; habitY = by
             val k = keys
             if (k != null) stats.onHabit(bx * k.pitch, by * k.pitch)
-            habit(floatArrayOf(bx, by))
+            val t = d.field.toArray(); touchSaved = t
+            habit(floatArrayOf(bx, by) + t)
         }
     }
 

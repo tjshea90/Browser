@@ -761,6 +761,21 @@ VIDEO_PAGES = [
     ("wikimedia-commons", "https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm", 25),
 ]
 
+# CR1 (owner message 2026-11-18: "The app crashed when i went to youtube"): the YouTube-only journey of the `yt` suite. Pages first (what a person meets before a film), then watch pages, each one watched,
+# scrolled under the playing film, left (Home key) and returned to. (name, url, screens to scroll, seconds to stay) / (name, url, seconds to watch)
+YT_PAGES = [
+    ("yt-home", "https://m.youtube.com/", 3, 4),
+    ("yt-results-a", "https://m.youtube.com/results?search_query=android+16", 3, 4),
+    ("yt-results-b", "https://m.youtube.com/results?search_query=relaxing+music", 3, 4),
+    ("yt-desktop-home", "https://www.youtube.com/", 3, 4),
+]
+YT_WATCH = [
+    ("yt-short", "https://m.youtube.com/watch?v=jNQXAC9IVRw", 40),
+    ("yt-long", "https://m.youtube.com/watch?v=aqz-KE-bpKQ", 60),
+    ("yt-music", "https://m.youtube.com/watch?v=dQw4w9WgXcQ", 45),
+    ("yt-api", "https://m.youtube.com/watch?v=M7lc1UVf-VE", 40),
+]
+
 # Safe Browsing test pages (RX4-X3): Mozilla's are answered from the engine's built-in test tables (they prove the machinery is on), Google's from the real lists (they prove the list download
 # and the key work). A page the engine blocks shows the app's warning screen: the Health line "page error ... kind=Dangerous".
 SAFEBROWSING = [
@@ -1254,6 +1269,242 @@ class Soak:
         self.scan_log(lines, name)
         self.check_alive(name)
         self.record(r)
+
+    # ---- DM2: the download window and the Downloads list must not come up by themselves at a start (owner messages 2026-11-18)
+    def dm_scene(self):
+        """DM1 / DM2 (owner: "the download manager pops up on browser restart or other times" and "when i first open the browser, download manager and a stale download started message show up"): a NEW download
+        brings the 'Download started' banner (the positive control); after the app is ended from outside and started cold, with that finished download in the list, nothing of the download UI may come up
+        (Health: downloads banner / window / open-by-tap); a launch carrying the notification's 'open Downloads' flag opens the list once (a real tap), the same flag replayed from history does not."""
+        pkg = self.a.pkg
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "downloads", "%s %s" % (name, detail))
+        lm = self.log.size()
+        self.download("dm-lab-1mb", "lab:/dl/1mb.bin", 1048576, 60)
+        banner = health_events(self.log.since(lm), "downloads", "banner")
+        check("DM1: a NEW download brings the 'Download started' banner (the positive control)", bool(banner) and "new=1" in banner[0]["rest"], "banner lines: %s" % [e["rest"] for e in banner])
+        time.sleep(8)                                                   # the finished row lingers 6 s, then the window goes
+        self.shot("dm-1-after-download")
+        for tag in ("front", "background"):
+            if tag == "background":
+                self.ph.key("KEYCODE_HOME"); time.sleep(3)
+            pids = self.ph.pids()
+            if pids:
+                self.adb.sh("kill -9 %d" % pids[0], timeout=20); time.sleep(2)
+            else:
+                self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
+            self.start_app()                                            # cold start: waits for the engine
+            m = self.log.size()
+            time.sleep(10)                                              # the window used to appear within the first seconds
+            lines = self.log.since(m)
+            check("DM2: a cold start (%s kill) shows no 'Download started' banner for the old download" % tag, not health_events(lines, "downloads", "banner"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "banner")])
+            check("DM2: a cold start (%s kill) brings up no download window" % tag, not health_events(lines, "downloads", "window"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "window")])
+            check("DM2: a cold start (%s kill) opens no Downloads list" % tag, not health_events(lines, "downloads", "open-by-tap"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "open-by-tap")])
+            self.shot("dm-2-cold-start-" + tag)
+        # the notification's launch intent: a real tap opens the list; the replay from history does not
+        act = "app.kestrel.browser.MainActivity"
+        m = self.log.size()
+        self.ph.a.sh("am start -n %s/%s --ez app.kestrel.browser.OPEN_DOWNLOADS true" % (pkg, act), timeout=30); time.sleep(4)
+        check("DM1: a launch that carries 'open Downloads' (a tap on a notification) opens the list", bool([e for e in health_events(self.log.since(m), "downloads", "open-by-tap")]), "lines: %s" % [e["rest"] for e in health_events(self.log.since(m), "downloads")])
+        self.shot("dm-3-opened-by-tap")
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        m = self.log.size()
+        self.ph.a.sh("am start -n %s/%s -f 0x00100000 --ez app.kestrel.browser.OPEN_DOWNLOADS true" % (pkg, act), timeout=30); time.sleep(4)   # FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY: the system replaying it
+        ign = health_events(self.log.since(m), "downloads", "open-ignored")
+        check("DM1: the same launch replayed from history is ignored (told in Health, list stays closed)", bool(ign) and not health_events(self.log.since(m), "downloads", "open-by-tap"), "lines: %s" % [e["rest"] for e in health_events(self.log.since(m), "downloads")])
+        self.shot("dm-4-replay-ignored")
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "dm", "name": "downloads-ui-at-start", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+
+    # ---- VS1: a vidsrc-style embed (movie page -> player frame -> CDN that wants the PLAYER's Referer, playlists as .txt, parts as .jpg, AES) on the real engine
+    def vs_scene(self):
+        """VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, 'it can't find the video to download', his other app can): four ways an embed delivers its stream, each opened on its movie page. For each:
+        does the app's finder list the stream (before and after the one tap a click-to-play player needs), and does one pick download a real file? tools/sitelab/vidlab_srv.py serves the pages and the stream."""
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        gen = os.path.join(self.out, "vidgen")
+        try:
+            subprocess.run(["bash", os.path.join(root, "tools", "sitelab", "vidlab_gen.sh"), gen], check=True, timeout=240, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            self.issue("high", "tooling", "VS1: the lab streams could not be made (%r)" % (e,))
+            return
+        env = dict(os.environ, VIDLAB_GEN=gen, VIDLAB_LOG=os.path.join(self.out, "vidlab.log"))
+        srv = subprocess.Popen([sys.executable, "-I", os.path.join(root, "tools", "sitelab", "vidlab_srv.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(4)
+            w, h = self.screen
+            for mode in ("mse", "msel", "msel0", "auto", "keep", "click", "nest", "worker"):
+                before = self.ph.downloads(); lm = self.log.size()
+                # VS1d (lab run 44233990309 found the rule switched OFF for the whole run, so nothing was ever held and msel0 'started'): the embed variants run with the owner's setting, Videos start only when I press play = ON;
+                # the finder variants keep the conditions they have always had (off)
+                self.ph.debug("vpress", "1" if mode.startswith("mse") else "0"); time.sleep(1.5)
+                try: vlog0 = os.path.getsize(os.path.join(self.out, "vidlab.log"))                  # the embed's states are read from here on, per variant (the file keeps every variant's)
+                except OSError: vlog0 = 0
+                self.ph.open_url("http://10.0.2.2:8000/watch3?v=%s" % mode)
+                t0 = time.time()
+                while time.time() - t0 < 25 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "10.0.2.2" in e["rest"]]:
+                    time.sleep(1.5)
+                time.sleep(7)                                           # the player frame, its script and (auto, nest, worker) its stream requests
+                r = {"kind": "vs", "name": "vidsrc-style-" + mode}
+                if mode.startswith("mse"):                              # doraby's way: the person taps the page's Play button, the frame loads, its MediaSource player must START without a second tap
+                    # mse = the embed builds its player at once; msel = it waits 7 s first (longer than the 5 s a tap's activation lasts: scripts and an API call on a hotspot); msel0 = a slow embed that was in the
+                    # page from the start, nobody pressed anything: the person's rule says it stays held
+                    if mode != "msel0": self.ph.tap(w // 2, 26 + 34 + 60 + 8)
+                    time.sleep(16 if mode == "mse" else 26)
+                    try:
+                        with open(os.path.join(self.out, "vidlab.log"), "rb") as f:
+                            f.seek(vlog0)
+                            states = [ln.split("/state?s=")[1].split("&")[0].split(" ")[0] for ln in f.read().decode("utf-8", "replace").splitlines() if "/state?s=" in ln]
+                    except OSError:
+                        states = []
+                    r["player_states"] = states
+                    ok_start = ("playing" in states) if mode != "msel0" else ("playing" not in states)    # msel0: held is the RIGHT answer
+                    r["status"] = "ok" if ok_start else "player-stuck"
+                    if not ok_start and mode == "msel0":
+                        self.issue("high", "gate", "VS1d msel0: a slow embed that nobody pressed STARTED (the person's rule is no video without a press): states %s" % (states or "none"))
+                    elif not ok_start:
+                        self.issue("high", "finding-video", "VS1d: the embed's MediaSource player never started after the person's tap on the movie page (states seen: %s): 'stuck on loading'" % (states or "none"), shot=True)
+                    self.shot("vs-mse")
+                    self.record(r)
+                    self.ph.debug("closetabs"); time.sleep(3)
+                    continue
+                if mode == "click":
+                    m0 = self.log.size(); self.ph.debug("videodl"); time.sleep(3)
+                    first = health_events(self.log.since(m0), "lab", "videodl")
+                    r["before_press"] = first[-1]["rest"] if first else "no answer"
+                    self.ph.tap(w // 10, 26 + 40 + 150); time.sleep(7)    # the player's big Play button fills the frame (left edge: clear of the download window)
+                m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(4)
+                said = health_events(self.log.since(m1), "lab", "videodl")
+                r["finder_said"] = said[-1]["rest"] if said else "no answer"
+                if not said or "pick=none" in said[-1]["rest"]:
+                    r["status"] = "not-found"
+                    self.issue("high", "finding-video", "VS1 %s: the finder offered NOTHING (%s)" % (mode, r["finder_said"]))
+                    self.record(r); continue
+                if mode == "keep":                                      # VS2: only the LIST is under test (the stream has film evidence: its playlist claims 3 minutes): decline the download this pick asks for
+                    if self.wait_dialog(m1, 25):
+                        self.answer(False)
+                    time.sleep(2)
+                    self.ph.tap(w // 10, 26 + 34 + 60 + 8); time.sleep(10)        # the page's Switch server button (left edge: the download window sits at the top RIGHT); the player frame goes to another document
+                    m2 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+                    if self.wait_dialog(m2, 12):
+                        self.answer(False)
+                    again = health_events(self.log.since(m2), "lab", "videodl")
+                    gl = health_events(self.log.since(m1), "media", "frame-gone")
+                    r["after_switch"] = again[-1]["rest"] if again else "no answer"
+                    r["frame_gone"] = [e["rest"][:160] for e in gl][-2:]
+                    if not gl:
+                        r["status"] = "unproven"
+                        self.issue("medium", "finding-video", "VS2 keep: no 'media frame-gone' line: the switch did not reach the app, so this run proves nothing about capture", shot=True)
+                    elif not again or "pick=none" in again[-1]["rest"]:
+                        r["status"] = "vanished"
+                        self.issue("high", "finding-video", "VS2 keep: the stream the finder had found DISAPPEARED when the player frame went to another document (%s; frame-gone: %s)" % (r["after_switch"], r["frame_gone"]), shot=True)
+                    else:
+                        r["status"] = "ok"
+                    self.record(r); self.ph.debug("closetabs"); time.sleep(3); continue
+                tapped = self.wait_dialog(m1, 40)                       # (a stream over plain http asks first)
+                if tapped:
+                    self.answer(True)
+                stream = health_events(self.log.since(m1), "lab", "videodl-stream")
+                r["stream_lines"] = [e["rest"][:100] for e in stream][-3:]
+                got = None; t1 = time.time()
+                while time.time() - t1 < 120:
+                    now = self.ph.downloads()
+                    new = {k: v for k, v in now.items() if k not in before and "lab-found-video" in k}
+                    if new:
+                        k, v = max(new.items(), key=lambda kv: kv[1])
+                        if v > 20000:
+                            time.sleep(4)
+                            k2, v2 = max({k_: v_ for k_, v_ in self.ph.downloads().items() if k_ in new}.items(), key=lambda kv: kv[1])
+                            if v2 == v: got = (k2, v2); break
+                    time.sleep(3)
+                if got is None:
+                    r["status"] = "dl-none"; r["note"] = "found, but no saved file: stream lines %s" % r["stream_lines"]
+                    self.issue("high", "download-video", "VS1 %s: the finder found it (%s) but the download produced no file (%s)" % (mode, r["finder_said"], r["stream_lines"]))
+                else:
+                    r.update(status="ok", file=got[0], size=got[1])
+                self.record(r)
+                self.ph.debug("closetabs"); time.sleep(3)
+        finally:
+            try: srv.terminate()
+            except Exception: pass
+            self.check_alive("vs scene")
+            try:
+                with open(os.path.join(self.out, "vidlab.log")) as f:
+                    lines = f.read().splitlines()
+                self.vs_log_tail = lines[-40:]
+            except OSError:
+                self.vs_log_tail = []
+
+    # ---- CR1: a person's YouTube visit, repeated, with the things that happen around it on a 2 GB tablet
+    def mem_hog(self, mb):
+        """Takes `mb` MB of the emulated phone's RAM the way another app would (a file in the RAM-backed /dev). False when this phone does not let the shell do it."""
+        out = self.ph.a.sh("dd if=/dev/zero of=/dev/kst_hog bs=1048576 count=%d 2>&1; ls -l /dev/kst_hog 2>&1" % mb, timeout=90)
+        return "kst_hog" in out and "No such file" not in out and "Permission denied" not in out and "Read-only" not in out
+
+    def mem_hog_free(self):
+        self.ph.a.sh("rm -f /dev/kst_hog", timeout=20)
+
+    def yt_after(self, name, pressure):
+        """After a film was watched: scroll under it, leave the app with the film on the page, wait, come back, press Back. Every step is checked for a dead app / engine."""
+        w, h = self.screen
+        lmark = self.log.size()
+        for _ in range(2):
+            self.ph.swipe(w // 2, int(h * 0.75), w // 2, int(h * 0.30), 400)
+            time.sleep(1.5)
+        self.ph.key("KEYCODE_HOME")
+        time.sleep(20)                                   # the app is out of sight with a film page behind it: Android may trim it, kill the engine's process or the whole app
+        self.ph.start_app()
+        time.sleep(7)
+        lines = self.log.since(lmark)
+        found, stalls = self.scan_log(lines, name + " (left and returned)")
+        alive = self.check_alive(name + " (left and returned)")
+        trims = health_events(lines, "mem", "trim")
+        gone = [e for e in health_events(lines, "gecko") if e["ev"] in ("onKill", "onCrash", "recover-after-kill", "recover-after-crash", "revive-deferred")]
+        self.ph.key("KEYCODE_BACK")
+        time.sleep(2)
+        self.record({"kind": "yt-leave", "name": name + "-leave", "status": "ok" if alive and not found else ("crash" if found else "restart"), "pressure": pressure,
+                     "trims": [e["rest"][:100] for e in trims][:4], "engine_gone": [e["ev"] + " " + e["rest"][:90] for e in gone][:4], "ui_stalls": len(stalls)})
+        if gone:
+            self.issue("medium", "engine", "%s: the engine's page process went (%s) while the app was left%s" % (name, ", ".join(sorted({e["ev"] for e in gone})), " under RAM pressure" if pressure else ""), shot=False)
+
+    def yt_journey(self, minutes):
+        """The `yt` suite: rounds of (YouTube pages, watch pages with leave + return) until the time is up; every second round runs with `kst_hog` MB of RAM taken (the 2 GB tablet has about 650 MB free
+        with one page open, research/TABLET_DIAG_2026-11-16.md). The report's table says per step: loaded, played, process alive, trims, engine process gone."""
+        deadline = time.time() + minutes * 60
+        rounds = 0
+        hog_ok = None
+        while time.time() < deadline:
+            rounds += 1
+            pressure = rounds % 2 == 0
+            if pressure:
+                pss, avail, procs = self.sample()
+                take = max(150, min(450, avail - 350)) if avail > 0 else 300     # leave about 350 MB: enough to run, little enough that the engine feels it
+                hog_ok = self.mem_hog(take)
+                say("yt round %d: RAM pressure %s (took %d MB, MemAvailable was %d MB)" % (rounds, "ON" if hog_ok else "NOT possible on this phone", take, avail))
+            else:
+                say("yt round %d: normal memory" % rounds)
+            try:
+                for name, url, scrolls, dwell in YT_PAGES:
+                    if time.time() > deadline:
+                        break
+                    self.load_page(name + ("-p" if pressure else ""), url, scrolls, dwell, timeout=90, kind="videosite")
+                    self.check_alive(name)
+                for name, url, watch in YT_WATCH:
+                    if time.time() > deadline:
+                        break
+                    self.video_site(name + ("-p" if pressure else ""), url, watch)
+                    self.yt_after(name + ("-p" if pressure else ""), pressure)
+                    pss, avail, procs = self.sample()
+                    say("yt %s: app PSS %d MB, MemAvailable %d MB, %d app processes, %.0f min left" % (name, pss, avail, procs, (deadline - time.time()) / 60))
+            except Exception as e:                                   # a bug in this script must never end the run
+                self.issue("low", "tooling", "yt round %d raised %r" % (rounds, e))
+            finally:
+                if pressure:
+                    self.mem_hog_free()
+            self.ph.debug("closetabs")
+            time.sleep(3)
+        self.sample()
 
     # ---- RX4-X2: which downloads ask first, and what the question says
     def guard_downloads(self):
@@ -1751,6 +2002,62 @@ class Soak:
     # ---- VP1 (owner message 49): Kestrel's own full-screen controls on the real engine: a film with no controls of its own goes full screen (the app turns it sideways by itself), the controls show, hide by themselves,
     # toggle with a tap, a double tap seeks and plays / pauses, the screen is turned upright, the mute and exit buttons work. Pictures after every step; the app's own `player` lines and the film's own
     # events (the lab page reports seeked / pause / play and every click the PAGE gets) say what really happened.
+    def ql_scene(self):
+        """QL1 (owner message 2026-11-18: "When i put YouTube video in full screen, it doesn't let me choose the video quality ..."): a film in YouTube's player element (the lab page defines the player API on it,
+        as the real page does) goes full screen under Kestrel's controls; the Quality button must come from the page's OWN list, a pick must reach the page's player (the lab page reports each call it gets)."""
+        w, h = self.screen
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "quality", "%s %s" % (name, detail))
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); self.ph.debug("fsturn", "1"); time.sleep(2)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        rmark = self.lab.size()
+        self.ph.open_url("%s/fsbox?kind=light&nobar=1&yt=1" % self.lab_base)
+        self.fsbox_wait(rmark); time.sleep(2)
+        lm = self.log.size()
+        self.ph.tap(w // 2, 140); time.sleep(5.5); self.ph.dismiss_cling()
+        ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
+        calls = lambda: [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("ev") == "ytcall"]
+        check("QL1: the full-screen film got Kestrel's controls", bool(ev("player", "start")), "no 'player start' line")
+        t_end = time.time() + 12
+        while time.time() < t_end and not ev("player", "quality-levels"):
+            time.sleep(0.5)
+        lv = ev("player", "quality-levels")
+        check("QL1: the page's own player (yt) offered its list to the controls", bool(lv) and "(yt)" in lv[0]["rest"] and "1080p" in lv[0]["rest"], "lines: %s" % [e["rest"][:100] for e in lv])
+        check("QL1: the Quality button is there although the page has no playlist", bool(ev("player", "quality-button")), "no 'player quality-button' line")
+        vw, vh, land = (973, 574, True) if (self.ph.look() or {}).get("w", 0) > (self.ph.look() or {}).get("h", 1) else (600, 947, False)
+        if not len(ev("player", "shown")) > len(ev("player", "hidden")):
+            self.ph.tap(int(vw * 0.25), 26 + int(vh * 0.2)); time.sleep(0.9)
+        m = self.log.size(); self.ph.tap(vw - 102, 26 + 41); time.sleep(1.8)
+        opened = bool(ev("video", "quality-open", m))
+        if not opened:
+            self.ph.debug("pagequality"); time.sleep(1.8)
+        op = ev("video", "quality-open", m)
+        check("QL1: the Quality button opens the list of the page's own player", bool(op) and "7 row(s) from the page's own player (yt)" in op[-1]["rest"], "lines: %s" % [e["rest"][:100] for e in op])
+        self.shot("ql-1-list")
+        n0 = len(calls())
+        m = self.log.size(); self.ph.debug("pagepick", "1"); time.sleep(3.5)                       # row 1 = 1080p (row 0 = Automatic)
+        got = [r for r in calls()[n0:] if r.get("fn") == "range"]
+        check("QL1: a pick of 1080p reached the page's player as setPlaybackQualityRange(hd1080, hd1080)", any(r.get("a") == "hd1080" and r.get("b") == "hd1080" for r in got), "calls: %s" % [(r.get("fn"), r.get("a"), r.get("b")) for r in calls()[n0:]])
+        check("QL1: the app logged the pick", bool(ev("player", "quality-page", m)), "no 'player quality-page' line")
+        # the controls come back (the sheet closed): open again, the check mark is on 1080p, then Automatic
+        if not len(ev("player", "shown")) > len(ev("player", "hidden")):
+            self.ph.tap(int(vw * 0.25), 26 + int(vh * 0.2)); time.sleep(0.9)
+        m = self.log.size(); self.ph.debug("pagequality"); time.sleep(1.8)
+        check("QL1: the list opens again", bool(ev("video", "quality-open", m)), "no second 'quality-open' line")
+        n1 = len(calls())
+        self.ph.debug("pagepick", "0"); time.sleep(3.5)
+        got2 = [r for r in calls()[n1:] if r.get("fn") == "range"]
+        check("QL1: Automatic gave the whole range back (tiny .. highres)", any(r.get("a") == "tiny" and r.get("b") == "highres" for r in got2), "calls: %s" % [(r.get("fn"), r.get("a"), r.get("b")) for r in calls()[n1:]])
+        self.shot("ql-2-after-auto")
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        self.record({"kind": "ql", "name": "quality-from-the-pages-own-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("ql scene")
+
     def kp_scene(self):
         w, h = self.screen
         checks = []
@@ -3252,6 +3559,130 @@ class Soak:
         self.dump_diag("smoke")
         return ev
 
+    def tb_scene(self):
+        """TP1 / UC1 / MT1 on the real engine (owner message 2026-11-18). TP1: "One of my tabs has the wrong preview. It shows the tab thumbnail for a site i went to before": tabs on three lab pages, the
+        tab in front moves to another page, the app is killed and started again - at every step Diagnostics' 'Tab previews' line must say 0 for the WRONG page. UC1: pressing the address bar shows the Copy
+        button and one tap puts the tab's whole address on the clipboard. MT1: the mini panel's tab tray lists the tabs, a row switches, the x closes, New tab opens a tab and the panel's keys."""
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "tabs", "%s %s" % (name, detail))
+        base = self.lab_base
+        pages = ["%s/page/text" % base, "%s/page/images" % base, "%s/page/iframes" % base]
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0); time.sleep(1)
+        self.ph.debug("closetabs"); time.sleep(3)
+        for u in pages:
+            self.ph.debug("normtab", u); time.sleep(8)               # each new tab loads its page and is in front for a while
+        def previews(tag):
+            m = self.log.size()
+            self.ph.debug("previews"); time.sleep(2.5)
+            line = health_events(self.log.since(m), "lab", "previews")
+            rows = [e["rest"] for e in health_events(self.log.since(m), "lab", "preview")]
+            txt = line[-1]["rest"] if line else ""
+            mm = re.search(r"(\d+) for the WRONG page", txt)
+            wrong = int(mm.group(1)) if mm else -1
+            bad = [r for r in rows if "ok=false" in r.lower()]
+            check("TP1: %s: Diagnostics counts 0 previews for the wrong page" % tag, wrong == 0 and not bad, "line: %s; bad rows: %s" % (txt, bad[:3]))
+            return txt, rows
+        self.ph.debug("opengrid"); time.sleep(3.5)                    # the grid takes a fresh picture of the page in front
+        t0, r0 = previews("grid open on three tabs")
+        check("TP1: the tab in front has a preview of its page", any("has=true" in r.lower() and "ok=true" in r.lower() for r in r0), "rows: %s" % r0[-4:])
+        self.shot("tb-1-grid"); self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        self.ph.open_url("%s/page/form" % base); time.sleep(1.0)    # the tab in front goes to ANOTHER page: its old picture must be gone at once
+        t1, r1 = previews("the tab went to another page")
+        cur = [r for r in r1 if "page/form" in r or "form" in r]
+        time.sleep(8); self.ph.debug("opengrid"); time.sleep(3.5)
+        t2, r2 = previews("the new page has been shown in the grid")
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        pids = self.ph.pids()                                         # a cold start: the previews come from disk
+        if pids:
+            self.adb.sh("kill -9 %d" % pids[0], timeout=20); time.sleep(2)
+        self.start_app(); time.sleep(4)
+        self.ph.debug("opengrid"); time.sleep(3.5)
+        t3, r3 = previews("after the app was killed and started again")
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        # UC1: the Copy button of the address bar
+        m = self.log.size()
+        self.ph.debug("copyurl"); time.sleep(3)
+        cu = health_events(self.log.since(m), "lab", "copyurl")
+        check("UC1: pressing the address bar shows the Copy button and one tap copies the tab's whole address", bool(cu) and "visible=true" in cu[-1]["rest"].lower() and "exact=true" in cu[-1]["rest"].lower(), "line: %s" % (cu[-1]["rest"] if cu else "none"))
+        # MT1: the tab tray of the mini panel
+        self.ph.debug("minipanel", "1"); time.sleep(1.5)
+        m = self.log.size()
+        self.ph.debug("minitabs"); time.sleep(1.5)
+        mt = health_events(self.log.since(m), "lab", "minitabs"); op = health_events(self.log.since(m), "panel", "tray-open")
+        n0 = int(re.search(r"tabs=(\d+)", mt[-1]["rest"]).group(1)) if mt and re.search(r"tabs=(\d+)", mt[-1]["rest"]) else -1
+        check("MT1: the Tabs button opens the tray with a row for every tab", bool(mt) and "tray=true" in mt[-1]["rest"].lower() and bool(op) and ("rows=%d" % n0) in op[-1]["rest"], "lab: %s panel: %s" % ([e["rest"] for e in mt], [e["rest"] for e in op]))
+        self.shot("tb-2-tray")
+        def act(what):
+            m2 = self.log.size(); self.ph.debug("trayact", what); time.sleep(2.0)
+            r = health_events(self.log.since(m2), "lab", "trayact")
+            return r[-1]["rest"] if r else ""
+        a1 = act("switch:0")
+        check("MT1: a row switches to that tab and puts the tray away", "ok=true" in a1.lower() and "current=0" in a1 and "tray=false" in a1.lower(), a1)
+        self.ph.debug("minitabs"); time.sleep(1.0)
+        a2 = act("close:%d" % max(0, n0 - 1))
+        check("MT1: the x closes that tab and the tray stays", "ok=true" in a2.lower() and ("tabs=%d" % (n0 - 1)) in a2 and "tray=true" in a2.lower(), a2)
+        a3 = act("new")
+        check("MT1: New tab opens a tab in front and the panel's keys", "ok=true" in a3.lower() and ("tabs=%d" % n0) in a3 and "keys=true" in a3.lower() and "tray=false" in a3.lower(), a3)
+        self.shot("tb-3-newtab")
+        self.ph.debug("minipanel", "0"); time.sleep(1)
+        # PV1: "I just opened a new private tab, and once i began to load a site, an old regular tab website i visited flashed": the page view keeps the last frame of the tab that used it before; a curtain must
+        # cover it from the moment the private tab's session is put on the view until that session has painted
+        m = self.log.size()
+        self.ph.debug("privtab", "%s/page/images" % base); time.sleep(9)
+        up = health_events(self.log.since(m), "tabs", "curtain-up"); dn = health_events(self.log.since(m), "tabs", "curtain-down")
+        check("PV1: a new private tab raises the curtain over the regular tab's last frame", any("private=true" in e["rest"].lower() and "UNPAINTED" in e["rest"] for e in up), "curtain-up lines: %s" % [e["rest"] for e in up])
+        check("PV1: the curtain comes down again once the private tab has painted", bool(dn) and any(("first-paint" in e["rest"] or "page-stop" in e["rest"] or "first-composite" in e["rest"]) for e in dn), "curtain-down lines: %s" % [e["rest"] for e in dn])
+        self.shot("tb-4-private")
+        m = self.log.size()
+        self.ph.debug("switchtab", "1"); time.sleep(3)
+        up2 = health_events(self.log.since(m), "tabs", "curtain-up")
+        check("PV1: from the private tab back to a regular tab there is a curtain too (the private page is not seen on it)", any("private=false" in e["rest"].lower() for e in up2), "curtain-up lines: %s" % [e["rest"] for e in up2])
+        t4, r4 = previews("at the end")
+        self.record({"kind": "tb", "name": "previews-copy-tabs", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("tb scene")
+
+    def lastrun_round(self):
+        """CR1c on the real engine: the app is ended the way Android ends it for memory (kill -9 of the main process, nothing runs in it any more) once while it is in front and once while it is in the
+        background, and the Diagnostics of the NEXT start must say which one it was (core: app/diag/LastRun.kt). Also reads the file the app keeps (files/last-run.txt) after the first kill."""
+        pkg = self.a.pkg
+        rows = []
+        for tag, in_front in (("front", True), ("background", False), ("freeze", True)):
+            self.load_page("lab-text", "lab:/page/text", 1, 1, timeout=60)
+            time.sleep(4)                                              # the note is written on the IO thread a moment after the page line
+            if tag == "freeze":                                        # CR1f: the screen thread is blocked for 25 s; the watchdog thread must write the stall (and where it sits) into the note on its own; then the process is killed in the middle of it
+                self.ph.debug("freeze", "25000"); time.sleep(8)
+            if not in_front:
+                self.ph.key("KEYCODE_HOME"); time.sleep(3)
+            note = self.adb.sh("run-as %s cat files/last-run.txt" % pkg, timeout=30)
+            pids = self.ph.pids()
+            killed = False
+            if pids:
+                self.adb.sh("kill -9 %d" % pids[0], timeout=20)
+                time.sleep(2)
+                killed = pids[0] not in self.ph.pids()
+            if not killed:
+                self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
+            self.start_app()                                           # cold start; waits for the engine
+            txt = self.dump_diag("lastrun-" + tag)
+            want = {"front": "ended WHILE ON SCREEN", "background": "in the background when it ended", "freeze": "SCREEN THREAD WAS FROZEN"}[tag]
+            top = txt.split("An EARLIER run")[0]                  # (the report also lists the earlier runs that ended badly: only the run just before this start counts here)
+            ok = want in top
+            nocrash = ("NO crash note" in top) if tag == "front" else (("NO crash note" not in top) if tag == "freeze" else True)
+            if tag == "freeze" and "ui STALL" not in note:
+                ok = False
+            if tag in ("front", "freeze") and "memory at the last note" not in txt:       # CR1g: the memory of every process of the app is in the note
+                self.issue("medium", "lastrun", "the Diagnostics after the %s kill has no 'memory at the last note' line (CR1g)" % tag, shot=False)
+            rows.append((tag, ok and nocrash, "state line in the file: %s" % ([l for l in note.splitlines() if l.startswith("state=")] or ["none"])[0]))
+            if not ok:
+                self.issue("high", "lastrun", "after the app was killed while %s the next Diagnostics did not say '%s'" % (tag, want), shot=False)
+            elif not nocrash:
+                self.issue("medium", "lastrun", "after a kill -9 while in front the Diagnostics found a crash note or engine report it should not have", shot=False)
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "lastrun", "name": "last-run-note", "status": "ok" if all(r[1] for r in rows) else "failed", "results": [{"case": r[0], "ok": r[1], "file": r[2]} for r in rows]})
+
     def dump_diag(self, tag):
         self.ph.debug("dump")
         time.sleep(7)   # the app reads the engine's preferences first (2.5 s), then writes the text
@@ -3754,6 +4185,48 @@ class Soak:
             for e in vs:
                 L.append("- %s: %s (the app saw playback: %s, videos the finder counted: %s)%s" % (e["name"], e["status"], e.get("app_saw_playing"), e.get("app_found_videos"), " - " + e["note"] if e.get("note") else ""))
             L.append("")
+        dmr = [e for e in ev if e.get("kind") == "dm"]
+        if dmr:
+            L.append("## The download window and list at a start (DM1 / DM2)")
+            L.append("")
+            for e in dmr:
+                for c in e.get("checks", []):
+                    L.append("- %s: %s%s" % (c["check"], "ok" if c["ok"] else "FAILED", ("  " + c["detail"]) if c["detail"] else ""))
+            L.append("")
+        vsr = [e for e in ev if e.get("kind") == "vs"]
+        if vsr:
+            L.append("## A vidsrc-style embed: found and saved? (VS1)")
+            L.append("")
+            for e in vsr:
+                if e.get("player_states") is not None:
+                    L.append("- %s: %s; the embedded player reported: %s" % (e["name"], e.get("status"), ", ".join(e["player_states"]) or "nothing"))
+                    continue
+                L.append("- %s: %s; finder: %s%s%s" % (e["name"], e.get("status"), e.get("finder_said"), ("; before the press: %s" % e["before_press"]) if e.get("before_press") else "", ("; saved %s (%s bytes)" % (e.get("file"), e.get("size"))) if e.get("file") else ("; " + e["note"] if e.get("note") else "")))
+            L.append("")
+            if getattr(self, "vs_log_tail", None):
+                L.append("The lab server's last requests (which Referer / Origin each one carried):")
+                L.append("")
+                L.append("```")
+                L.extend(self.vs_log_tail[-25:])
+                L.append("```")
+                L.append("")
+        lr = [e for e in ev if e.get("kind") == "lastrun"]
+        if lr:
+            L.append("## How the last run ended (CR1c): the app killed from outside, the next Diagnostics")
+            L.append("")
+            for e in lr:
+                for r in e.get("results", []):
+                    L.append("- killed while %s: %s (%s)" % (r["case"], "the Diagnostics said so" if r["ok"] else "the Diagnostics did NOT say so", r["file"]))
+            L.append("")
+        yl = [e for e in ev if e.get("kind") == "yt-leave"]
+        if yl:
+            L.append("## YouTube: leaving the app with a film page behind it and coming back (CR1)")
+            L.append("")
+            L.append("| step | RAM pressure | result | memory trims seen | engine page process gone | UI stalls |")
+            L.append("| :- | :- | :- | :- | :- | -: |")
+            for e in yl:
+                L.append("| %s | %s | %s | %s | %s | %s |" % (e["name"], "yes" if e.get("pressure") else "no", e["status"], "; ".join(e.get("trims") or []) or "-", "; ".join(e.get("engine_gone") or []) or "-", e.get("ui_stalls", 0)))
+            L.append("")
         if dls:
             L.append("## Downloads")
             L.append("")
@@ -3936,7 +4409,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3948,10 +4421,10 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.profile == "auto":
-        a.profile = "tablet" if a.suite == "daily" else "standard"
+        a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4002,6 +4475,22 @@ def main():
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
+        if a.suite in ("ql", "vp"):
+            s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
+        if a.suite == "new":
+            s.lastrun_round(); s.vs_scene(); s.ql_scene()    # (one boot for the checks of this session: CR1f/g the Last run note after a freeze and a kill, with the memory of every process; VS1 / VS2 / VP2 the finder and the capture; QL1; the lab runs one job at a time per branch)
+        if a.suite == "dm":
+            s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
+        if a.suite == "vs":
+            s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
+        if a.suite in ("tb", "new2"):
+            s.tb_scene()                                     # (TP1 / UC1 / MT1: the right preview on every tab, the Copy button of the address bar, the tab tray of the mini panel)
+        if a.suite == "new2":
+            s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
+        if a.suite == "lr":
+            s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
+        if a.suite == "yt":
+            s.yt_journey(a.minutes)                          # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
             s.daily(a.minutes)                               # (LAB3, owner message 62: a person's day on the app's real defaults, then the report for the build)
         if a.suite in ("soak", "all"):

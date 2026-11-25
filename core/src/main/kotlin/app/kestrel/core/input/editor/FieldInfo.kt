@@ -8,6 +8,15 @@ package app.kestrel.core.input.editor
 enum class FieldKind { TEXT, PASSWORD, EMAIL, URL, NUMBER, PHONE, SEARCH, OMNIBOX }
 
 /**
+ * Owner R23d (2026-11-18): a field for numbers only brings up a big number pad by itself. Which pad: [NUMBER] (a number field, also a number PIN / password field, which is a [FieldKind.PASSWORD] for everything else),
+ * [PHONE], [DATETIME] (dates and times), or [NONE] (the letters keyboard).
+ */
+enum class Pad {
+    NONE, NUMBER, PHONE, DATETIME;
+    companion object { fun of(kind: FieldKind): Pad = when (kind) { FieldKind.NUMBER -> NUMBER; FieldKind.PHONE -> PHONE; else -> NONE } }
+}
+
+/**
  * The facts about the field being edited, as plain data. [imeAction] is one of [ImeActions]. [noPersonalizedLearning] is IME_FLAG_NO_PERSONALIZED_LEARNING
  * (the app asked the keyboard to learn nothing from this field, e.g. incognito); a password field also learns nothing, whatever the flag says.
  */
@@ -21,6 +30,8 @@ class FieldInfo(
     val capsFlags: Int = 0,
     val initialSelStart: Int = -1,
     val initialSelEnd: Int = -1,
+    /** The number pad this field wants instead of the letters (R23d). */
+    val pad: Pad = Pad.of(kind),
 ) {
     /** The keyboard may learn words, pairs and glide shapes from this field. */
     val learningAllowed: Boolean get() = kind != FieldKind.PASSWORD && !noPersonalizedLearning
