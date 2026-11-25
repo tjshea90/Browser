@@ -31,7 +31,13 @@ class Experiment(
 
 object Catalog {
     /** Bumped whenever the list changes: the history only trusts results of the same catalog version. */
-    const val VERSION = 1
+    const val VERSION = 2          // 2 (alpha108): the clip test really plays its clips now, the outlier guard and the real-clock budget changed: every setting is measured again
+
+    /**
+     * Experiments that were measured on the owner's tablet and are dropped for good (never planned, not even by 'test everything again'):
+     * hw2 (hardware drawing without the helper process): 3.5 times the processor time (25 s against 7 s per pass) and WebGL stopped working (first real run, 2026-11-25).
+     */
+    val RETIRED: Set<String> = setOf("hw2")
 
     private fun p(n: String, v: String) = Change.Pref(n, v)
 

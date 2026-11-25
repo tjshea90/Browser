@@ -78,10 +78,16 @@ object Decider {
         return exp(used.sumOf { it.weight * it.gain(ref.getValue(it.id), cand.getValue(it.id)) } / wsum) - 1.0
     }
 
-    /** The metric that got worst, as (metric, loss as a fraction), for the "hurts one thing a lot" guard. */
+    /**
+     * The metric that got worst, as (metric, loss as a fraction), for the "hurts one thing a lot" guard. The loss must show in EVERY sample: the smallest loss of the candidate's samples counts, so one odd sample (first real run:
+     * 13.1 s of processor time once, 7.8 s the next time, against 7.2 s) cannot reject a setting by itself.
+     */
     fun worst(baselines: List<Sample>, candidate: List<Sample>, metrics: List<Metric>): Pair<Metric, Double>? {
-        val ref = reference(baselines); val cand = reference(candidate)
-        return metrics.filter { it.id in ref && it.id in cand }.map { it to (1.0 - exp(it.gain(ref.getValue(it.id), cand.getValue(it.id)))) }.maxByOrNull { it.second }
+        val ref = reference(baselines)
+        return metrics.filter { it.id in ref }.mapNotNull { m ->
+            val losses = candidate.filter { it.ok && m.id in it.values }.map { 1.0 - exp(m.gain(ref.getValue(m.id), it.values.getValue(m.id))) }
+            if (losses.isEmpty()) null else m to losses.min()
+        }.maxByOrNull { it.second }
     }
 
     /**

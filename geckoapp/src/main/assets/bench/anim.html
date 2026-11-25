@@ -26,19 +26,22 @@ K.run('anim', function () {
   for (var j = 0; j < 6; j++) { var d = document.createElement('div'); d.style.left = (j * 40 - 40) + 'px'; d.style.top = (j * 70) + 'px'; d.style.background = 'radial-gradient(circle,' + cols[j] + ',transparent 70%)'; d.style.animation = 'drift ' + (3 + j) + 's ease-in-out infinite alternate'; BL.appendChild(d); }
   var videos = [], strip = document.getElementById('strip');
   for (var v = 0; v < 8; v++) { var e = document.createElement('video'); e.muted = true; e.loop = true; e.playsInline = true; e.setAttribute('muted', ''); e.setAttribute('loop', ''); e.setAttribute('playsinline', ''); e.preload = 'auto'; e.src = 'clip.mp4'; strip.appendChild(e); videos.push(e); }
-  var t = 0, moving = true;
+  var t = 0, moving = true, refused = {};
   function wiggle() { if (!moving) return; t += 0.05; for (var k = 20; k < 40; k++) boxes[k].style.transform = 'translate(' + (Math.sin(t + k) * 40) + 'px,' + (Math.cos(t + k) * 20) + 'px)'; requestAnimationFrame(wiggle); }
   show('a'); requestAnimationFrame(wiggle);
   return K.cadence(ms).then(function (r) {
     out.fps_css = r.fps; out.late_a = r.late; out.gap_a = r.gap; moving = false; show('b');
     return K.sleep(300).then(function () { return K.cadence(ms); });
   }).then(function (r) {
-    out.fps_blur = r.fps; out.late_b = r.late; out.gap_b = r.gap; show('c'); videos.forEach(function (x) { try { var p = x.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {} });
+    out.fps_blur = r.fps; out.late_b = r.late; out.gap_b = r.gap; show('c'); videos.forEach(function (x) { try { var p = x.play(); if (p && p.catch) p.catch(function (er) { var nm = String(er && er.name || 'err'); refused[nm] = (refused[nm] || 0) + 1; }); } catch (e) {} });
     return K.sleep(500).then(function () { return K.cadence(ms); });
   }).then(function (r) {
     out.fps_clips = r.fps; out.late_c = r.late; out.gap_c = r.gap;
     var playing = 0; videos.forEach(function (x) { if (!x.paused && x.currentTime > 0) playing++; });
-    out.clips_playing = playing;                                      // how many of the 8 really ran (Kestrel's clip limiter and press-to-play rule may hold them: that is part of what is measured)
+    out.clips_playing = playing;
+    var rs = [], er = 0, mr = 9; videos.forEach(function (x) { if (x.error) er++; if (x.readyState < mr) mr = x.readyState; });
+    for (var nm in refused) rs.push(nm + 'x' + refused[nm]);
+    K.note = (K.note ? K.note + ' ' : '') + 'clips: ' + playing + '/8 playing, lowest ready state ' + mr + ', errors ' + er + (rs.length ? ', refused ' + rs.join(',') : '');                                      // how many of the 8 really ran (Kestrel's clip limiter and press-to-play rule may hold them: that is part of what is measured)
     out.late_pct = K.round((out.late_a + out.late_b + out.late_c) / 3);
     return out;
   });

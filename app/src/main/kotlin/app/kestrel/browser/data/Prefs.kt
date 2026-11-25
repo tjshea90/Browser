@@ -100,7 +100,7 @@ class Prefs private constructor(ctx: Context) {
      * with the Mali fixes (core DrawTrial), 2 = the same without the renderer's helper process. Applies at the next start. [drawTrialStart] is the time a trial start began and is taken away once the engine has drawn
      * for 15 seconds (or the app is left after its first picture): if it is still there at the next start, that start never steadied and the trial switches itself off ([drawTrialWhy] keeps the reason for the Diagnostics).
      */
-    var drawTrial: Int get() = sp.getInt("draw_trial", 0); set(v) = put("draw_trial", v.coerceIn(0, 2))
+    var drawTrial: Int get() = sp.getInt("draw_trial", 0).coerceIn(0, 1); set(v) = put("draw_trial", v.coerceIn(0, 1))   // trial 2 was measured on the tablet (3.5x the processor time, WebGL broken) and is gone; a saved 2 reads as 1
     var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
     var drawTrialWhy: String get() = sp.getString("draw_trial_why", "") ?: ""; set(v) = put("draw_trial_why", v)
     /**

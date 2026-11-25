@@ -45,6 +45,9 @@ object PlanBuilder {
  * The whole decision logic of a run as pure functions on [RunState]: no clock, no files, no Android. The app feeds it events (process start, a sample, an answer) and does what [next] says; because
  * everything it needs is in the state, a run that is killed at ANY point resumes to the same decisions (core tests kill and restore it at every step).
  */
+/** What a planned restart costs in real time (stop, start, warm-up page): about 25 s on the tablet. */
+const val RESTART_MIN = 0.4
+
 class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     private fun exp(id: String?) = catalog.firstOrNull { it.id == id }
 
@@ -85,7 +88,9 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
     fun onSample(s: RunState, sample: Sample): RunState {
         if (s.cursor >= s.steps.size) return s
         val list = s.samples[s.cursor].orEmpty() + sample
-        return s.copy(samples = s.samples + (s.cursor to list), taken = s.taken + 1, bootMark = 0L, bootStarts = 0, failures = if (sample.ok) 0 else s.failures)
+        // the budget is REAL work time: a sample adds the time its suite took (suite_s, about 44 s on the tablet; 45 s when a test does not say). The first real run was planned at 4 minutes a step and 75 in all, took 31, and skipped three experiments as 'out of time'.
+        val addMin = (sample.values["suite_s"] ?: 45.0) / 60.0
+        return s.copy(samples = s.samples + (s.cursor to list), taken = s.taken + 1, bootMark = 0L, bootStarts = 0, failures = if (sample.ok) 0 else s.failures, doneMin = s.doneMin + addMin)
     }
 
     fun onAnswer(s: RunState, experimentId: String, ok: Boolean): RunState = s.copy(answers = s.answers + (experimentId to ok))
@@ -118,8 +123,8 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
             }
             val want = wanted(s, step, e)
             if (want == null) { s = failStep(s, "the engine's own value of that setting could not be read"); continue }
-            val running = s.running ?: return s.copy(bootConfig = want, bootMark = now, bootStarts = 0) to Action.Restart(want, "the engine must start with: " + want.enginePart().ifEmpty { "its own settings" })
-            if (want.enginePart() != running.enginePart()) return s.copy(bootConfig = want, running = null, bootMark = now, bootStarts = 0) to Action.Restart(want, "the next test needs the engine to start with: " + want.enginePart().ifEmpty { "its own settings" })
+            val running = s.running ?: return s.copy(bootConfig = want, bootMark = now, bootStarts = 0, doneMin = s.doneMin + RESTART_MIN) to Action.Restart(want, "the engine must start with: " + want.enginePart().ifEmpty { "its own settings" })
+            if (want.enginePart() != running.enginePart()) return s.copy(bootConfig = want, running = null, bootMark = now, bootStarts = 0, doneMin = s.doneMin + RESTART_MIN) to Action.Restart(want, "the next test needs the engine to start with: " + want.enginePart().ifEmpty { "its own settings" })
             if (want.livePart() != running.livePart()) return s.copy(running = Config(running.engine, running.settings.filterKeys { it !in want.settings } + want.settings)) to Action.ApplySettings(want)
             val needed = step.samples + s.extra
             if (s.taken < needed) return s to Action.Measure
@@ -147,7 +152,7 @@ class RunMachine(private val catalog: List<Experiment> = Catalog.all) {
 
     private fun advance(s: RunState): RunState {
         val step = s.steps[s.cursor]
-        return s.copy(cursor = s.cursor + 1, taken = 0, extra = 0, doneMin = s.doneMin + step.estMin)
+        return s.copy(cursor = s.cursor + 1, taken = 0, extra = 0)      // (doneMin counts REAL minutes since alpha108: each sample and each restart adds its own, see onSample / next)
     }
     private fun decide(s: RunState, id: String, d: Decision): RunState = advance(s.copy(decisions = s.decisions + (id to d)))
     private fun failStep(s: RunState, why: String): RunState {

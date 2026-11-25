@@ -91,7 +91,7 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
     fun startRun(priority: Priority, retestAll: Boolean, quick: Boolean = false) {
         if (PrivateGuard.active()) { ui.say("Close your private tabs first: Auto-tune never runs while one is open."); return }
         val base = OptimizerApply.snapshot(prefs)
-        val skip = if (retestAll) emptySet() else OptReport.settledIds(OptimizerStore.history(ctx), Flavor.engineVersion, Catalog.VERSION)
+        val skip = (if (retestAll) emptySet() else OptReport.settledIds(OptimizerStore.history(ctx), Flavor.engineVersion, Catalog.VERSION)) + Catalog.RETIRED
         val runId = (if (quick) "q-" else "") + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         state = machine.start(runId, System.currentTimeMillis(), priority, 75, base, skip, Flavor.engineVersion, appVersion(), if (quick) setOf("scroll0", "gcpar", "fps30") else emptySet())
         persist(); Health.log("opt", "start", "run=$runId priority=$priority skip=${skip.size}")
@@ -161,6 +161,12 @@ class OptimizerRunner(private val act: Activity, private val view: GeckoView, pr
             override fun onFirstContentfulPaint(session: GeckoSession) { if (firstPaintAt == 0L) firstPaintAt = SystemClock.elapsedRealtime() }
         }
         s.promptDelegate = object : GeckoSession.PromptDelegate {}
+        // the person's press-to-play rule makes the engine ask before any video starts by itself (and refuses): on THIS screen the pages are the app's own benchmark pages on the loopback address, whose looping clips must play or the clip test measures
+        // nothing (first real run: clips_playing was 0 in all 37 samples). Muted starts are allowed here, everything else a page may ask for is refused.
+        s.permissionDelegate = object : GeckoSession.PermissionDelegate {
+            override fun onContentPermissionRequest(session: GeckoSession, perm: GeckoSession.PermissionDelegate.ContentPermission): org.mozilla.geckoview.GeckoResult<Int>? =
+                org.mozilla.geckoview.GeckoResult.fromValue(if (perm.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE) GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW else GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+        }
         s.open(GeckoEngine.runtime(ctx))
         view.setSession(s)
         session = s
