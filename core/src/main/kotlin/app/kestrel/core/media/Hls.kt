@@ -51,7 +51,8 @@ object Hls {
     }
 
     /** The initialization section of fragmented MP4 (EXT-X-MAP): written once, before the first segment. */
-    class Init(val url: String, val from: Long, val len: Long)
+    /** [key]: the index into [Media.keys] of the EXT-X-KEY that applies to this EXT-X-MAP (RVW2 V11: RFC 8216 4.3.2.5 encrypts the initialization section with it), -1 = clear. */
+    class Init(val url: String, val from: Long, val len: Long, val key: Int = -1)
     /** [ad]: the playlist's own markers (CUE-OUT .. CUE-IN, SCTE-35, DATERANGE) put this segment inside an advertising break (RX3-V5, [AdMarkers]); false when it says nothing. */
     class Seg(val url: String, val durationMs: Long, val from: Long, val len: Long, val key: Int, val seq: Long, val discontinuity: Boolean, val ad: Boolean = false)
     /** An AES-128 key: its address and the IV the playlist names (null = derive it from the segment's sequence number). */
@@ -83,13 +84,20 @@ object Hls {
         }
     }
 
+    /** RVW1 S4: the most lines a playlist may have and the most distinct key tags it may name; beyond that it is refused, not parsed. */
+    const val MAX_LINES = 150_000
+    const val MAX_KEYS = 4096
+
     sealed class Playlist
     class MasterPlaylist(val master: Master) : Playlist()
     class MediaPlaylist(val media: Media) : Playlist()
 
     /** @return null when [text] is not an HLS playlist at all (an HTML error page, an empty reply). */
     fun parse(text: String, baseUrl: String): Playlist? {
-        val lines = text.removePrefix("﻿").lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        // RVW1 S4: a hostile page can make the finder read a 4 MB body of "#EXTINF:1,\na\n" lines, which was 300k-2M strings and segment objects, parsed twice (once to validate) with the second on the UI thread: an out-of-memory
+        // or a freeze on the 128 MB heap class. No real VOD list comes near [MAX_LINES] (24 hours of 2 s segments is under 90,000 lines); more is "not a usable playlist".
+        val lines = text.removePrefix("﻿").lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.take(MAX_LINES + 1).toList()
+        if (lines.size > MAX_LINES) return null
         if (lines.isEmpty() || !lines[0].startsWith("#EXTM3U")) return null
         return if (lines.any { it.startsWith("#EXT-X-STREAM-INF") }) MasterPlaylist(parseMaster(lines, baseUrl)) else MediaPlaylist(parseMedia(lines, baseUrl))
     }
@@ -162,6 +170,7 @@ object Hls {
                         method == "AES-128" -> {
                             val uri = a["URI"]
                             if (uri == null) { problem = problem ?: Problem.UNSUPPORTED; curKey = -1 }
+                            else if (keys.size >= MAX_KEYS) { problem = problem ?: Problem.UNSUPPORTED; curKey = -1 }   // RVW1 S4: a key tag before every one of 100,000 segments
                             else { keys.add(Key(resolve(base, uri), a["IV"]?.let { parseIv(it) })); curKey = keys.size - 1 }
                         }
                         else -> { problem = problem ?: Problem.SAMPLE_AES; curKey = -1 } // SAMPLE-AES, SAMPLE-AES-CTR
@@ -172,7 +181,7 @@ object Hls {
                     val uri = a["URI"]
                     if (uri != null) {
                         val (len, off) = parseRange(a["BYTERANGE"], null, 0)
-                        val m = Init(resolve(base, uri), if (len >= 0) off else -1, len)
+                        val m = Init(resolve(base, uri), if (len >= 0) off else -1, len, curKey)
                         if (init == null) init = m else if (init.url != m.url || init.from != m.from) problem = problem ?: Problem.UNSUPPORTED
                     }
                 }

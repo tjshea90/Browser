@@ -373,7 +373,13 @@ onMsg(function (m, sender) {
     if (fid === 0 && tabId >= 0 && mp && !tabTop.has(tabId)) tabTop.set(tabId, mp); // the top frame's own address is the page (see learnTop)
     var dp = (tabId >= 0 && tabTop.get(tabId)) || (fid > 0 ? '' : mp);        // the page the tab is on; a frame never names the page by ITS address (the app then takes the tab in front)
     if (fid > 0) noteFrame(tabId, fid, undefined, mp);
-    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' }).catch(function () {});
+    var dmsg = { k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' };
+    if (typeof m.lb === 'string' && m.lb) dmsg.lb = m.lb.slice(0, 24);          // RVW1 F11: the quality label the <source> carried
+    send(dmsg).catch(function () {});
+    return undefined;
+  }
+  if (m.k === 'bye') {                                                        // RVW2 F13: a frame that offered media is being unloaded (its element was removed, or it navigates itself)
+    if (tabId >= 0 && sender && sender.frameId > 0) frameGone(tabId, sender.frameId);
     return undefined;
   }
   if (m.k === 'pop') {
@@ -621,8 +627,8 @@ function onRequest(d) {
     rv.pages++;
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
-    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
-    sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
+    navId.set(d.tabId, Number(d.requestId) || 0); trimMap(navId, 80); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
+    sniffed.delete(d.tabId); sniffed.delete(-1); jsonSeen.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
@@ -713,7 +719,7 @@ var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
 var PLAYLIST = /mpegurl|dash\+xml|\.(?:m3u8|m3u|mpd)(?:$|[?#])/i; // playlists are small by nature; only plain files are judged by their size
 var MIN_FILE_BYTES = 102400; // the app never offers a plain file under 100 KB (core MediaList.MIN_FILE): not worth a message to it
 // Sites that fetch a video in pieces by putting the byte range in the QUERY make every piece a new address: those parameters do not make a different file.
-var PIECE_PARAMS = /^(range|bytestart|byteend|start|end|sq|seg|segment|rn|rbuf|offset|byte_range|bytes)$/i;
+var PIECE_PARAMS = /^(range|bytestart|byteend|start|end|sq|seg|segment|rn|rbuf|offset|byte_range|bytes|_|cb|nocache|cachebuster|rnd|rand)$/i; // RVW1 F22: and the cache-busters (`_=1700000000`, `cb=`, `nocache=`): every request of a player that adds one was a new address
 function dedupeKey(url, sized) {
   var q = url.indexOf('?');
   if (q < 0) return url + '|' + sized;
@@ -722,6 +728,20 @@ function dedupeKey(url, sized) {
   var parts = rest.split('&'), keep = [];
   for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (!PIECE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) keep.push(parts[i]); }
   return url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + '|' + sized;
+}
+// RVW1 F4: the address the app is TOLD about. A site that fetches a file in pieces by putting the byte range in the query (Facebook / Instagram `...mp4?...&bytestart=0&byteend=N`) was reported with the FIRST piece's range,
+// so the app showed the size of one slice and Download saved only that slice. Only keys that are certainly byte positions are taken out (not start / end / offset, which may be times); null = the address had none.
+// RVW1 N6: a Content-Disposition is cut at 1000 characters (was 300: a percent-encoded `filename*` of 50 Cyrillic letters is 300 characters and ended in half an escape = U+FFFD in the file name); a cut in the middle of `%XX` goes back to before it
+function cdCut(v) { v = v.slice(0, 1000); var p = v.lastIndexOf('%'); if (p >= v.length - 2 && p >= 0) v = v.slice(0, p); return v; }
+var BYTE_PARAMS = /^(range|bytestart|byteend|byte_range|bytes)$/i;
+function pieceFree(url) {
+  var q = url.indexOf('?');
+  if (q < 0) return null;
+  var rest = url.slice(q + 1), frag = '', hash = rest.indexOf('#');
+  if (hash >= 0) { frag = rest.slice(hash); rest = rest.slice(0, hash); }
+  var parts = rest.split('&'), keep = [], cut = false;
+  for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (BYTE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) cut = true; else keep.push(parts[i]); }
+  return cut ? url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + frag : null;
 }
 // VP2 (owner message 2026-11-18: "I selected three different video servers on doraby.Com but none of them would play. It showed no error, it just couldn't load the video"): a trusted click in the TOP page
 // (content.js sends `ptap`, nothing but the fact) followed within PTAP_MS by a frame the page starts is the person's press of that frame: the frame's gate is told (guard answer `pp`) and opens its player.
@@ -764,8 +784,8 @@ function docOf(u) { return u ? String(u).replace(/#.*$/, '') : ''; } // a docume
 function noteFrame(tabId, frameId, parentId, doc) {
   if (!(frameId > 0) || tabId < 0) return;
   doc = docOf(doc);
-  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
-  if (parentId !== undefined && parentId >= 0 && !pm.has(frameId)) pm.set(frameId, parentId);
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); trimMap(frameParent, 60); } // RVW1 P10: the per-tab maps are capped too (a closed tab's entry used to stay until the extension process died)
+  if (parentId !== undefined && parentId >= 0 && !pm.has(frameId) && pm.size < 120) pm.set(frameId, parentId);
   var mf = mediaFrames.get(tabId); if (!mf) { if (mediaFrames.size >= SNIFFED_TABS) mediaFrames.delete(mediaFrames.keys().next().value); mf = new Map(); mediaFrames.set(tabId, mf); }
   if (mf.size < 60 || mf.has(frameId)) mf.set(frameId, doc || '');
 }
@@ -785,10 +805,15 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
     if (!pf) { pf = new Map(); personFrames.set(tabId, pf); if (personFrames.size > 40) personFrames.delete(personFrames.keys().next().value); }
     if (pf.size < 30 || pf.has(f)) { pf.set(f, now); vgt.inherit++; markStats(); }
   }
-  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
-  if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
-  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); }
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); trimMap(frameParent, 60); }
+  if (d.parentFrameId >= 0 && (pm.size < 120 || pm.has(f))) pm.set(f, d.parentFrameId);
+  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); trimMap(frameDoc, 60); }
   if (fd.size < 80 || fd.has(f)) fd.set(f, docOf(d.url));
+  frameGone(tabId, f);
+}
+// The frame [f] (and the frames inside it) no longer shows the document that offered media: what they offered is dropped (the app is told which documents are gone). Called when a sub_frame request replaces the frame and,
+// RVW2 F13, when the frame's own script says it is being unloaded (`bye`): a site that REMOVES the player iframe and inserts a new one (a different frame id) never sent a request for the old id.
+function frameGone(tabId, f) {
   var mf = mediaFrames.get(tabId);
   if (!mf || !mf.size) return;
   var gone = [], ids = [];
@@ -804,7 +829,7 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
 // What the browser itself sent with a request that may turn out to be media: its Referer and Origin. A video server often wants the embedded PLAYER's (the page the player sits in is not who asks), so the app
 // repeats these when it reads the playlist and fetches the parts. Kept briefly, by request id; a request that never gets an answer is pushed out by the next ones.
 var reqHdr = new Map();
-var REQ_HDR_MAX = 160;
+var REQ_HDR_MAX = 320; // RVW1 F20: was 160; an entry is dropped when its response is read, so only a burst of unanswered requests ever pushes one out, and a busy page's burst was enough
 browser.webRequest.onBeforeSendHeaders.addListener(lstTimed(LST.snd, function (d) {
   var h = d.requestHeaders;
   if (!h) return;
@@ -850,7 +875,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
     seen = new Set(); sniffed.set(d.tabId, seen);
   }
   if (seen.has(key)) return;
-  var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); }
+  var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); trimMap(maybeCount, 60); }
   var now = Date.now(), total = 0;
   fc.forEach(function (v) { topUp(v, now); total += v.n; });
   var q = fc.get(d.frameId);
@@ -880,7 +905,7 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
     var n = h[i].name.toLowerCase();
     if (n === 'content-type') ct = (h[i].value || '').toLowerCase();
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
-    else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
+    else if (n === 'content-disposition') cd = cdCut(String(h[i].value || '')); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
     else if (n === 'cache-control' && d.type === 'main_frame' && /no-store/i.test(h[i].value || '')) nostore = true; // 13 letters like content-range: it passes the length filter above
   }
@@ -900,7 +925,11 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   seen.add(key);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org }).catch(function () {});
+  var ru = redirFrom.get(url);                                  // RVW2 F16
+  var whole = pieceFree(url);                                  // RVW1 F4: a piece's range is not the file: report the file, and its length only when the server said the TOTAL (Content-Range)
+  var mmsg = { k: 'media', u: whole || url, c: ct, l: (whole && total < 0) ? -1 : size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org };
+  if (ru && ru !== url) mmsg.ru = ru.slice(0, 1000);
+  send(mmsg).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
@@ -946,14 +975,104 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   return {};
 }, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
 
+// RVW1 F8: JSON answers that NAME media. Vimeo's player configuration (`progressive` MP4 files and `hls` playlists), JW Player's `v2/media/ID`, Wistia's `ID.json`, Dailymotion's metadata, Brightcove's playback API and
+// the like never show a media address on the wire: the player reads them from a JSON answer and then fetches the pieces through MSE, so the finder saw nothing. The answers of video-looking endpoints are READ here
+// (written straight through to the page as they arrive, so the page is not slowed; the first 256 KB are kept) and every media address in them is reported like one found in the page's text (verified before it
+// counts). Narrow on purpose, like the HLS filter above: only URLs whose path names a video-ish word reach this listener at all (the pattern match is done before the extension is called), only JSON or plain-text
+// answers, at most JSON_PER_PAGE per page, and nothing for a body that says it is big.
+var JSON_MAX = 262144, JSON_PER_PAGE = 24, JSON_MAX_URLS = 12;
+var JSON_WORDS = ['video', 'player', 'config', 'playlist', 'manifest', 'media', 'embed', 'stream', 'vod', 'clip', 'oembed', 'sources', 'metadata'];
+var JSON_URLS = [];
+(function () { for (var i = 0; i < JSON_WORDS.length; i++) { JSON_URLS.push('http://*/*' + JSON_WORDS[i] + '*'); JSON_URLS.push('https://*/*' + JSON_WORDS[i] + '*'); } })();
+var JSON_CT = /^(?:application\/(?:[a-z0-9.+-]*\+)?json|text\/(?:plain|json|javascript)|application\/javascript)\b/i;
+var JSON_FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+// RVW2 F16: media / script requests that were REDIRECTED: final address -> the address the page first asked for. The page's own <video> reports its currentSrc (the first address); the response that is sniffed carries
+// the last one. The first address goes along with the final one (`ru`) so the app can match what the element said.
+var redirFrom = new Map();
+browser.webRequest.onBeforeRedirect.addListener(function (d) {
+  try {
+    if (!d.redirectUrl) return;
+    var root = redirFrom.get(d.url) || d.url;
+    redirFrom.delete(d.redirectUrl); redirFrom.set(d.redirectUrl, root); trimMap(redirFrom, 120);
+  } catch (e) { /* never break a request */ }
+}, { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other'] });
+var jsonSeen = new Map();   // tabId -> JSON answers read on this page
+function jsonUrlsOf(text) {
+  var t = text.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/'), out = [], seen = {}, m;
+  JSON_FIND.lastIndex = 0;
+  while ((m = JSON_FIND.exec(t)) !== null && out.length < JSON_MAX_URLS) { if (!seen[m[0]]) { seen[m[0]] = 1; out.push(m[0]); } }
+  return out;
+}
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  try {
+    if (d.tabId < 0 || d.statusCode !== 200 || (d.method !== 'GET' && d.method !== 'POST') || stale(d)) return {};
+    var rh = d.responseHeaders || [], ct = '', len = -1, i;
+    for (i = 0; i < rh.length; i++) {
+      var nl = rh[i].name.length;
+      if (nl === 12 && rh[i].name.toLowerCase() === 'content-type') ct = String(rh[i].value || '');
+      else if (nl === 14 && rh[i].name.toLowerCase() === 'content-length') len = parseInt(rh[i].value, 10);
+    }
+    if (!JSON_CT.test(ct) || len > JSON_MAX) return {};
+    var n = jsonSeen.get(d.tabId) || 0;
+    if (n >= JSON_PER_PAGE) return {};
+    jsonSeen.set(d.tabId, n + 1); trimMap(jsonSeen, 60);
+    var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, over = false;
+    f.ondata = function (e) {
+      try {
+        if (!e || !e.data) { f.disconnect(); return; }
+        f.write(e.data);                                                   // straight through: the page gets its bytes at once
+        if (!over) { total += e.data.byteLength; if (total > JSON_MAX) { over = true; chunks = []; } else chunks.push(new Uint8Array(e.data.slice(0))); }
+      } catch (x) { try { f.disconnect(); } catch (y) { /* gone */ } }
+    };
+    f.onstop = function () {
+      try {
+        if (!over && total > 0) {
+          var all = new Uint8Array(total), at = 0;
+          for (var c = 0; c < chunks.length; c++) { all.set(chunks[c], at); at += chunks[c].length; }
+          var urls = jsonUrlsOf(new TextDecoder('utf-8').decode(all));
+          if (urls.length) {
+            var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
+            var fr = docOf(d.documentUrl), rhd = reqHdr.get(d.requestId), ref = '', org = '';
+            if (rhd !== undefined) { var nlp = rhd.indexOf('\n'); ref = rhd.slice(0, nlp); org = rhd.slice(nlp + 1); }
+            noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
+            for (var k = 0; k < urls.length; k++) send({ k: 'media', u: urls[k], c: '', l: -1, p: page, f: fr !== docOf(page) ? fr : '', s: 'dom', rf: ref, og: org }).catch(function () {});
+            jsonStat.found += urls.length;
+          }
+          jsonStat.read++;
+        }
+      } catch (x) { jsonStat.err++; }
+      try { f.close(); } catch (x) { /* gone */ }
+    };
+    f.onerror = function () { jsonStat.err++; try { f.disconnect(); } catch (x) { /* gone */ } };
+  } catch (e) { jsonStat.err++; }
+  return {};
+}, { urls: JSON_URLS, types: ['xmlhttprequest'] }, ['blocking', 'responseHeaders']);
+var jsonStat = { read: 0, found: 0, err: 0 };
+
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
-onMsg(function (m) {
+// RVW1 F1: a frame's number for the element ids. content.js numbers its elements per DOCUMENT (1, 2, ...), so the player in an iframe and the one in the page both said "el 1" and the app took them for one element
+// (blob matching, "played", ad runs). The frame's small number (1..1999, 0 = the page itself) goes above the element's: el = n * 1000000 + element, at most 1 999 999 999 (an Int on the app side).
+var frameNos = new Map(), frameNoNext = 0;
+function frameNo(tabId, fid) {
+  if (!(fid > 0) || !(tabId >= 0)) return 0;
+  var k = tabId + ':' + fid, n = frameNos.get(k);
+  if (!n) { n = (frameNoNext++ % 1999) + 1; frameNos.set(k, n); if (frameNos.size > 300) frameNos.delete(frameNos.keys().next().value); }
+  return n;
+}
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vid' || !m.u) return undefined;
   // RX3-V1: what the element is for (content.js factsOf): small whole numbers, clamped here again because the message comes from a web page's frame
   function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
-  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' };
+  // RVW1 F1: the PAGE the tab is on, not the frame's own address: a cross-origin player frame (doraby's vidsrc / vidfast embeds, Vimeo, Dailymotion) names its own address in `p`, and the app finds no tab for it and
+  // dropped the whole report (role, played, heights, length, blob match). Same rule as the `dom` report: the tab's page; a frame without a known page names none (the app then takes the tab in front).
+  var tabId = (sender && sender.tab) ? sender.tab.id : -1, fid = sender ? (sender.frameId | 0) : 0;
+  var page = (tabId >= 0 && tabTop.get(tabId)) || (fid > 0 ? '' : String(m.p || ''));
+  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: page };
   if (typeof m.f === 'number') { o.f = ci(m.f, 63); o.rw = ci(m.rw, 20000); o.rh = ci(m.rh, 20000); o.vp = ci(m.vp, 100); }
-  if (typeof m.el === 'number') o.el = ci(m.el, 1000000);          // RX3-V3: the element's number on its page
+  if (typeof m.el === 'number') {                                   // RX3-V3: the element's number on its page
+    var fn = frameNo(tabId, fid);
+    o.el = fn ? ci(m.el, 999999) + 1000000 * fn : ci(m.el, 1000000);
+  }
   if (m.ev === 'played') o.ev = 'played';                            // RX3-V3: it really played for 3 s
   send(o).catch(function () {});
   return undefined;

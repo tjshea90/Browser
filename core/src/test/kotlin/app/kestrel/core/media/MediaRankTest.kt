@@ -208,4 +208,16 @@ class MediaRankTest {
             assertTrue("$u is a soft word and 20 MB next to 100 MB", urls(MediaRank.rank(listOf(film, file(u, 20 * MB))).other).contains(u))
         }
     }
+
+    @Test fun theSameFileOnTwoHostsIsOneRowButOnlyWhenPathAndKnownLengthAgree() {
+        // RVW2 F24
+        val a = file("https://cdn1.example/v/2024/film-full.mp4", 480 * MB); val b = file("https://cdn2.example/v/2024/film-full.mp4?token=9", 480 * MB)
+        assertEquals(1, MediaRank.rank(listOf(a, b)).main.size)
+        val other = file("https://cdn2.example/v/2024/film-full.mp4", 300 * MB)                       // same path, another length: another file
+        assertEquals(2, MediaRank.rank(listOf(a, other)).main.size)
+        val u1 = file("https://cdn1.example/v/2024/unknown.mp4", -1); val u2 = file("https://cdn2.example/v/2024/unknown.mp4", -1)
+        assertEquals("an unknown length proves nothing", 2, MediaRank.rank(listOf(u1, u2)).let { it.main.size + it.other.size })
+        val short1 = file("https://cdn1.example/a.mp4", 90 * MB); val short2 = file("https://cdn2.example/a.mp4", 90 * MB)
+        assertEquals("a path that short is not evidence", 2, MediaRank.rank(listOf(short1, short2)).main.size)
+    }
 }

@@ -1,5 +1,6 @@
 package app.kestrel.browser.shield
 
+import app.kestrel.browser.readAllSized
 import android.content.Context
 import android.util.Log
 import app.kestrel.browser.Io
@@ -56,7 +57,7 @@ object Engine {
             } catch (t: Throwable) { Log.w(Io.TAG, "downloaded filter set rejected: ${t.message}") }
         }
         try {
-            publish(app.assets.open("filters/default.kfs").use { FilterSetCodec.read(it.readBytes()) })
+            publish(app.assets.open("filters/default.kfs").use { FilterSetCodec.read(it.readAllSized()) })   // RVW1 P11: one allocation, not two
             sourceDescription = "bundled list"
             return
         } catch (t: Throwable) { Log.w(Io.TAG, "bundled filter set unreadable", t) }
