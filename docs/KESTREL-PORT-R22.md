@@ -1,0 +1,8 @@
+
+## R26 (2026-11-19): the latest Swoop engine (0.7.0-alpha7) in Kestrel - Browser branch ccr-2630e41a-palpyu
+Owner: "sync the latest swoop version to kestrel browser". Branch built from the newest other-session tip (ccr-587430ac-royssd, which released alpha70 on 2026-11-18), with the R22 port (branch claude/keyboard-caps-space-resize-glide-r72nmp) merged in, then the engine synced again
+(`tools/sync-keyboard-core.sh`, pin = Keyboard commit recorded in KEYBOARD_PIN, `check-keyboard-core.sh` passes). NOT released, NOT merged to main or to the other session's branch: that is the owner's / that session's call (it ships Kestrel releases).
+* Arrives with the copy (all engine): the phone key-size tuning of Swoop R24b (`GlideParams.forPitchDp`: straight-line price 1.0 and visitCap 5 for phone keys, the old values for big keys, language floor 0.45), `GlideKeys.pitchDp`, the shadow decode (Diagnostics counters of Swoop only), `GlideTyping.forgetThumb`, the next-word re-judging inside `GlideSession`, `ClassModel` (an experiment, off), the real-swipe test tools (skipped unless REAL_SWIPES=1) and their tests.
+* Adapted by hand: `MiniNav.glideKeys()` sets `pitchDp = pitch / density` (without it the engine would treat every phone as a big-key tablet and keep the old parameters).
+* NOT ported, on purpose: "fix the word before" (it lives in `GlideSession`, which MiniNav does not use: MiniNav has its own commit glue; Kestrel types through Swoop whenever Swoop is installed, and Swoop has it).
+* Checked here: Kestrel `:core:test` (the vendored engine suite and Kestrel's own core tests) passes. NOT run: Kestrel `:app` tests (MiniNavTest etc.; the Gecko app module was not built in this sandbox), Kestrel on a device or emulator.
