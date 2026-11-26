@@ -2422,7 +2422,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16; const val PHONE = 19; const val RELOAD = 20 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16; const val PHONE = 19; const val RELOAD = 20; const val PAINT = 21 }
 
     override fun onMenu(anchor: View) {
         val t = current
@@ -2450,6 +2450,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.RELOAD, "Reload without cache", null, R.drawable.ic_refresh))
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
+        if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.PAINT, "Parts of the page are missing", null, R.drawable.ic_refresh))     // GL2c
         items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings)) // in private windows too (owner 2026-11-13: it must not disappear there); Back up / Restore decline by themselves in a private window
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
         if (!updateHot) items.add(MenuItemSpec(M.UPDATE, "Updates", null, R.drawable.ic_update))
@@ -2464,6 +2465,7 @@ open class BrowserActivity : Activity(), DockListener {
         when (id) {
             M.RELOAD -> reloadFresh()
             M.REFRESH -> refreshScreen("menu")
+            M.PAINT -> paintReport()
             M.DIAG -> showDiagnostics()
             M.UPDATE -> showUpdates()
             M.VIDEO -> t?.let { video.show(it) }
@@ -2811,6 +2813,29 @@ open class BrowserActivity : Activity(), DockListener {
      * What switching apps and coming back does to the page, on demand: re-send the focus and keyboard state (R0), toggle the session's active state (R1),
      * then ask GeckoView for a brand-new rendering surface (R2). Logged so a report shows which step cured it.
      */
+    /**
+     * GL2c (owner 2026-11-26: "undrawn cut off pictures and text"; core DrawGuard / PaintReports): one tap says "a part of this page is not drawn". It is written down with the drawing mode in force (so the next
+     * review knows which mode lost the part), the screen is redrawn (the existing Refresh screen steps), and a second tap within 3 days while the graphics chip draws moves the tablet to the processor from the
+     * next start, the one mode that never left a part of a page undrawn. A private tab's page is never named in the line.
+     */
+    private fun paintReport() {
+        val now = System.currentTimeMillis()
+        val t = current
+        val mode = app.kestrel.core.gfx.DrawGuard.mode(prefs.labSoft, prefs.drawTrial)
+        val list = app.kestrel.core.gfx.PaintReports.add(prefs.paintReports, now)
+        prefs.paintReports = list
+        val fall = app.kestrel.core.gfx.PaintReports.fallBack(mode, list, now)
+        val where = if (t != null && !t.isPrivateTab && t.topHost.isNotEmpty()) " host=" + t.topHost else ""
+        Health.log("paint", "report", app.kestrel.core.gfx.PaintReports.logLine(mode, list, now) + where)
+        Health.count("paint.report")
+        if (fall && !GeckoPrefs.autoTuneActive(applicationContext)) {
+            prefs.labSoft = true; prefs.drawTrial = 0; prefs.drawTrialStart = 0L; prefs.drawTrialWhy = ""; prefs.paintReports = ""
+            prefs.drawNote = "you reported parts of pages missing twice in 3 days while the graphics chip drew, so Kestrel draws with the processor from the next start"
+            Health.log("paint", "fallback", "to the processor after " + app.kestrel.core.gfx.PaintReports.LIMIT + " reports in 3 days; was " + mode.label.replace(' ', '-'))
+        } else refreshScreen("paint-report")
+        Toast.makeText(this, app.kestrel.core.gfx.PaintReports.answer(mode, list, now), Toast.LENGTH_LONG).show()
+    }
+
     private fun refreshScreen(why: String) {
         Health.log("user", "refresh-screen", why); Health.count("user.refresh")
         val s = current?.session ?: return

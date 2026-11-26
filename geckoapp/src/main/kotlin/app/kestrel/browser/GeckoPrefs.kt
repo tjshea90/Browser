@@ -109,7 +109,7 @@ object GeckoPrefs {
     }
 
     /** An Auto-tune run that has not finished owns the drawing configuration of its steps. */
-    private fun autoTuneActive(ctx: Context): Boolean =
+    internal fun autoTuneActive(ctx: Context): Boolean =
         try { app.kestrel.browser.optimizer.OptimizerStore.load(ctx)?.let { it.status != app.kestrel.core.optimizer.Status.DONE } == true } catch (e: Exception) { false }
 
     /**
