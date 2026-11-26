@@ -954,7 +954,7 @@ class OwnerRulesTest {
     /** OPT1 (owner 2026-11-24: "an automated system ... that tries all different experiments and settings ... finds the best speed"; research/OPTIMIZER.md): the wiring that makes Auto-tune safe. */
     @Test fun opt1AutoTuneIsWiredSoThatNoRunCanLeaveTheOwnerInABrokenOrTestSetting() {
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
-        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
+        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(ctx, app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
         val guard = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerGuard.kt")
         assertTrue("the guard asks the pure machine and writes the configuration it returns", guard.contains("RunMachine().onProcessStart(st)") && guard.contains("OptimizerApply.write(Prefs.get(ctx), cfg)") && guard.contains("if (st.status == Status.DONE) return"))
         val apply = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerApply.kt")
