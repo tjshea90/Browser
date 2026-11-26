@@ -2825,7 +2825,8 @@ open class BrowserActivity : Activity(), DockListener {
         val list = app.kestrel.core.gfx.PaintReports.add(prefs.paintReports, now)
         prefs.paintReports = list
         val fall = app.kestrel.core.gfx.PaintReports.fallBack(mode, list, now)
-        val where = if (t != null && !t.isPrivateTab && t.topHost.isNotEmpty()) " host=" + t.topHost else ""
+        val h = t?.topHost
+        val where = if (t != null && !t.isPrivateTab && !h.isNullOrEmpty()) " host=$h" else ""
         Health.log("paint", "report", app.kestrel.core.gfx.PaintReports.logLine(mode, list, now) + where)
         Health.count("paint.report")
         if (fall && !GeckoPrefs.autoTuneActive(applicationContext)) {

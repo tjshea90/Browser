@@ -1,21 +1,22 @@
-# CHECKPOINT 3358 — read me first, then TASKS.md
+# CHECKPOINT 3365 — read me first, then TASKS.md
 
-**Written:** 2026-11-26T00:01:40Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/wonderful-maxwell-p7v1fm` · **builds on:** `ae386900` (this checkpoint is the commit after it)
+**Written:** 2026-11-26T00:05:04Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/wonderful-maxwell-p7v1fm` · **builds on:** `9316a71a` (this checkpoint is the commit after it)
 
 ## Just done
-GL2 written into TASKS (owner words) + research/PAINT_GLITCH.md 2026-11-26 section: alpha108 uploads show hardware drawing with Safe drawing OFF (the failing mode)
+GL2b/c coded (not compiled yet): core DrawGuard + PaintReports, Prefs drawNote/paintReports, GeckoPrefs always-on shortcut lines + leavePlain + trialSwitchedOff, BrowserActivity menu tile + paintReport, Settings one choice
 
 ## Do this next
-GL2b: add core DrawGuard (pure) + wire GeckoPrefs.drawLines / trial revert fallback / one-time migration, then GL2c report button, GL2d digest section, GL2e tests + ship alpha109. Heartbeat trigger not yet created.
+1) write core DrawGuardTest + update OwnerRulesTest (perf7 line ~719-726, perf10 ~806-811, perf25 ~940-948) for the removed Safe drawing toggle; 2) compile: ./gradlew --offline -q :core:test :geckoapp:compileDebugKotlin (background, poll log); 3) GL2d digest DRAWING section in tools/diag_digest.py; 4) heartbeat trigger; 5) bump versionCode 210 / alpha109, ship.sh gecko, dispatch
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M research/PAINT_GLITCH.md
+     M geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt
 
 ## Last ten checkpoints
 ```
+  12d8b35b ckpt 3358: GL2 written into TASKS (owner words) + research/PAINT_GLITCH.md 2026-11-26 s
   d033d956 ckpt 3339: alpha108 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha108, run 455502
   7097bf33 ckpt 3337: alpha108 build dispatched ONCE (run 45550204316, head ad9506c7, app=gecko fu
   ad9506c7 ckpt 3336: gated kestrel-g-v0.3.0-alpha108 (gecko code 209) and pushed it: handoff self
@@ -25,8 +26,7 @@ GL2b: add core DrawGuard (pure) + wire GeckoPrefs.drawLines / trial revert fallb
   eeac4ff3 ckpt 3328: alpha107 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha107, run 455370
   788928f7 ckpt 3326: alpha107 build dispatched ONCE (run 45537054629, head d23bd30b, app=gecko fu
   d23bd30b ckpt 3325: gated kestrel-g-v0.3.0-alpha107 (gecko code 208) and pushed it: handoff self
-  13f6ec0b ckpt 3324: OPT1c lab v14 read: the screen thread froze inside a native draw call right 
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(6 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
