@@ -91,7 +91,7 @@ class Prefs private constructor(ctx: Context) {
     var labBuffer: Boolean get() = bool("lab_buf", false); set(v) = put("lab_buf", v)
     /** EX-16: text in a web font shows after 0.5 s in the fallback font instead of staying invisible for up to 3 s. ON by default since alpha26 (readable text sooner on a slow link; the page may jump a little when the font arrives). */
     var labFontDelay: Boolean get() = bool("lab_font", true); set(v) = put("lab_font", v)
-    /** PERF7c: "Safe drawing" (default ON): engine start-up preferences that turn off the graphics shortcuts that can leave bands of a page undrawn (GeckoPrefs.drawLines); read when the engine starts. */
+    /** PERF7c: the old "Safe drawing" switch. GL2b: no longer in Settings and no longer read by the engine config: the shortcut switches are ALWAYS written (GeckoPrefs.drawLines), because OFF was the mode that cut text and pictures. The key stays so old backups still restore. */
     var labDraw: Boolean get() = bool("lab_draw", true); set(v) = put("lab_draw", v)
     /** PERF10b (owner 2026-11-22: still bands of text undrawn with Safe drawing on): "Software drawing" (default OFF): the engine draws the page with the processor instead of the graphics chip (gfx.webrender.software); no graphics driver can corrupt it, it costs speed on four slow cores. Read when the engine starts. */
     var labSoft: Boolean get() = bool("lab_soft", false); set(v) = put("lab_soft", v)
@@ -103,6 +103,10 @@ class Prefs private constructor(ctx: Context) {
     var drawTrial: Int get() = sp.getInt("draw_trial", 0).coerceIn(0, 1); set(v) = put("draw_trial", v.coerceIn(0, 1))   // trial 2 was measured on the tablet (3.5x the processor time, WebGL broken) and is gone; a saved 2 reads as 1
     var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
     var drawTrialWhy: String get() = sp.getString("draw_trial_why", "") ?: ""; set(v) = put("draw_trial_why", v)
+    /** GL2b (core DrawGuard): the sentence Settings shows when Kestrel itself changed how pages are drawn (left the plain graphics-chip mode, fell back to the processor after reports). Empty = nothing changed by itself. */
+    var drawNote: String get() = sp.getString("draw_note", "") ?: ""; set(v) = put("draw_note", v)
+    /** GL2c (core PaintReports): times (epoch ms, comma separated, oldest first) of the "Parts of the page are missing" taps of the last 3 days. */
+    var paintReports: String get() = sp.getString("paint_reports", "") ?: ""; set(v) = put("paint_reports", v)
     /**
      * OPT1 (research/OPTIMIZER.md, Auto-tune): the engine preferences a run asked for, `name=value` per line (only names of core Catalog; written into the engine's start-up config by GeckoPrefs.labOverrides),
      * and typed access to the app settings the catalog can change, by key. Nothing outside the catalog's keys can be read or written through [optGet] / [optSet].
