@@ -3287,9 +3287,7 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
         // PERF25: a page process that dies soon after the app started, while a hardware drawing trial runs, ends the trial (at the next start): the drawing path is the first suspect.
         if (crashed && app.kestrel.core.gfx.DrawTrial.crashEndsTrial(prefs.drawTrial, SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime())) {
-            prefs.drawTrialWhy = "the page process crashed within 3 minutes of the start with '" + app.kestrel.core.gfx.DrawTrial.label(prefs.drawTrial) + "', so it is switched off"
-            prefs.drawTrial = 0; prefs.drawTrialStart = 0L
-            Health.log("engine", "draw-trial", "reverted: " + prefs.drawTrialWhy)
+            GeckoPrefs.trialSwitchedOff(applicationContext, prefs, "the page process crashed within 3 minutes of the start with '" + app.kestrel.core.gfx.DrawTrial.label(prefs.drawTrial) + "', so it is switched off")      // GL2b: lands on the processor, not on the plain graphics chip
         }
         if (!tab.isPrivateTab) prefs.lastEngineKillAt = System.currentTimeMillis()      // PERF20: for 6 hours after an engine kill every memory signal reaches the engine again (core TrimGate)
         endFullScreenOf(tab, if (crashed) "the page's process crashed" else "the page's process was killed")
