@@ -95,10 +95,14 @@ for layout in ('schema', 'cols'):
         (dom, 40.0, 0, 2, 0, {'type': 'DOMEvent', 'id': 7}), (dom, 41.0, 0, 2, 0, {'type': 'DOMEvent', 'id': 8}),
         (dom, 0, 45.0, 3, 0, {'type': 'DOMEvent', 'id': 8}), (dom, 0, 60.0, 3, 0, {'type': 'DOMEvent', 'id': 7}),     # two overlapping ones told apart by id: 4 ms and 20 ms
         (awake, 3990.0, 0, 2, 0, None),                                     # a START still open at the end: left out
+        (l1, 100.0, 150.0, 1, 6, net(1, 'Unresolved', 0, 'https://assets-proxy.example.com/a/one.js', 'STATUS_START')),   # the START row of load 1: answer after 50 ms; not a second request
         (l1, 100.0, 900.0, 1, 6, net(1, 'Hit', 1000, 'https://assets-proxy.example.com/a/one.js')),
         (l2, 200.0, 1200.0, 1, 6, net(2, 'Missed', 3000, 'https://assets-proxy.example.com/a/two.js')),
         (l3, 2100.0, 2150.0, 1, 6, net(3, 'Hit', 7, 'https://other.example.org/x.png', 'STATUS_CANCEL')),
     ]
+    susp, extp = sid('Extension Suspend'), sid('ExtensionParent')
+    mrows += [(susp, 300.0, 0, 2, 0, {'type': 'Text', 'name': sid('onBeforeRequest https://x.example/a.js by shields@kestrel.local (chanId: 5)')}), (susp, 0, 4300.0, 3, 0, {'type': 'Text', 'name': sid('onBeforeRequest https://x.example/a.js by shields@kestrel.local (chanId: 5)')}),
+              (extp, 310.0, 3110.0, 1, 0, {'type': 'Text', 'name': sid('shields@kestrel.local, api_event: webRequest.onCompleted')})]
     sc = ['name', 'startTime', 'endTime', 'phase', 'category', 'data']
     mth['markers'] = ({'schema': {n: i for i, n in enumerate(sc)}, 'data': [list(x) for x in mrows]} if layout == 'schema'
                       else dict({n: [x[i] for x in mrows] for i, n in enumerate(sc)}, length=len(mrows)))
@@ -107,6 +111,9 @@ for layout in ('schema', 'cols'):
     mrep = pd.report(mp)
     check(layout + ': time inside an interval kind is totalled with its count and longest', re.search(r'\b14 ms\s+2 x\s+longest\s+10 ms\s+Awake', mrep) is not None)
     check(layout + ': network markers are summed (3 requests, bytes, cache, ends)', 'network: 3 requests, 4007 bytes, cache Hit 2 Missed 1, ends STOP 2 CANCEL 1' in mrep)
+    check(layout + ': the START row is not a second request but gives the time to the first answer', 'open-to-first-answer (the START rows, 1): median 50 ms' in mrep)
+    check(layout + ': requests held for the extension are listed with their wait', re.search(r'held for the blocking onBeforeRequest\s+1 x\s+median\s+4000 ms', mrep) is not None)
+    check(layout + ': extension API events are listed by event', re.search(r'extension API event webRequest.onCompleted\s+1 x\s+median\s+2800 ms', mrep) is not None)
     check(layout + ': hosts are counted', 'assets-proxy.example.com 2' in mrep and 'other.example.org 1' in mrep)
     check(layout + ': opened and ended per 2 s are listed', '0:2/2 2:1/1' in mrep and 'opened / ended per 2 s' in mrep)
 print('profile_digest self-test: %s' % ('OK' if not fails else '%d FAILED' % len(fails)))

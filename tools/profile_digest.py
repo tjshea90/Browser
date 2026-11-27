@@ -316,29 +316,60 @@ def _host_of(url):
 
 
 def network_report(t, intervals, out):
-    """The requests this process's main thread saw (Network markers): how many, how big, from the cache or not, how long each was open, and WHEN they were opened and ended: a page that asks for a thousand files in a burst and gets them
-    ten seconds later shows it here (the claude.ai recording: 1,212 script modules, all cache hits, opened at 8-14 s, ended at 16-24 s, with the main thread full in between)."""
+    """The requests this process's main thread saw (Network markers): how many, how big, from the cache or not, how long each was open, and WHEN they were opened and ended: a page that asks for a thousand files in a burst and gets
+    them ten seconds later shows it here (the claude.ai recording: 1,217 script modules, all cache hits, opened at 8-14 s, ended at 16-24 s, with the main thread full in between). The engine writes TWO rows per request: a START
+    row (cache 'Unresolved': channel created -> first answer) and a STOP / CANCEL row (the whole load, with the cache verdict and the bytes): a request is counted once, from its STOP row."""
     loads = [(a, b, d) for nm, a, b, d in intervals if isinstance(d, dict) and d.get('type') == 'Network']
     if not loads:
         return
+    first = [(a, b, d) for a, b, d in loads if str(d.get('status')) == 'STATUS_START']
+    fin = [(a, b, d) for a, b, d in loads if str(d.get('status')) != 'STATUS_START'] or loads
     times = [s['time'] for s in t.samples if isinstance(s.get('time'), (int, float))]
-    t0 = min(times) if times else min(a for a, b, d in loads)
-    durs = sorted(b - a for a, b, d in loads)
-    nbytes = sum(d['count'] for a, b, d in loads if isinstance(d.get('count'), (int, float)))
-    cache = Counter(str(d.get('cache') or '?') for a, b, d in loads)
-    status = Counter(str(d.get('status') or '?').replace('STATUS_', '') for a, b, d in loads)
+    t0 = min(times) if times else min(a for a, b, d in fin)
+    durs = sorted(b - a for a, b, d in fin)
+    nbytes = sum(d['count'] for a, b, d in fin if isinstance(d.get('count'), (int, float)))
+    cache = Counter(str(d.get('cache') or '?') for a, b, d in fin)
+    status = Counter(str(d.get('status') or '?').replace('STATUS_', '') for a, b, d in fin)
     out.append('  network: %d requests, %d bytes, cache %s, ends %s; open-to-end median %.0f ms, 90%% %.0f ms, longest %.0f ms' % (
-        len(loads), nbytes, ' '.join('%s %d' % kv for kv in cache.most_common(4)), ' '.join('%s %d' % kv for kv in status.most_common(3)),
+        len(fin), nbytes, ' '.join('%s %d' % kv for kv in cache.most_common(4)), ' '.join('%s %d' % kv for kv in status.most_common(3)),
         _quantile(durs, 0.5), _quantile(durs, 0.9), durs[-1]))
-    hosts = Counter(_host_of(d.get('URI') or '') for a, b, d in loads)
+    if first:
+        fd = sorted(b - a for a, b, d in first)
+        out.append('    open-to-first-answer (the START rows, %d): median %.0f ms, 90%% %.0f ms, longest %.0f ms' % (len(fd), _quantile(fd, 0.5), _quantile(fd, 0.9), fd[-1]))
+    hosts = Counter(_host_of(d.get('URI') or '') for a, b, d in fin)
     out.append('    hosts: ' + ', '.join('%s %d' % (h[:40], c) for h, c in hosts.most_common(5)))
     opened, ended = Counter(), Counter()
-    for a, b, d in loads:
+    for a, b, d in fin:
         opened[int((a - t0) / 2000.0)] += 1
         ended[int((b - t0) / 2000.0)] += 1
-    wins = sorted(set(opened) | set(ended))
-    wins = [w for w in wins if 0 <= w < 40]
+    wins = [w for w in sorted(set(opened) | set(ended)) if 0 <= w < 40]
     out.append('    opened / ended per 2 s from the first sample (second: opened/ended): ' + ' '.join('%d:%d/%d' % (w * 2, opened[w], ended[w]) for w in wins))
+
+
+def extension_report(t, intervals, out):
+    """What Firefox's own markers say about the extension plumbing in THIS process. 'Extension Suspend' = a request held until the extension's BLOCKING listener answered (the text names the event and the request: only the event is kept
+    here); 'ExtensionParent' = an extension API event on its way (the text names the extension and the event). Kestrel G runs its extension in the parent process (extensionsProcessEnabled false), so these waits are queueing behind
+    everything else the parent's main thread does. The claude.ai recording: 1,258 requests held a median of 3.9 s each."""
+    def text(d):
+        v = d.get('name') if isinstance(d, dict) else None
+        return t.s(v) if isinstance(v, int) else (v if isinstance(v, str) else '')
+    susp, par = Counter(), defaultdict(list)
+    held = defaultdict(list)
+    for nm, a, b, d in intervals:
+        if nm == 'Extension Suspend':
+            held[(text(d).split(' ', 1)[0] or '?')[:30]].append(b - a)
+        elif nm == 'ExtensionParent':
+            tx = text(d)
+            par[(tx.split('api_event:', 1)[1].strip() if 'api_event:' in tx else tx)[:40]].append(b - a)
+    if not held and not par:
+        return
+    out.append('  extension plumbing (parent process; wall-clock waits, they overlap, they are not processor time):')
+    for ev, v in sorted(held.items(), key=lambda kv: -len(kv[1]))[:4]:
+        v.sort()
+        out.append('     requests held for the blocking %-22s %5d x  median %6.0f ms, 90%% %6.0f ms, longest %6.0f ms' % (ev, len(v), _quantile(v, 0.5), _quantile(v, 0.9), v[-1]))
+    for ev, v in sorted(par.items(), key=lambda kv: -len(kv[1]))[:5]:
+        v.sort()
+        out.append('     extension API event %-34s %5d x  median %6.0f ms, 90%% %6.0f ms, longest %6.0f ms' % (ev, len(v), _quantile(v, 0.5), _quantile(v, 0.9), v[-1]))
 
 
 def marker_report(t, out, top=10):
@@ -357,6 +388,7 @@ def marker_report(t, out, top=10):
         out.append('     %9.0f ms  %6d x  longest %7.0f ms  %s' % (ms, many[nm], longest[nm], nm[:60]))
     out.append('  the most frequent markers: ' + ', '.join('%s %d' % (nm[:30], c) for nm, c in cnt.most_common(8)))
     network_report(t, iv, out)
+    extension_report(t, iv, out)
 
 
 def detail_report(t, out):
