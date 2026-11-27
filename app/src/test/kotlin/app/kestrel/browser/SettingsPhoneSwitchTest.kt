@@ -42,12 +42,15 @@ class SettingsPhoneSwitchTest {
         return out
     }
 
-    @After fun reset() { PhoneBridge.setMaster(ctx, false) }
+    /** ND1: Settings builds a section's rows only while it is open, so a test that looks for a row opens every section first. */
+    private fun opened(p: Prefs): SettingsView = SettingsView(ctx, Pal(ctx, false), p, listener).also { it.openAll() }
+
+    @After fun reset() { PhoneBridge.setMaster(ctx, false); SettingsView.forgetOpenSections() }
 
     @Test fun underAnOffHelperTheSubSwitchesAreNotThere() {
         val p = Prefs.get(ctx)
         p.phoneMode = 0; p.pagesViaPhone = true // the state an older build left behind after the menu switch was turned off
-        val t = texts(SettingsView(ctx, Pal(ctx, false), p, listener))
+        val t = texts(opened(p))
         assertTrue("the one switch is there", t.contains("Phone helper"))
         assertFalse("no pages switch under an off helper", t.contains("Load pages through the phone"))
         assertFalse(t.contains("Downloads and videos"))
@@ -55,7 +58,7 @@ class SettingsPhoneSwitchTest {
 
     @Test fun underAnOnHelperTheFineChoicesAppear() {
         PhoneBridge.setMaster(ctx, true)
-        val t = texts(SettingsView(ctx, Pal(ctx, false), Prefs.get(ctx), listener))
+        val t = texts(opened(Prefs.get(ctx)))
         assertTrue(t.contains("Phone helper")); assertTrue(t.contains("Load pages through the phone")); assertTrue(t.contains("Downloads and videos"))
     }
 }

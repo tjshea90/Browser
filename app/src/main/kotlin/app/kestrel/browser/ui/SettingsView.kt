@@ -61,6 +61,9 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
          * is closed. The rows themselves, their texts and what they do are unchanged.
          */
         private val OPEN = HashSet<String>()
+
+        /** Tests: start from the first-run state (every section closed). */
+        internal fun forgetOpenSections() { OPEN.clear() }
     }
 
     init {
