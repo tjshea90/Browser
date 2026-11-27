@@ -24,5 +24,11 @@ while IFS= read -r name; do
   N=$((N+1))
   if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (set live from the Kotlin code, but not in this GeckoView)"; MISSING=$((MISSING+1)); fi
 done < <(grep -rhoE '(setGeckoPref|clearGeckoUserPref|tri)\("[a-z0-9_.-]+"' geckoapp/src/main/kotlin | sed -E 's/^[A-Za-z]+\("//; s/"$//' | sort -u)
+# the prefs GeckoPrefs.kt writes into the config file from the Settings switches (labLines, drawLines: `append("  name: value`) are held to the same rule
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  N=$((N+1))
+  if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (written by GeckoPrefs.kt from a Settings switch, but not in this GeckoView)"; MISSING=$((MISSING+1)); fi
+done < <(grep -hoE 'append\("  [a-z0-9_.-]+:' geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt | sed -E 's/^append\("  //; s/:$//' | sort -u)
 echo "  checked $N pref names against $(basename "$AAR"): $MISSING missing"
 [ "$MISSING" -eq 0 ]

@@ -427,7 +427,7 @@ onMsg(function (m, sender) {
     var veC = function (x, hi) { x = +x; return x >= 0 && x <= hi ? Math.floor(x) : 0; };
     var veS = { none: 1, blob: 1, hls: 1, dash: 1, http: 1 };
     if (!vhAllow('e|' + tabId + '|' + (tabTop.get(tabId) || ''), 8)) return undefined;
-    send({ k: 'verr', p: tabTop.get(tabId) || '', c: (+m.c === 99 ? 99 : veC(m.c, 9)), ns: veC(m.ns, 3), rs: veC(m.rs, 4), s: veS[m.s] === 1 ? m.s : 'none', f: m.f === 1 ? 1 : 0, e: m.e === 'a' ? 'a' : 'v', pa: m.pa === 1 ? 1 : 0, b: veC(m.b, 9) }).catch(function () {});   // c 99 = stuck loading with no error event (videoprobe.js)
+    send({ k: 'verr', p: tabTop.get(tabId) || '', c: (+m.c === 99 ? 99 : +m.c === 98 ? 98 : veC(m.c, 9)), ns: veC(m.ns, 3), rs: veC(m.rs, 4), s: veS[m.s] === 1 ? m.s : 'none', f: m.f === 1 ? 1 : 0, e: m.e === 'a' ? 'a' : 'v', pa: m.pa === 1 ? 1 : 0, b: veC(m.b, 9), x: (+m.c === 98 ? String(m.x || '').replace(/[^\x20-\x7e]/g, '').slice(0, 160) : '') }).catch(function () {});   // c 98 = calm.js turned a stuck loading circle of a paused video into a play mark (x = what it found: element, size, parent clip); c 99 = stuck loading with no error event (videoprobe.js)
     return undefined;
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks

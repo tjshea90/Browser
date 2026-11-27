@@ -59,6 +59,9 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val model = PlayerModel(this)
     private var priv = false
     var url = ""; private set
+    /** PERF5b: the other qualities of the film that plays (kept until the host has been told that it ended: the full-screen screen carries them on). */
+    var altsPlaying: List<app.kestrel.core.media.SiblingQualities.Alt> = emptyList(); private set
+    private var built: PlayerFactory.Built? = null
     private var ack = 0
     private var muted = false
     private var startedAt = 0L
@@ -131,7 +134,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     // ---------------------------------------------------------------------------------------- start / stop
 
     /** Starts [url] over [box] (view pixels), [startMs] in. false = could not start (the caller uses the full-screen screen). [capH]: the tallest picture to choose (the box is small: 480 is plenty). */
-    fun start(url: String, headerLines: List<String>, startMs: Long, priv: Boolean, box: InlineBox.Rect, capH: Int): Boolean {
+    fun start(url: String, headerLines: List<String>, startMs: Long, priv: Boolean, box: InlineBox.Rect, capH: Int, alts: List<app.kestrel.core.media.SiblingQualities.Alt> = emptyList()): Boolean {
         if (player != null) stop("a new film")
         this.url = url; this.priv = priv
         ack = 0; muted = false; firstPictureAt = 0L; playingSince = 0L; picW = 0; picH = 0; pixelRatio = 1f; pausedByEdge = false; passing = false
@@ -141,11 +144,15 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         var p: ExoPlayer? = null
         try {
             val built = PlayerFactory.create(context, url, headerLines)
+            this.built = built
             p = built.player
             val prefs = app.kestrel.browser.data.Prefs.get(context.applicationContext)
-            val q = PlayerQuality(priv, { prefs.inlineMaxH }, { prefs.inlineMaxH = it }, { e, t -> say(e, t) })       // (the person's own pick inside the page is remembered apart from the full-screen player's)
+            val q = PlayerQuality(priv, { prefs.inlineMaxH }, { prefs.inlineMaxH = it }, { e, t -> say(e, t) }, { a -> switchSource(a) })       // (the person's own pick inside the page is remembered apart from the full-screen player's)
             quality = q
             q.begin(p, capH, null, false)                                                                            // Automatic, at most capH (480 in a small box) unless the person picked a size before
+            val first = q.setAlts(alts, url)                                                                         // PERF5b: a film given as one list per quality starts with the biggest that fits the cap (480 in a box)
+            altsPlaying = q.alts
+            if (first != null) this.url = first.url
             controls.showQuality = false
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) recovery.onReady(); sample() }
@@ -184,7 +191,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                 }
             })
             p.setVideoSurfaceView(surface)
-            p.setMediaSource(built.source)
+            p.setMediaSource(if (first != null) built.newSource(first.url) else built.source)
             if (startMs > 0L) p.seekTo(startMs)
             p.prepare()
             p.playWhenReady = true
@@ -220,7 +227,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             val dc = p.videoDecoderCounters
             if (!priv) NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); if (!priv) NativePlayerStats.playedMs += pos
             NativePlayerActivity.lastPositionMs = pos
-            if (priv) NativePlayerActivity.lastUrl = "" else { NativePlayerActivity.lastUrl = url; NativePlayerActivity.lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; NativePlayerActivity.lastStoppedAt = SystemClock.uptimeMillis() }
+            if (priv) { NativePlayerActivity.lastUrl = ""; NativePlayerActivity.lastAlts = emptyList() } else { NativePlayerActivity.lastUrl = url; NativePlayerActivity.lastAlts = altsPlaying.map { it.url }; NativePlayerActivity.lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; NativePlayerActivity.lastStoppedAt = SystemClock.uptimeMillis() }
             if (!priv) NativePlayerStats.last = "ended inside the page after ${(SystemClock.uptimeMillis() - startedAt) / 1000} s"
         } catch (e: Throwable) { /* gone */ }
         try { p.release() } catch (e: Throwable) { /* gone */ }
@@ -230,7 +237,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         downCopy?.recycle(); downCopy = null; passing = false
         say("stop", "$why (at ${pos / 1000} s)")
         host?.onEnded(why, pos, fullscreen, failed)
-        url = ""
+        url = ""; altsPlaying = emptyList(); built = null
     }
 
     // ---------------------------------------------------------------------------------------- where it sits
@@ -342,6 +349,22 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         host?.openQuality(rows)
         say("quality-open", "${rows.size} row(s)")
     }
+    /** PERF8a: the film's other lists became known after the start: the quality button shows now. UI thread. */
+    fun offerAlts(list: List<app.kestrel.core.media.SiblingQualities.Alt>) {
+        val q = quality ?: return
+        if (q.updateAlts(list)) { altsPlaying = q.alts; controls.showQuality = true }
+    }
+
+    /** PERF5b: another list of the same film (another quality): same second, same play state. */
+    private fun switchSource(a: app.kestrel.core.media.SiblingQualities.Alt) {
+        val p = player ?: return; val b = built ?: return
+        val at = p.currentPosition.coerceAtLeast(0L); val was = p.playWhenReady
+        url = a.url
+        p.setMediaSource(b.newSource(a.url), at)
+        p.prepare()
+        p.playWhenReady = was
+    }
+
     /** A row of the list was picked (the host's sheet says so): that picture, and the list closes. */
     fun pickQuality(row: QualitySheet.Row) { val p = player ?: return; quality?.pick(p, row); host?.closeQuality() }
     /** The list closed (a pick, the x, a tap outside, Back, the end of the film). */

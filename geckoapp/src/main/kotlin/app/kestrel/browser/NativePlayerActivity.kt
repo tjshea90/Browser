@@ -47,6 +47,7 @@ import app.kestrel.browser.web.QualitySheet
 import app.kestrel.browser.web.VideoGestures
 import app.kestrel.core.media.FullscreenTurn
 import app.kestrel.core.media.QualityLabel
+import app.kestrel.core.media.SiblingQualities
 import app.kestrel.core.player.PlayerModel
 import app.kestrel.core.player.PlayerRules
 
@@ -73,6 +74,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private lateinit var surface: SurfaceView
     private lateinit var controls: PlayerControlsView
     private var player: ExoPlayer? = null
+    private var built: PlayerFactory.Built? = null                  // PERF5b: kept to build the source of another quality of the film
     private val model = PlayerModel(this)
     private var priv = false
     private var shownUrl = ""                    // the film this screen plays (kept in lastUrl when it ends, for core WebHandOver.resumeMs)
@@ -111,6 +113,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        live = java.lang.ref.WeakReference(this)
         installBackCallback()
         val i = intent
         val url = i.getStringExtra(EXTRA_URL).orEmpty()
@@ -152,7 +155,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         setContentView(stage)
         debugTouch = app.kestrel.browser.web.DebugTouch.attach(this)             // DEBUG builds only (the emulator lab plays a finger path through a broadcast)
 
-        try { buildPlayer(url, i.getStringArrayExtra(EXTRA_HEADERS)?.toList().orEmpty(), i.getLongExtra(EXTRA_START_MS, 0L), i.getIntExtra(EXTRA_MAX_H, 720), QualityLabel.decode(i.getStringExtra(EXTRA_PICK)), i.getBooleanExtra(EXTRA_AUTO, false)) }
+        try { buildPlayer(url, i.getStringArrayExtra(EXTRA_HEADERS)?.toList().orEmpty(), i.getLongExtra(EXTRA_START_MS, 0L), i.getIntExtra(EXTRA_MAX_H, 720), QualityLabel.decode(i.getStringExtra(EXTRA_PICK)), i.getBooleanExtra(EXTRA_AUTO, false), SiblingQualities.decode(i.getStringExtra(EXTRA_ALTS))) }
         catch (e: Throwable) { fail("the player could not start: ${e.javaClass.simpleName}"); return }
         startedAt = SystemClock.uptimeMillis()
         NativePlayerStats.firstPictureMs = -1L
@@ -166,11 +169,13 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     // ---------------------------------------------------------------------------------------- the player
 
-    private fun buildPlayer(url: String, headerLines: List<String>, startMs: Long, maxH: Int, pick: QualityLabel.Rung?, auto: Boolean) {
+    private fun buildPlayer(url: String, headerLines: List<String>, startMs: Long, maxH: Int, pick: QualityLabel.Rung?, auto: Boolean, alts: List<SiblingQualities.Alt> = emptyList()) {
         val built = PlayerFactory.create(this, url, headerLines)             // ANS55f: shared with the player inside the page
-        val p = built.player; val source = built.source
-        quality = PlayerQuality(priv, { Prefs.get(applicationContext).nativeMaxH }, { Prefs.get(applicationContext).nativeMaxH = it }, { e, t -> say(e, t) })
+        this.built = built
+        val p = built.player
+        quality = PlayerQuality(priv, { Prefs.get(applicationContext).nativeMaxH }, { Prefs.get(applicationContext).nativeMaxH = it }, { e, t -> say(e, t) }, { a -> switchSource(a) })
         quality.begin(p, maxH, pick, auto)             // the picture size to start with (remembered pick, the page's list, or maxH) and the cap of Automatic
+        val source = quality.setAlts(alts, url)?.let { built.newSource(it.url) } ?: built.source          // PERF5b: a film the site gives as one list per quality starts with the biggest one that fits the cap
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) { ended = true }
@@ -217,6 +222,15 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         p.prepare()
         p.playWhenReady = true
         player = p
+    }
+
+    /** PERF5b: another list of the same film (another quality): same second, same play state; the new list starts from the buffer's end of the old one. */
+    private fun switchSource(a: SiblingQualities.Alt) {
+        val p = player ?: return; val b = built ?: return
+        val at = p.currentPosition.coerceAtLeast(0L); val was = p.playWhenReady
+        p.setMediaSource(b.newSource(a.url), at)
+        p.prepare()
+        p.playWhenReady = was
     }
 
     // ---------------------------------------------------------------------------------------- ANS53d: the quality list (the rules are PlayerQuality's)
@@ -397,7 +411,17 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         super.onPause()
     }
 
+    /** PERF8a: the address of the list that plays now ("" before the player is up). */
+    fun currentFilmUrl(): String = if (::quality.isInitialized) quality.currentUrl else ""
+
+    /** PERF8a: the film's other lists became known after the start (the finder read them a moment later): the quality button shows now. UI thread. */
+    fun offerAlts(list: List<SiblingQualities.Alt>) {
+        if (!::quality.isInitialized || !::controls.isInitialized) return
+        if (quality.updateAlts(list)) controls.showQuality = true
+    }
+
     override fun onDestroy() {
+        if (live?.get() === this) live = null
         if (android.os.Build.VERSION.SDK_INT >= 33) backCb?.let { try { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) } catch (e: Throwable) { /* already gone */ } }
         app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); recovery.stop(); app.kestrel.browser.download.DownloadController.filmStopped()
@@ -410,7 +434,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 val dc = p.videoDecoderCounters
                 if (!priv) { NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); NativePlayerStats.playedMs += p.currentPosition.coerceAtLeast(0L) }
                 lastPositionMs = p.currentPosition.coerceAtLeast(0L)
-                if (priv) lastUrl = "" else { lastUrl = shownUrl; lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; lastStoppedAt = SystemClock.uptimeMillis() }   // (RAM only, never for a private tab)
+                if (priv) { lastUrl = ""; lastAlts = emptyList() } else { lastUrl = shownUrl; lastAlts = if (::quality.isInitialized) quality.alts.map { it.url } else emptyList(); lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; lastStoppedAt = SystemClock.uptimeMillis() }   // (RAM only, never for a private tab)
                 if (!priv) NativePlayerStats.last = "ended after ${(SystemClock.uptimeMillis() - startedAt) / 1000} s"
             } catch (e: Throwable) { /* gone */ }
             try { p.release() } catch (e: Throwable) { /* gone */ }
@@ -430,6 +454,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         const val EXTRA_MAX_H = "mh"           // the tallest picture to choose (the stream's own quality list is filtered to it)
         const val EXTRA_PRIVATE = "p"
         const val EXTRA_PICK = "pq"            // ANS53d.2: the picture picked in the page's quality list, QualityLabel.encode
+        const val EXTRA_ALTS = "al"            // PERF5b: the other qualities of the film, SiblingQualities.encode
         const val EXTRA_AUTO = "au"            // ANS53d.2: Automatic picked in that list (the remembered cap is forgotten)
         const val EXTRA_W = "w"
         const val EXTRA_FROM_PAGE = "fp"        // ANS54e: started for a film of a web page (the result says whether it failed)
@@ -441,14 +466,19 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         @Volatile var lastPositionMs = 0L
         /** The film Kestrel's own player showed last (never a private tab's), how long it is and when it ended: a page film pressed again continues from where it stopped (core WebHandOver.resumeMs). */
         @Volatile var lastUrl = ""
+        /** PERF5b: every list (quality) of the film that played last: pressing play again on ANY of them continues where the person stopped (VideoFlow.lastFor). RAM only, never a private tab's. */
+        @Volatile var lastAlts: List<String> = emptyList()
+        /** PERF8a: the screen that is up (VideoFlow offers it the film's other lists when the finder has read them). */
+        @Volatile var live: java.lang.ref.WeakReference<NativePlayerActivity>? = null
         @Volatile var lastDurationMs = 0L
         @Volatile var lastStoppedAt = 0L
 
-        fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false) {
+        fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false, alts: List<SiblingQualities.Alt> = emptyList()) {
             val i = Intent(from, NativePlayerActivity::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_HEADERS, headers.toTypedArray()).putExtra(EXTRA_START_MS, startMs)
                 .putExtra(EXTRA_MAX_H, maxH).putExtra(EXTRA_PRIVATE, priv).putExtra(EXTRA_W, w).putExtra(EXTRA_H, h)
             if (pick != null) i.putExtra(EXTRA_PICK, QualityLabel.encode(pick))
             if (auto) i.putExtra(EXTRA_AUTO, true)
+            if (alts.size >= 2) i.putExtra(EXTRA_ALTS, SiblingQualities.encode(alts))
             NativePlayerStats.launchedAt = SystemClock.uptimeMillis(); NativePlayerStats.launchedUrl = if (priv) "" else url
             if (fromPage && from is Activity) { i.putExtra(EXTRA_FROM_PAGE, true); from.startActivityForResult(i, REQ_PAGE_FILM) } else from.startActivity(i)
         }
