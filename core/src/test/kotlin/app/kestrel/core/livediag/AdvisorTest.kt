@@ -25,6 +25,19 @@ class AdvisorTest {
         assertTrue("one kill is not a pattern", adv(k = mapOf("gecko onKill" to 1L)).isEmpty())
     }
 
+    /** ND1 / KR1 (research/DIAG_2026-11-27.md): 10 of 11 kills came while the app was in the background; closing tabs does not help those, keeping the page ready does. */
+    @Test fun killsWhileTheAppWasAwaySuggestKeepingThePageReadyAndNeverSayCloseTabs() {
+        val a = adv(s = mapOf("keep_ready" to "0"), k = mapOf("gecko onKill" to 3L, "gecko kill-away" to 3L)).single()
+        assertEquals("keep_ready", a.key); assertEquals(2, a.value)
+        assertTrue(a.text(), a.text().startsWith("Settings > Appearance > Keep the page ready when I leave: change off to 1 hour"))
+        assertTrue(a.why, a.why.contains("3 times") && a.why.contains("background"))
+        assertTrue("one kill is not a pattern", adv(s = mapOf("keep_ready" to "0"), k = mapOf("gecko onKill" to 1L, "gecko kill-away" to 1L)).isEmpty())
+        assertTrue("with it on (the default: no key saved) there is nothing to switch on, and the away kills do not make the tablet say 'close tabs'", adv(k = mapOf("gecko onKill" to 6L, "gecko kill-away" to 6L)).isEmpty())
+        assertTrue("it is one of the settings a tap may change", Advisor.canApply("keep_ready", 2) && !Advisor.canApply("keep_ready", 4))
+        val mixed = adv(s = mapOf("tabs_kept" to "1"), k = mapOf("gecko onKill" to 7L, "gecko kill-away" to 3L, "gecko kill-front" to 4L)).single()
+        assertNull(mixed.key); assertTrue("kills in front still say close tabs", mixed.change.contains("close the tabs") && mixed.why.contains("4 times"))
+    }
+
     @Test fun manyHibernationsWithFreeMemoryAndNoKillsSuggestAutomatic() {
         val a = adv(s = mapOf("tabs_kept" to "1"), k = mapOf("tabs hibernate" to 14L), f = mapOf("ramAvailMb" to 520L)).single()
         assertEquals("tabs_kept", a.key); assertEquals(0, a.value)
