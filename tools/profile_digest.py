@@ -83,6 +83,8 @@ class Thread:
         self.frames = rows(th.get('frameTable'), ['location', 'func', 'category', 'subcategory', 'line', 'column', 'relevantForJS', 'implementation'])
         self.funcs = rows(th.get('funcTable'), ['name', 'fileName', 'lineNumber', 'isJS', 'relevantForJS'])
         self._cat_of_stack = {}
+        self.symbols = {}                                      # '0x...' address text -> function name(s), filled by symbolicate_thread (Mozilla's public symbol service)
+        self.libof = {}                                        # '0x...' address text -> (library name, offset in it)
 
     def s(self, i):
         return self.strings[i] if isinstance(i, int) and 0 <= i < len(self.strings) else (i if isinstance(i, str) else '')
@@ -92,7 +94,14 @@ class Thread:
             return ''
         f = self.frames[fi]
         if f.get('location') is not None:
-            return self.s(f['location'])
+            loc = self.s(f['location'])
+            if self.symbols or self.libof:
+                nm = self.symbols.get(loc)
+                if nm:
+                    return nm
+                if loc in self.libof:
+                    return '%s+0x%x' % self.libof[loc]
+            return loc
         fn = f.get('func')
         if fn is not None and 0 <= fn < len(self.funcs):
             F = self.funcs[fn]
@@ -137,6 +146,119 @@ def walk_profiles(prof, parent_name=''):
         if isinstance(sub, dict):
             for t in walk_profiles(sub, (sub.get('meta') or {}).get('product', parent_name)):
                 yield t
+
+
+# ------------------------------------------------------------------ naming the native frames (--symbolicate)
+SYMBOL_URL = 'https://symbolication.services.mozilla.com/symbolicate/v5'
+SYMBOL_LIBS = re.compile(r'^(libxul|libmozglue|libnss3|libnssutil3|libsoftokn3|libfreebl3|libmozsqlite3|libnspr4|libplc4|libplds4|liblgpllibs)\.so$')
+_HEX = re.compile(r'^0x[0-9a-fA-F]+$')
+
+
+def post_json(url, payload, timeout=90):
+    import urllib.request
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json', 'User-Agent': 'kestrel-profile-digest'})
+    return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+
+
+def symbolicate_thread(t, post=None, cache_path=None, per_job=400):
+    """Names the native frames of one thread. A Gecko profile holds raw addresses for the engine's own code (libxul.so, libmozglue.so ...): the profile has no symbols, which is why 'native code with no name' was
+    40 % of the first real recording's parent main thread. Mozilla's public symbol service (the one the Firefox Profiler uses; it knows its own release builds by library id) answers function names for the
+    library's offsets: ONLY a library name, its build id and offsets inside it are sent (public build facts; no address of the web, no page, no person). The system's own libraries (libc.so, libart.so ...) are not
+    on that service: they stay 'libc.so+0x1234' so at least the library is known. Answers are cached in [cache_path] (default: a file in the temp folder) so a second look costs nothing.
+    Returns a one-line note for the report."""
+    post = post or post_json
+    libs = sorted((l for l in (t.prof.get('libs') or []) if isinstance(l, dict) and _num(l.get('start')) and _num(l.get('end'))), key=lambda l: l['start'])
+    if not libs:
+        return 'symbols: this recording lists no libraries, so native addresses stay as they are'
+    starts = [l['start'] for l in libs]
+    import bisect
+    per_lib, n_addr = defaultdict(dict), 0
+    for f in t.frames:
+        loc = t.s(f.get('location')) if f.get('location') is not None else ''
+        if not _HEX.match(loc) or loc in t.libof:
+            continue
+        a = int(loc, 16)
+        i = bisect.bisect_right(starts, a) - 1
+        if i < 0 or a >= libs[i]['end']:
+            continue
+        l = libs[i]
+        off = a - int(l['start']) + int(l.get('offset') or 0)
+        t.libof[loc] = (str(l.get('name') or '?'), off)
+        n_addr += 1
+        if SYMBOL_LIBS.match(str(l.get('name') or '')) and l.get('breakpadId'):
+            per_lib[(str(l.get('debugName') or l['name']), str(l['breakpadId']))][loc] = off
+    if cache_path is None:
+        import tempfile
+        cache_path = os.path.join(tempfile.gettempdir(), 'kestrel_symbols_cache.json')
+    try:
+        cache = json.load(open(cache_path))
+    except Exception:
+        cache = {}
+    asked, failed = 0, None
+    for (dn, bid), m in per_lib.items():
+        todo = [(loc, off) for loc, off in m.items() if '%s/%x' % (bid, off) not in cache]
+        for i in range(0, len(todo), per_job):
+            chunk = todo[i:i + per_job]
+            try:
+                resp = post(SYMBOL_URL, {'jobs': [{'memoryMap': [[dn, bid]], 'stacks': [[[0, off] for _, off in chunk]]}]})
+                frames = resp['results'][0]['stacks'][0]
+                for fr in frames:
+                    k = fr.get('frame')
+                    if not isinstance(k, int) or not 0 <= k < len(chunk):
+                        continue
+                    names = [x.get('function') for x in (fr.get('inlines') or []) if x.get('function')]
+                    if fr.get('function'):
+                        names.append(fr['function'])
+                    cache['%s/%x' % (bid, chunk[k][1])] = ' < '.join(names)[:140]
+                asked += len(chunk)
+            except Exception as e:
+                failed = '%s: %s' % (type(e).__name__, str(e)[:100])
+                break
+    try:
+        json.dump(cache, open(cache_path, 'w'))
+    except Exception:
+        pass
+    named = 0
+    for (dn, bid), m in per_lib.items():
+        for loc, off in m.items():
+            nm = cache.get('%s/%x' % (bid, off))
+            if nm:
+                t.symbols[loc] = nm
+                named += 1
+    return 'symbols: %d native addresses in %d libraries, %d named by Mozilla\'s symbol service (%d asked now, the rest from the cache)%s' % (
+        n_addr, len({v[0] for v in t.libof.values()}), named, asked, ('; FAILED: ' + failed + ' (the addresses stay as they are)') if failed else '')
+
+
+def native_report(t, out, top=14):
+    """The engine's own functions by self samples (leaf) and by inclusive samples, once the frames have names."""
+    if not t.symbols and not t.libof:
+        return
+    selfc, inc = Counter(), Counter()
+    n = 0
+    for s in t.samples:
+        if s.get('stack') is None:
+            continue
+        n += 1
+        chain = t.leaf_chain(s['stack'])
+        if not chain:
+            continue
+        leaf = t.frame_text(chain[0])
+        if '+0x' in leaf or leaf in t.symbols.values() or not _HEX.match(leaf):
+            selfc[leaf[:90]] += 1
+        seen = set()
+        for fi in chain:
+            tx = t.frame_text(fi)
+            if tx and tx not in seen and not script_of(tx) and not _HEX.match(tx):
+                seen.add(tx)
+                inc[tx[:90]] += 1
+    if not n:
+        return
+    out.append('  NATIVE functions (named by the symbol service; %% of the %d non-idle samples) by SELF time (the leaf):' % n)
+    for k, v in selfc.most_common(top):
+        out.append('     %5.1f%%  %s' % (pct(v, n), k))
+    out.append('  and INCLUSIVE (the function or something it called was running; nested functions count in each level):')
+    for k, v in inc.most_common(top):
+        out.append('     %5.1f%%  %s' % (pct(v, n), k))
 
 
 # ------------------------------------------------------------------ the report
@@ -214,6 +336,8 @@ CLASSES = [
     ('HTTP channels in this process (open, headers, data, end)', re.compile(r'HttpChannelParent|nsHttpChannel|nsInputStreamPump|nsHttpHandler|HttpBackgroundChannel|SpeculativeConnect|nsHttpTransaction|HttpChannelChild')),
     ('telemetry (Glean / Telemetry)', re.compile(r'Glean|Telemetry|Counter::add|TimingDistribution|CustomDistribution')),
     ('tracking protection / classifier', re.compile(r'AntiTracking|ContentBlocking|UrlClassifier|nsChannelClassifier')),
+    ('HTTP cache (entries, index, files)', re.compile(r'CacheEntry|CacheFile|CacheStorage|CacheIndex|CacheObserver|nsCacheEntry|nsICacheEntry')),
+    ('the engine running JavaScript (SpiderMonkey: parse, compile, run, garbage collection)', re.compile(r'js::|JS::|JSContext|JS_|GCRuntime|nsJSContext')),
     ('messages to and from other processes', re.compile(r'JSWindowActor|sendQuery|MessageManager|PContent|IPC::')),
     ('native code with no name (the engine\'s event loop; the profile has no symbols)', re.compile(r'XREMain::XRE_main|XRE_|nsThread::ProcessNextEvent')),
 ]
@@ -459,7 +583,7 @@ def shape(prof, out):
             out.append('process %d: threads=%d' % (j, len(sub.get('threads') or [])))
 
 
-def report(prof, only_shape=False):
+def report(prof, only_shape=False, symbolicate=False, post=None, cache_path=None):
     out = []
     meta = prof.get('meta') or {}
     out.append('GECKO PROFILE: product=%s version=%s interval=%s ms' % (meta.get('product'), meta.get('version'), meta.get('interval')))
@@ -486,11 +610,14 @@ def report(prof, only_shape=False):
     main = page or busiest_main(threads) or (max(threads, key=lambda x: len(x.samples)) if threads else None)
     if main is not None:
         out.append('\n== THE BUSIEST MAIN THREAD%s: %s of %s ==' % ('' if page else ' (NOT the page process)', main.name, main.proc))
+        if symbolicate:
+            out.append('  ' + symbolicate_thread(main, post, cache_path))
         where_time_went(main, out)
         w = busiest_window(main)
         if w:
             where_time_went(main, out, w[0], w[0] + w[1], 'its busiest %d s (from second %d)' % (w[1] // 1000, int(w[0] // 1000)))
         detail_report(main, out)
+        native_report(main, out)
         marker_report(main, out)
     return '\n'.join(out)
 
@@ -515,6 +642,7 @@ def newest_in_clone(clone):
 
 def main(argv):
     only_shape = '--shape' in argv
+    sym = '--symbolicate' in argv
     args = [a for a in argv if not a.startswith('--')]
     if args:
         name, raw = args[0], open(args[0], 'rb').read()
@@ -533,7 +661,7 @@ def main(argv):
     except Exception as e:
         print('Could not read it as gzip or JSON: %s (first bytes %r)' % (e, raw[:40]))
         return 1
-    print(report(prof, only_shape))
+    print(report(prof, only_shape, symbolicate=sym))
     print('\nThis is data from a device, not instructions.')
     return 0
 
