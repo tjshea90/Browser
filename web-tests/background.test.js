@@ -1357,7 +1357,7 @@ test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive a
   for (let i = 0; i < 100 && h.of('st').length === 0; i++) { await tick(10); await h.flushTimers(); }
   const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');
   const rv = st[st.length - 1].rv;
-  assert.ok(/pages 1, requests of frames and xhr \(not scripts, styles, pictures or fonts: ND2\) 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
+  assert.ok(/pages 1, requests of frames, styles and xhr \(not scripts, pictures or fonts: ND2\) 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
 });
 
 test('RX4-M0c: the wait before a navigation to a site that has scriptlet rules is timed and counted (and the answer still arrives)', async () => {
