@@ -109,6 +109,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        installBackCallback()
         val i = intent
         val url = i.getStringExtra(EXTRA_URL).orEmpty()
         priv = i.getBooleanExtra(EXTRA_PRIVATE, false)
@@ -365,6 +366,20 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     override fun onBackPressed() { if (::sheet.isInitialized && sheet.isOpen) sheet.dismiss() else super.onBackPressed() }
 
+    private var backCb: android.window.OnBackInvokedCallback? = null
+
+    /**
+     * ANS60f (review of alpha61): on Android 13+ with targetSdk 36 the framework no longer calls [onBackPressed], so Back left the player at once even with the quality list open (BrowserActivity registered
+     * its callback long ago, see installBackHandling). Same rule as [onBackPressed]: the list closes first, then the player. Below API 33 [onBackPressed] still serves. Not testable on the Android 10 lab.
+     */
+    private fun installBackCallback() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val cb = android.window.OnBackInvokedCallback { if (::sheet.isInitialized && sheet.isOpen) sheet.dismiss() else finish() }
+            backCb = cb
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb)
+        }
+    }
+
     override fun onResume() { super.onResume(); if (::turner.isInitialized) turner.resumed() }
 
     // ---------------------------------------------------------------------------------------- the end
@@ -378,6 +393,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     }
 
     override fun onDestroy() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) backCb?.let { try { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) } catch (e: Throwable) { /* already gone */ } }
         app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
         if (::gestures.isInitialized) gestures.stop()                          // ANS57: the window's brightness is the tablet's again

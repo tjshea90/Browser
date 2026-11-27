@@ -2531,7 +2531,7 @@ class Soak:
         close = lambda a, b, tol=6: a is not None and b is not None and all(abs(x - y) <= tol for x, y in zip(a[:4], b[:4]))
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.physical(0, 9.81, 0)
-        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); time.sleep(2.5)
+        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); self.ph.debug("handreset", "1"); time.sleep(2.5)   # handreset: the earlier scenes played this clip to its end (alpha62 loop breaker: pressed again within 10 minutes it goes to the page, so nothing would be handed over)
         rm = self.lab.size()
         self.ph.open_url("%s/ho?v=inline&tag=ip" % self.lab_base)
         t0 = time.time(); L = None
@@ -3184,6 +3184,8 @@ class Soak:
         self.ph.setting("system", "accelerometer_rotation", 0)
         self.ph.setting("system", "user_rotation", 0)
         self.ph.setting("secure", "immersive_mode_confirmations", "confirmed")   # Android's one-time "Viewing full screen" box would sit over the picture in every screenshot
+        if getattr(self.a, "profile", "standard") == "tablet":
+            self.ph.setting("system", "font_scale", "1.2")                           # LAB3a: the owner's tablet runs at font scale 1.2 (docs/HARDWARE.md)
         size = self.ph.a.sh("wm size")
         m = re.search(r"(\d+)x(\d+)", size)
         if m:
@@ -3235,11 +3237,11 @@ class Soak:
         else:
             say("engine ready after %.0f s" % eng)
         time.sleep(5)
-        if eng is not None and self.a.suite not in ("ap", "ho"):
+        if eng is not None and self.a.suite not in ("ap", "ho", "daily"):
             self.ph.debug("vpress", "0"); time.sleep(1.5)          # ANS53: the other scenes were written for pages whose videos start by themselves; the rule has its own suite (ap)
-        if eng is not None and self.a.suite != "ho":
+        if eng is not None and self.a.suite not in ("ho", "daily"):
             self.ph.debug("webmode", "2"); time.sleep(1.0)           # ANS54e: the older scenes test the PAGE's players, gate and controls: Kestrel's own player must not take their films over (suite ho tests exactly that)
-        if eng is not None:
+        if eng is not None and self.a.suite != "daily":
             self.ph.debug("fsturn", "0"); time.sleep(1.0)          # ANS54e.1: the DEFAULT is now "follow the tablet" (never turn by itself); the older scenes check the automatic turning, so they ask for it; the default has its own check (kp)
         self.main_pid = (self.ph.pids() or [None])[0]
         self.record({"kind": "start", "name": "app-start", "status": "ok" if eng else "no-engine", "engine_ready_s": round(eng, 1) if eng else None})
@@ -3915,10 +3917,26 @@ class FakeAdb:
 
 
 # ------------------------------------------------------------------------------------------------ main
+def _install_daily():
+    """LAB3: the daily-use journey lives in daily.py next to this file. This script runs as `python3 -I` (no script folder on sys.path), so the file is loaded by path."""
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "daily.py")
+    spec = importlib.util.spec_from_file_location("kestrel_daily", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.bind(globals())
+    for name in dir(mod.DailyMixin):
+        if not name.startswith("__"):
+            setattr(Soak, name, getattr(mod.DailyMixin, name))
+
+
+_install_daily()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3926,11 +3944,14 @@ def main():
     ap.add_argument("--net", default="full", choices=["full", "hotspot"], help="hotspot = the owner's link: 5 Mbit/s each way and about 80 ms of delay (the carrier caps his phone hotspot)")
     ap.add_argument("--emu-cmd", default="", help="how the workflow started the emulator: used to start it again from a clean disk when the phone's system keeps dying")
     ap.add_argument("--apk", default="", help="the debug APK, installed again after such a restart")
+    ap.add_argument("--profile", default="standard", choices=["standard", "tablet", "auto"], help="tablet = font scale 1.2 and the other tablet settings of docs/HARDWARE.md (the workflow chose the 32-bit image and the low-RAM flag)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
+    if a.profile == "auto":
+        a.profile = "tablet" if a.suite == "daily" else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -3981,6 +4002,8 @@ def main():
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
+        if a.suite == "daily":
+            s.daily(a.minutes)                               # (LAB3, owner message 62: a person's day on the app's real defaults, then the report for the build)
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
