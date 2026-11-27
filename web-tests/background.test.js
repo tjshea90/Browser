@@ -59,6 +59,7 @@ function fakeStreamFilter(id) {
 function harness(app, opts) {
   opts = opts || {};
   const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 }, filters = [];
+  const regs = {};                                    // ND2: the filters the end-of-request listeners were registered with
   const ctx = {
     console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder, URL,   // (URL: BK10 reads the address of a main page)
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
@@ -89,8 +90,8 @@ function harness(app, opts) {
         onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.types && filter.types.length === 1 && filter.types[0] === 'main_frame') { listeners.bkHeaders = f; listeners.bkFilter = filter; } else if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
         filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
         onBeforeRedirect: { addListener: (f) => { listeners.redirect = f; } },
-        onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
-        onCompleted: { addListener: (f) => { listeners.completed = f; } },
+        onErrorOccurred: { addListener: (f, filter) => { listeners.error = f; regs.error = filter; } },
+        onCompleted: { addListener: (f, filter) => { listeners.completed = f; regs.completed = filter; } },
       },
     },
   };
@@ -98,7 +99,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, raws, ctx, listeners, clock, tabMsgs, filters,
+    sent, raws, ctx, listeners, regs, clock, tabMsgs, filters,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
@@ -1157,6 +1158,28 @@ test('RX3-BK1: an answer to a request of the page the tab already left does not 
   assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
 });
 
+test('ND2: the end-of-request listeners ask only for scripts, styles, frames and xhr: pictures and fonts (most of a heavy page) cost no webRequest dispatch', () => {
+  const h = harness(standardApp());
+  for (const k of ['completed', 'error']) {
+    const f = h.regs[k];
+    assert.ok(f && Array.isArray(f.types), k + ' is registered with a types filter');
+    for (const ty of ['main_frame', 'sub_frame', 'script', 'stylesheet', 'xmlhttprequest']) assert.ok(f.types.indexOf(ty) >= 0, k + ' keeps ' + ty);
+    for (const ty of ['image', 'imageset', 'font', 'ping', 'websocket', 'csp_report']) assert.ok(f.types.indexOf(ty) < 0, k + ' does not ask for ' + ty);
+    assert.deepEqual(f.urls, ['http://*/*', 'https://*/*']);
+  }
+});
+
+test('ND2: a picture the page started is not "pending" when the page is left (its end is never reported, so it must not be counted)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  for (let i = 0; i < 4; i++) h.req('image', 'https://nothing.test/p' + i + '.png', PAGE);
+  h.req('script', PLAIN + '?a', PAGE);
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?a', statusCode: 200 });
+  h.mainFrame('https://example.com/next', { requestId: '20' });
+  await tick(20);
+  assert.equal(h.of('pend').length, 0, 'four pictures without an end are not four pending requests');
+});
+
 // ---------------------------------------------------------------- RX3-G3: the assist of a player inside a frame is relayed to the ONE frame the owner pressed
 
 const frameReq = (h, id, parent, url) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId: id, parentFrameId: parent, requestId: String(100 + id), documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
@@ -1321,7 +1344,7 @@ test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive a
   for (let i = 0; i < 100 && h.of('st').length === 0; i++) { await tick(10); await h.flushTimers(); }
   const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');
   const rv = st[st.length - 1].rv;
-  assert.ok(/pages 1, requests 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
+  assert.ok(/pages 1, requests of scripts, styles, frames and xhr \(not pictures or fonts: ND2\) 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
 });
 
 test('RX4-M0c: the wait before a navigation to a site that has scriptlet rules is timed and counted (and the answer still arrives)', async () => {
