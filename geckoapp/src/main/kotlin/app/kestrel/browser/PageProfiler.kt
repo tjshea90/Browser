@@ -86,6 +86,8 @@ object PageProfiler {
     private fun done(ctx: Context, r: Rec, bytes: ByteArray?, why: String) {
         if (rec === r) rec = null
         if (bytes == null || bytes.size < 1000) { Health.count("profile.empty"); Health.log("life", "profile", "empty"); say(ctx, "The engine returned no recording."); return }
+        // the rule (core ProfileRule) refused a private tab at the start; one opened (or closed less than 2 minutes ago) while it recorded means the recording covers it too: nothing of it is kept, on the tablet or anywhere
+        if (PrivateGuard.active()) { Health.count("profile.discarded"); Health.log("life", "profile", "discarded"); say(ctx, "A private tab was open while recording: the recording was thrown away, nothing was saved or sent."); return }
         val kb = bytes.size / 1024
         Health.count("profile.done"); Health.log("life", "profile", "done why=$why kb=$kb mode=" + (if (r.load) "load" else "now"))
         try { File(ctx.cacheDir, "profile-last.json.gz").writeBytes(bytes) } catch (e: Exception) { /* the copy is a courtesy */ }

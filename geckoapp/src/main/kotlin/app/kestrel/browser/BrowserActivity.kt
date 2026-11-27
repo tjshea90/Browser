@@ -741,13 +741,15 @@ open class BrowserActivity : Activity(), DockListener {
      * on the Home screen with nothing to keep, or while the system itself says memory is short.
      */
     private fun keepReadyOnLeave() {
-        val choice = prefs.keepReady
-        if (choice == app.kestrel.core.mem.KeepReady.OFF) return
-        val finishing = isFinishing || isChangingConfigurations
-        val hasPage = tabs.any { it.session != null && !it.isNewTab && !it.showHome }
-        val low = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(it) }.lowMemory
-        if (app.kestrel.core.mem.KeepReady.applies(choice, hasPage, low, finishing)) KeepReadyService.start(this, app.kestrel.core.mem.KeepReady.minutes(choice))
-        else Health.log("life", "keep-ready-skip", app.kestrel.core.mem.KeepReady.whyNot(choice, hasPage, low, finishing))
+        try {
+            val choice = prefs.keepReady
+            if (choice == app.kestrel.core.mem.KeepReady.OFF) return
+            val finishing = isFinishing || isChangingConfigurations
+            val hasPage = tabs.any { it.session != null && !it.isNewTab && !it.showHome }
+            val low = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(it) }.lowMemory
+            if (app.kestrel.core.mem.KeepReady.applies(choice, hasPage, low, finishing)) KeepReadyService.start(this, app.kestrel.core.mem.KeepReady.minutes(choice))
+            else Health.log("life", "keep-ready-skip", app.kestrel.core.mem.KeepReady.whyNot(choice, hasPage, low, finishing))
+        } catch (e: Throwable) { Health.log("life", "keep-ready-refused", "leave " + e.javaClass.simpleName) }       // a hold is a courtesy: nothing in it may break leaving the app
     }
 
     private var lastTouchAt = 0L

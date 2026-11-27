@@ -67,16 +67,23 @@ class KeepReadyService : Service() {
         startedAt = SystemClock.elapsedRealtime()
         ProcessLife.keepReady = true
         Health.count("keepready.start")
-        promote(60)
+        if (!promoteSafely(60)) return
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_LET_GO) { endWhy = "letgo"; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
         val minutes = (intent?.getIntExtra(EXTRA_MINUTES, 60) ?: 60).coerceIn(1, 24 * 60)
-        promote(minutes)                                    // every startForegroundService() call must be answered with startForeground(), also when the service already runs
+        if (!promoteSafely(minutes)) return START_NOT_STICKY   // every startForegroundService() call must be answered with startForeground(), also when the service already runs
         handler.removeCallbacks(timeout); handler.postDelayed(timeout, minutes * 60_000L)
         Health.log("life", "keep-ready", "minutes=$minutes")
         return START_NOT_STICKY                             // never brought back by Android after a kill: a hold only makes sense while the page is still in this process
+    }
+
+    /** Go foreground; if Android or the notification system refuses, say so and stop: a hold that cannot start must never take the browser down with it. */
+    private fun promoteSafely(minutes: Int): Boolean = try { promote(minutes); true } catch (e: Throwable) {
+        endWhy = "refused"; Health.count("keepready.refused"); Health.log("life", "keep-ready-refused", "promote " + e.javaClass.simpleName)
+        try { stopSelf() } catch (x: Throwable) { /* gone */ }
+        false
     }
 
     private fun promote(minutes: Int) {
