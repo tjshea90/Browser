@@ -2933,7 +2933,7 @@ open class BrowserActivity : Activity(), DockListener {
             val fs = Engine.peek()
             val rules = fs?.meta?.let { it.totalNetwork } ?: 0
             return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" + (fs?.queryRuleCount?.takeIf { it > 0 }?.let { ", ${"%,d".format(it)} address-cleaning rules" } ?: "") +
-                (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(prefs.lastUpdateMs))}" else "") +
+                (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${app.kestrel.core.ui.LocalStamp.format(prefs.lastUpdateMs, java.util.TimeZone.getDefault().getOffset(prefs.lastUpdateMs))}" else "") +
                 (if (prefs.lastUpdateNote.isNotEmpty()) "\n${prefs.lastUpdateNote}" else "")
         }
         override fun dataUsed(): String = DataMeter.totalBytes(prefs).let { if (it < 0) "not available on this device" else NewTabPage.fmtBytes(it) }
