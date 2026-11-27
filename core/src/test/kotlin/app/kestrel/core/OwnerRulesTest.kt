@@ -1034,7 +1034,7 @@ class OwnerRulesTest {
         val send = ld.substring(ld.indexOf("fun sendProfile("), ld.indexOf("private class Extras("))
         assertTrue("sendProfile has the same gates as the diagnostics upload: switch, token, a private repository, no private tab (asked again before the bytes go)", send.contains("!enabled || token.isEmpty()") && send.contains("RepoState.PRIVATE -> {}") && send.contains("PrivateGuard.active()") && send.indexOf("PrivateGuard.active()", send.indexOf("RepoState.ERROR")) > 0)
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
-        assertTrue("the two buttons are in the live-diagnostics section and only with a token", set.contains("button(\"Record a profile of this page\"") && set.contains("button(\"Record 25 seconds of what I do now\"") && set.indexOf("if (ld.hasToken()) {\n                button(\"Record a profile") > 0)
+        assertTrue("the two buttons are in the live-diagnostics section and only with a token", set.contains("button(\"Record a profile of this page\"") && set.contains("button(\"Record \${app.kestrel.core.livediag.ProfileRule.NOW_MS / 1000} seconds of what I do now\"") && set.indexOf("if (ld.hasToken()) {\n                button(\"Record a profile") > 0)
         assertTrue("the reader for Claude exists and is tested by the handoff self-test", source("tools/profile_digest.py").contains("ProfilerController.stopProfiler()") && source("tools/test_handoff.sh").contains("test_profile_digest.py"))
     }
 
