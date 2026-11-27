@@ -314,6 +314,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onFilePrompt(session: GeckoSession, prompt: PromptDelegate.FilePrompt): GeckoResult<PromptDelegate.PromptResponse>? {
         val r = GeckoResult<PromptDelegate.PromptResponse>()
+        if (prompt.type == PromptDelegate.FilePrompt.Type.FOLDER) { a.refuseFolder(); r.complete(prompt.dismiss()); return r }   // ATT1: a whole-folder ask is answered at once
         a.pickFiles(prompt.mimeTypes, prompt.type == PromptDelegate.FilePrompt.Type.MULTIPLE) { uris ->
             if (uris.isEmpty()) r.complete(prompt.dismiss()) else r.complete(prompt.confirm(a, uris.toTypedArray()))
         }
