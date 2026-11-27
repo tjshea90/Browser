@@ -25,6 +25,13 @@ versions, download locations, checksums and the exact recipe: docs/DICTIONARY.md
 
 5. About 300 hand-written extra words (web names, texting words, contractions): written for this project, no outside licence applies.
 
+6. Tatoeba English sentences (https://tatoeba.org, weekly export, sentence contributors listed there), licensed CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/),
+   some of them CC0. Only COUNTS were taken from them: how often one word follows another inside a stretch of plain words (about 11 million words of everyday sentences, sentences
+   that mention the names Tom, Mary, John and a few more left out), pruned to the pairs seen at least 6 times and mixed into the pair chances of item 3. No sentence is
+   republished. Credit: "Tatoeba (tatoeba.org), CC BY 2.0 FR". The counting is done by tools/glide/count_pairs.py on a CI runner; the recipe is in docs/DICTIONARY.md.
+
+7. About 60 hand-written shorthand and slang words (pls, thx, omw, idk, brb, tbh ...: tools/glide/texting-words.txt): written for this project, no outside licence applies.
+
 ------------------------------------------------------------------------------------------------------------------------------------------------
 wordfreq code licence (Apache-2.0; the full text is at http://www.apache.org/licenses/LICENSE-2.0):
 

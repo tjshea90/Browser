@@ -1,22 +1,24 @@
-# CHECKPOINT 2643 — read me first, then TASKS.md
+# CHECKPOINT 2644 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T18:28:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `894cf0a1` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T22:16:06Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-5531c47b-hl1gzo` · **builds on:** `3b88d8d1` (this checkpoint is the commit after it)
 
 ## Just done
-alpha67 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha67 code 168, run 44146222603 all jobs green incl. the new coverage gate, APK 95.9 MB + sha256 + dm 4,132 bytes, BUILDLOG commit recorded). TASKS LAB7 ticked, HANDOFF alpha67 entry, research/LAB7_RESULTS.md + LAB7_INSTALL_COMPILE.md hold the evidence. DO NOT DISPATCH ALPHA67 AGAIN.
+gated kestrel-g-v0.3.0-alpha68 (gecko code 169) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-Nothing is running. Wait for the owner: update the tablet from alpha66 to alpha67 and send Diagnostics lines 'start oat' (base.odex about 12 MB = whole app compiled at install) and 'start art'; tablet test of alpha66 Swoop keyboard link (other lane); owner decisions still open: Neon idle pulse, alpha62 site. If more speed work is wanted: candidates not done = nothing with evidence; ideas: lab-only Health mirror on a release build to run the daily suite against compile modes, GPU first-frame stall (HardwareRenderer.nSetStopped 0.9 s at each cold start on emulator AND tablet) is platform GL init
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-5531c47b-hl1gzo, inputs {"app":"gecko","full_build":"true","note":"alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha68), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha68 "alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."
+NEVER ship kestrel-g-v0.3.0-alpha68 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M HANDOFF.md
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  e38fb0d8 ckpt 2643: alpha67 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha67 code 168, run
   765d1c8a ckpt 2642: alpha67 DISPATCHED ONCE (android.yml app=gecko full_build=true, ref ccr-e89b
   d8340975 ckpt 2641: gated kestrel-g-v0.3.0-alpha67 (gecko code 168) and pushed it: handoff self-
   fd0ea0b5 ckpt 2640: Diagnostics line 'start oat' added (BrowserActivity.oatSizes: sizes of oat/<
@@ -26,8 +28,7 @@ Nothing is running. Wait for the owner: update the tablet from alpha66 to alpha6
   e40a5b70 ckpt 2636: LAB7 lab run 44125632537 CANCELLED ON PURPOSE and replaced by a corrected on
   3206d5dd ckpt 2635: LAB7 lab run DISPATCHED ONCE (android.yml app=lab lab_suite=aot lab_profile=
   eaa4e46d ckpt 2634: LAB7a+b lab code written and dry-run against a fake adb (aotlab.py breadth_c
-  a2313194 ckpt 2634: gated kestrel-g-v0.3.0-alpha66 (gecko code 167) and pushed it: handoff self-
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(15 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)

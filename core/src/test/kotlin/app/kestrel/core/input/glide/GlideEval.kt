@@ -13,6 +13,7 @@ import java.util.Random
  */
 object GlideEval {
     fun findAsset(): File {
+        System.getenv("GLIDE_KLX")?.takeIf { it.isNotEmpty() }?.let { return File(it) }          // GLIDE_KLX=<file>: run every accuracy test and eval against another compiled list (a candidate), never touching the shipped one
         for (p in listOf("ime/src/main/assets/glide/en.klx", "../ime/src/main/assets/glide/en.klx", "geckoapp/src/main/assets/glide/en.klx", "../geckoapp/src/main/assets/glide/en.klx")) { val f = File(p); if (f.exists()) return f }
         throw IllegalStateException("glide word list not found (run from the repository root or core/)")
     }
