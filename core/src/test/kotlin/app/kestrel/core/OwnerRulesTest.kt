@@ -995,7 +995,7 @@ class OwnerRulesTest {
         assertTrue("the notification says nothing about any page and is hidden on the lock screen; it has a Let go button", svc.contains("VISIBILITY_SECRET") && svc.contains("\"Let go\"") && !svc.contains("tab.url"))
         assertTrue("it ends by itself after the chosen time and lets the process go when nothing is on screen", svc.contains("handler.postDelayed(timeout, minutes * 60_000L)") && svc.contains("if (!ProcessLife.uiAlive) ProcessLife.maybeExit()"))
         val man = source("geckoapp/src/main/AndroidManifest.xml")
-        assertTrue("declared, not exported, special use with its subtype, and the swipe-away default (stopWithTask) is NOT switched off", man.contains(".KeepReadyService") && man.contains("android:foregroundServiceType=\"specialUse\"") && man.contains("PROPERTY_SPECIAL_USE_FGS_SUBTYPE") && man.contains("FOREGROUND_SERVICE_SPECIAL_USE") && !man.contains("stopWithTask"))
+        assertTrue("declared, not exported, special use with its subtype, and the swipe-away default (stopWithTask) is NOT switched off", man.contains(".KeepReadyService") && man.contains("android:foregroundServiceType=\"specialUse\"") && man.contains("PROPERTY_SPECIAL_USE_FGS_SUBTYPE") && man.contains("FOREGROUND_SERVICE_SPECIAL_USE") && !man.contains("android:stopWithTask"))
         val life = source("app/src/main/kotlin/app/kestrel/browser/ProcessLife.kt")
         assertTrue("a hold keeps the process while it runs, so the person's pause is not read as a quit, and ends with it", life.contains("if (keepReady) return"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
