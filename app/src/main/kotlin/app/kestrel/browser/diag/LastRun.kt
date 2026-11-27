@@ -207,7 +207,10 @@ object LastRun {
             }
             if (parts.isNotEmpty()) sb.append(" app{").append(parts.joinToString(" ")).append(" sum=").append(total / 1024).append("MB}")
         } catch (e: Exception) { /* best effort */ }
-        return sb.toString().take(400)
+        try {
+            if (ctx != null && System.currentTimeMillis() - startedAt in 0 until 90_000L) sb.append(" inst{").append(app.kestrel.browser.update.UpdateManager.sessionsLine(ctx)).append('}')      // ND4: was an install still running while this run lived (the first start after an update)?
+        } catch (e: Exception) { /* best effort */ }
+        return sb.toString().take(520)
     }
 
     /** The process ends on purpose (nothing left to do, [app.kestrel.browser.ProcessLife]): written at once, on the caller's thread, because the next line kills the process. */

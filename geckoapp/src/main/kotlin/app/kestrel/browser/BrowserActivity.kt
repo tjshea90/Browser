@@ -540,6 +540,7 @@ open class BrowserActivity : Activity(), DockListener {
         DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
         UpdateManager.addListener(updateListener)
+        UpdateManager.beforeInstallScreen = { Health.log("update", "task-back", "before the installer screen"); try { moveTaskToBack(true) } catch (e: Exception) { /* the installer screen still opens */ } }   // ND4: nothing of this app stays behind the installer's dialog
         dock.setMenuDot(UpdateManager.pending())
         installBackHandling()
         NetworkMonitor.addListener(netListener)
@@ -907,6 +908,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(lookScrollTimer); Io.main.removeCallbacks(lookCheckTick); Io.main.removeCallbacks(lookNoteShow)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }; privateAnchor = null
+        UpdateManager.beforeInstallScreen = null
         super.onDestroy()
         Health.log("life", "destroy", "finishing=$isFinishing config=$isChangingConfigurations")      // ANS58/59: tells a swipe-away from the system taking the screen away (Diagnostics)
         // swiped away (finishing): leave after 2 s unless a download is still running. A screen the SYSTEM destroyed (not finishing, not a turn) is not a quit: the person may be on their way back, so the process stays two
