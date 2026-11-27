@@ -336,7 +336,7 @@ object DownloadController {
     }
     fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
     fun resumeAll(ctx: Context) { init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
-    fun tick() { engine?.tick() }
+    fun tick() { engine?.tick(); streams?.tick() }
     fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false) || (phone?.needsService() ?: false)
     fun counts(): IntArray {
         val a = engine?.counts() ?: intArrayOf(0, 0, 0); val b = streams?.counts() ?: intArrayOf(0, 0, 0)

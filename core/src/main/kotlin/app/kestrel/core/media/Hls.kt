@@ -52,7 +52,8 @@ object Hls {
 
     /** The initialization section of fragmented MP4 (EXT-X-MAP): written once, before the first segment. */
     class Init(val url: String, val from: Long, val len: Long)
-    class Seg(val url: String, val durationMs: Long, val from: Long, val len: Long, val key: Int, val seq: Long, val discontinuity: Boolean)
+    /** [ad]: the playlist's own markers (CUE-OUT .. CUE-IN, SCTE-35, DATERANGE) put this segment inside an advertising break (RX3-V5, [AdMarkers]); false when it says nothing. */
+    class Seg(val url: String, val durationMs: Long, val from: Long, val len: Long, val key: Int, val seq: Long, val discontinuity: Boolean, val ad: Boolean = false)
     /** An AES-128 key: its address and the IV the playlist names (null = derive it from the segment's sequence number). */
     class Key(val url: String, val iv: ByteArray?)
 
@@ -130,8 +131,20 @@ object Hls {
         var lastUrl: String? = null; var lastEnd = 0L
         var seq = 0L
         var seqSet = false
+        // RX3-V5: the playlist's own advertising markers. inBreak: the segments that follow are advertising; breakLeft: milliseconds of the break still to come (-1 = not told); breakSoFar: how long it has run
+        var inBreak = false; var breakLeft = -1L; var breakSoFar = 0L
+        fun startBreak(durationMs: Long) { inBreak = true; breakLeft = durationMs; breakSoFar = 0 }
         for (l in lines) {
             when {
+                l.startsWith("#EXT-X-CUE-OUT-CONT:") -> { val left = AdMarkers.cueOutContLeftMs(l.substringAfter(':')); if (left == 0L) inBreak = false else { if (!inBreak) { inBreak = true; breakSoFar = 0 }; breakLeft = left } }
+                l.startsWith("#EXT-X-CUE-OUT:") || l.trimEnd() == "#EXT-X-CUE-OUT" -> startBreak(AdMarkers.cueOutMs(l.substringAfter(':', "")))
+                l.startsWith("#EXT-X-CUE-IN") -> inBreak = false
+                l.startsWith("#EXT-OATCLS-SCTE35:") -> AdMarkers.scte35(l.substringAfter(':'))?.let { if (it.out) startBreak(it.durationMs) else inBreak = false }
+                l.startsWith("#EXT-X-DATERANGE:") -> {
+                    val a = attrs(l.substringAfter(':'))
+                    if (a.containsKey("SCTE35-OUT")) startBreak((a["DURATION"] ?: a["PLANNED-DURATION"])?.toDoubleOrNull()?.let { (it * 1000).toLong() }?.takeIf { it in 0..AdMarkers.MAX_BREAK_MS } ?: -1L)
+                    else if (a.containsKey("SCTE35-IN")) inBreak = false
+                }
                 l.startsWith("#EXT-X-TARGETDURATION:") -> target = ((l.substringAfter(':').trim().toDoubleOrNull() ?: 0.0) * 1000).toLong()
                 l.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> { mediaSeq = l.substringAfter(':').trim().toLongOrNull() ?: 0; seq = mediaSeq; seqSet = true }
                 l.startsWith("#EXT-X-PLAYLIST-TYPE:") -> if (l.substringAfter(':').trim().equals("VOD", true)) vod = true
@@ -169,7 +182,11 @@ object Hls {
                 else -> {
                     val url = resolve(base, l)
                     if (gap) { gap = false; dur = 0; pendingFrom = -1; pendingLen = -1; seq++; continue } // a hole the server marked: nothing to fetch
-                    segs.add(Seg(url, dur, pendingFrom, pendingLen, curKey, seq, disc))
+                    segs.add(Seg(url, dur, pendingFrom, pendingLen, curKey, seq, disc, inBreak))
+                    if (inBreak) {   // the break ends with its duration (a segment may overshoot it by a second), or after three minutes when it never said
+                        breakSoFar += dur
+                        if (breakLeft >= 0) { breakLeft -= dur; if (breakLeft < 1000) inBreak = false } else if (breakSoFar >= 180_000) inBreak = false
+                    }
                     if (pendingLen >= 0) { lastUrl = url; lastEnd = pendingFrom + pendingLen } else { lastUrl = null; lastEnd = 0 }
                     seq++; dur = 0; pendingFrom = -1; pendingLen = -1; disc = false
                 }

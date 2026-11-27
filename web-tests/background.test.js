@@ -51,7 +51,7 @@ function fakeIdb(store) {
 /** @param app (message) => reply string (may be async). @param opts { idb: Map } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], raws = [], timers = [], listeners = {}, clock = { now: 1700000000000 };
+  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 };
   const ctx = {
     console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
@@ -74,6 +74,7 @@ function harness(app, opts) {
           return Promise.resolve(r);
         },
       } : undefined,
+      tabs: { sendMessage: (tabId, m, o) => { tabMsgs.push({ tabId, m, o }); return Promise.resolve(); } }, // what the background page tells a tab's frames (RX3-G3)
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
@@ -87,7 +88,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, raws, ctx, listeners, clock,
+    sent, raws, ctx, listeners, clock, tabMsgs,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
@@ -845,8 +846,7 @@ test('early scriptlets: the first navigation to a site asks the app, does not wa
   assert.ok(!isPromise(r), 'a site seen for the first time never holds its request up');
   eq(r, {});
   await until(() => mine().length === 1, 'the site script');
-  const lib = regs.findIndex((x) => x.opts.js[0].file === 'scriptlets-main.js');
-  assert.ok(lib >= 0 && lib < regs.indexOf(mine()[0]), 'the library is registered first: scripts of one extension run in registration order');
+  assert.equal(regs.findIndex((x) => x.opts.js && x.opts.js[0].file === 'scriptlets-main.js'), -1, 'the library and the guard are declared in the manifest (RX3-G1): nothing of them is registered at run time');
   const o = mine()[0].opts;
   eq(o.matches, ['http://site.example/*', 'https://site.example/*']);
   assert.equal(o.runAt, 'document_start'); assert.equal(o.world, 'MAIN'); assert.equal(o.allFrames, true); assert.equal(o.matchAboutBlank, true); assert.equal(o.matchOriginAsFallback, true);
@@ -966,11 +966,6 @@ test('early scriptlets: a registration the browser refuses, an app that cannot a
   eq(broken.mainFrame(SLSITE), {});
   await tick(20);
   eq(broken.mainFrame(SLSITE), {});
-  const noLib = harness(standardApp(), { scripts: { list: [], fail: (o) => o.js && o.js[0].file === 'scriptlets-main.js' } });
-  await tick(20);                                               // the refusal of the library's registration arrives
-  eq(noLib.mainFrame(SLSITE), {});
-  await tick(20);
-  assert.equal(noLib.of('sc').length, 0, 'without the library there is nothing to hand the calls to: no question either');
 });
 
 test('early scriptlets: the numbers for Diagnostics say how many pages ran calls and how many of them before the page\'s first script', async () => {
@@ -1028,4 +1023,185 @@ test('stand-ins: the Diagnostics numbers count the files answered with a stand-i
   h.req('script', 'https://redir.test/a.js', PAGE); h.req('script', 'https://redir.test/b.js', PAGE);
   await h.flushTimers();
   assert.match(h.of('st').map((m) => m.w).join(' | '), /2 blocked files answered with a stand-in/);
+});
+
+// ---------------------------------------------------------------- RX3-BK1 / RX3-BK2 (research/REVIEW-EXTERNAL-3.md section 3): the Back lab's signals and the place question
+
+test('RX3-BK2: the place question of a reloaded page is relayed to the app and its answer comes back; frames and senders without a tab get nothing', async () => {
+  const h = harness((m) => (m.k === 'bk' ? (m.p === PAGE ? '1200' : null) : standardApp()(m)));
+  const r = h.message({ k: 'bk', p: PAGE }, 1, PAGE, 0);
+  assert.ok(isPromise(r), 'an answer is promised to the page');
+  assert.equal(await r, '1200');
+  assert.equal(await h.message({ k: 'bk', p: 'https://other.test/' }, 1, PAGE, 0), '', 'nothing armed for that page, or a reply that is not text: an empty answer');
+  assert.equal(h.message({ k: 'bk', p: PAGE }, 1, PAGE, 3), undefined, 'an iframe never asks');
+  assert.equal(h.message({ k: 'bk', p: PAGE }, -1, PAGE, 0), undefined, 'not from a tab');
+  assert.equal(h.of('bk')[0].p, PAGE);
+});
+
+test('RX3-BK1: the show report is forwarded with its five fields only, from the top frame only', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'bf', p: PAGE, ps: 1, nt: 'back_forward', ts: 4096.7, y: 640.2, junk: 'x'.repeat(5000) }, 1, PAGE, 0);
+  h.message({ k: 'bf', p: PAGE, ps: 0, nt: 'back_forward', ts: 1, y: 0 }, 1, PAGE, 2); // a frame
+  await tick(20);
+  eq(h.of('bf'), [{ k: 'bf', p: PAGE, ps: 1, nt: 'back_forward', ts: 4096, y: 640 }]);
+});
+
+test('RX3-BK1: a main page that forbids caching (Cache-Control: no-store) is reported once; other responses and other pages are not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  const res = (type, url, id, headers) => h.listeners.headers({ tabId: 1, frameId: 0, type, url, statusCode: 200, requestId: id, responseHeaders: headers });
+  res('main_frame', PAGE, '5', [{ name: 'Content-Type', value: 'text/html' }, { name: 'Cache-Control', value: 'private, No-Store, max-age=0' }]);
+  res('xmlhttprequest', 'https://example.com/api', '6', [{ name: 'Cache-Control', value: 'no-store' }]);            // a sub-resource: not the page
+  res('main_frame', 'https://example.com/ok', '7', [{ name: 'Cache-Control', value: 'max-age=60' }]);               // cacheable: nothing to say
+  res('main_frame', 'https://example.com/old', '3', [{ name: 'Cache-Control', value: 'no-store' }]);                // an answer for a document the tab already left
+  await tick(20);
+  eq(h.of('ns').map((m) => m.p), [PAGE]);
+});
+
+test('RX3-BK1: a page left with requests still pending is reported once with how many; a page that finished is not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  for (let i = 0; i < 5; i++) h.req('script', PLAIN + '?' + i, PAGE);
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?0', statusCode: 200 });
+  h.listeners.completed({ tabId: 1, requestId: '7', type: 'script', url: PLAIN + '?1', statusCode: 200 });
+  h.listeners.error({ tabId: 1, requestId: '8', type: 'script', url: PLAIN + '?2', error: 'NS_BINDING_ABORTED' });   // an aborted request is no longer pending either
+  h.mainFrame('https://example.com/next', { requestId: '20' });
+  await tick(20);
+  const p = h.of('pend');
+  assert.equal(p.length, 1);
+  assert.equal(p[0].n, 2);
+  assert.equal(p[0].p, PAGE);
+  // the next page finishes everything it started: leaving it says nothing
+  h.req('script', PLAIN + '?z', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '21', type: 'script', url: PLAIN + '?z', statusCode: 200 });
+  h.mainFrame('https://example.com/third', { requestId: '30' });
+  await tick(20);
+  assert.equal(h.of('pend').length, 1);
+});
+
+test('RX3-BK1: an answer to a request of the page the tab already left does not count as one of the new page', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  h.req('script', PLAIN + '?a', PAGE);
+  h.mainFrame('https://example.com/next', { requestId: '20' });
+  h.req('script', PLAIN + '?b', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?a', statusCode: 200 }); // belongs to the old document (id 6 < 20)
+  h.mainFrame('https://example.com/third', { requestId: '30' });
+  await tick(20);
+  const p = h.of('pend');
+  assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
+});
+
+// ---------------------------------------------------------------- RX3-G3: the assist of a player inside a frame is relayed to the ONE frame the owner pressed
+
+const frameReq = (h, id, parent, url) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId: id, parentFrameId: parent, requestId: String(100 + id), documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+
+test('RX3-G3: an assist from the parent frame goes to the ONE child frame that has the iframe\'s address, as a number place; frames inside it and other frames get nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 4, 0, 'https://other.example/ad');
+  frameReq(h, 5, 3, 'https://inner.example/x');
+  h.message({ k: 'assist', x: 100.4, y: 80, s: 'https://player.example/embed#t=1' }, 1, PAGE, 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 1);
+  eq(h.tabMsgs[0], { tabId: 1, m: { k: 'assist', x: 100, y: 80 }, o: { frameId: 3 } });
+});
+
+test('RX3-G3: two frames with the same address and none to tell apart: no guess, nothing is sent', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 4, 0, 'https://player.example/embed');
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 0);
+});
+
+test('RX3-G3: the only child frame is used even when its address changed since the request; an inner frame can ask about its own child', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 5, 3, 'https://inner.example/x');
+  h.message({ k: 'assist', x: 5, y: 6, s: 'https://player.example/other-address' }, 1, PAGE, 0);   // top frame: its only child is frame 3
+  h.message({ k: 'assist', x: 7, y: 8, s: '' }, 1, 'https://player.example/embed', 3);              // frame 3: its only child is frame 5
+  await tick(20);
+  eq(h.tabMsgs.map((t) => [t.o.frameId, t.m.x, t.m.y]), [[3, 5, 6], [5, 7, 8]]);
+});
+
+test('RX3-G3: nothing is relayed for a sender without a tab, a place that is not a number, no known frame, or another page after a navigation', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, -1, PAGE, 0);      // not from a tab
+  h.message({ k: 'assist', x: 'a', y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: -4, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: 99999, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 9);        // a frame that has no children
+  h.mainFrame('https://example.com/next', { requestId: '30' });                                    // a new page: the old frames are forgotten
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, 'https://example.com/next', 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 0);
+});
+
+test('RX3-G7: the manifest declares the other-players ad skipper for every web page and frame except the YouTube hosts (youtube.js owns those), in the extension world, from the first moment', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
+  const e = m.content_scripts.filter((c) => c.js.includes('players.js'));
+  assert.equal(e.length, 1, 'declared once');
+  assert.equal(e[0].run_at, 'document_start'); assert.equal(e[0].all_frames, true); assert.equal(e[0].world, undefined, 'it needs the extension API: not the page world');
+  assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
+  assert.deepEqual(e[0].exclude_matches, ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.youtubekids.com/*']);
+  const y = m.content_scripts.filter((c) => c.js.includes('youtube.js'));
+  assert.deepEqual(y[0].matches, e[0].exclude_matches, 'the two scripts split the web between them: exactly the same hosts');
+});
+
+test('RX3-G7: the ad skipper reports are forwarded as numbers with their kind (YouTube y, other players p) and the tab page, nothing else', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'yts', w: 'p', a: 2, s: 1, c: 1, o: 0, d: 0, f: 1, g: 0, r: 'speed refused', junk: 'x'.repeat(4000) }, 1, PAGE, 0);
+  h.message({ k: 'yts', a: 1, s: 1, c: 0, o: 0, d: 0, f: 0, g: 0, r: '' }, 1, PAGE, 3);               // from youtube.js: no kind given
+  h.message({ k: 'yts', w: 'zzz', a: 5000, s: -3, c: 'x', r: 'y'.repeat(300) }, 1, PAGE, 0);          // a made-up kind, absurd numbers, a long reason
+  assert.equal(h.message({ k: 'yts', w: 'p', a: 1 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('yts');
+  assert.equal(got.length, 3);
+  assert.equal(got[0].w, 'p'); assert.equal(got[0].a, 2); assert.equal(got[0].f, 1); assert.equal(got[0].r, 'speed refused'); assert.equal(got[0].junk, undefined);
+  assert.equal(got[1].w, 'y', 'no kind means YouTube');
+  assert.equal(got[2].w, 'y'); assert.equal(got[2].a, 0); assert.equal(got[2].s, 0); assert.equal(got[2].c, 0); assert.equal(got[2].r.length, 60);
+});
+
+test('RX3-G7: a report from the top frame of a tab whose page the extension never saw (the first page after a cold start) names that page; a frame of such a tab names none', async () => {
+  const h = harness(standardApp());                                                             // no main-frame request was judged: tabTop knows nothing about tab 7
+  h.message({ k: 'yts', w: 'p', a: 1, s: 1 }, 7, PAGE + '#section', 0);
+  h.message({ k: 'yts', w: 'p', a: 1, s: 1 }, 7, 'https://player.example/embed?id=1', 4);   // a frame: its own address is NOT the page
+  await tick(20);
+  const got = h.of('yts');
+  assert.equal(got.length, 2);
+  assert.equal(got[0].p, PAGE, 'the top frame\'s address without its fragment');
+  assert.equal(got[1].p, '', 'a frame says nothing: the app then drops the report like one from a private tab');
+});
+
+test('RX3-V1: the video report carries the element facts as clamped whole numbers; a report without them (an older script) stays as it was', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 25.4, l: '', p: PAGE, f: 27, rw: 300.7, rh: 170, vp: 80 }, 1, PAGE, 0);
+  h.message({ k: 'vid', u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '720p', p: PAGE, f: 9999, rw: -4, rh: 99999999, vp: 5000 }, 1, PAGE, 0);
+  h.message({ k: 'vid', u: 'https://cdn.example/c.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 3);
+  assert.deepEqual([got[0].f, got[0].rw, got[0].rh, got[0].vp, got[0].d], [27, 300, 170, 80, 25400]);
+  assert.deepEqual([got[1].f, got[1].rw, got[1].rh, got[1].vp], [63, 0, 20000, 100]);
+  assert.equal('f' in got[2], false, 'no facts were sent, none are invented');
+});
+
+test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
+  for (const f of ['guard-main.js', 'scriptlets-main.js']) {
+    const e = m.content_scripts.filter((c) => c.js.includes(f));
+    assert.equal(e.length, 1, f + ' is declared once');
+    assert.equal(e[0].world, 'MAIN'); assert.equal(e[0].run_at, 'document_start'); assert.equal(e[0].all_frames, true);
+    assert.equal(e[0].match_about_blank, true); assert.equal(e[0].match_origin_as_fallback, true);
+    assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
+  }
+  assert.ok(m.content_scripts[0].js.includes('content.js'), 'content.js comes first: it listens for the guard\'s ready event');
 });

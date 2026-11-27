@@ -1,0 +1,44 @@
+# Back: same scroll place, instantly (RX3-BK1 .. BK5)
+
+Owner's words (2026-11-14): "when I press back to go to the last web page, it automatically goes back to the last scroll position I was at on that web page, and it should load immediately because it should be cached".
+Design and rows: research/REVIEW-EXTERNAL-3.md part BK (section 3). This file holds what was BUILT and what was MEASURED. Newest first.
+
+## 1. What was built (alpha41 candidate, branch claude/new-session-7d9rxz)
+- **The place of every page is the app's business.** `Tab.scrollByUrl` (core `ScrollMemory`, 32 pages per tab, least recently used out, RAM only, dies with the tab, never on disk, synchronized because the extension bridge's worker thread reads it). Written by `BrowserActivity.lookScrolled(tab, y, page)` from the page's own scroll reports (content.js: 300 ms after the last scroll and once after load, plus now an immediate report on `pagehide`). The key is the report's OWN address, so a late report of the page just left never lands on the next page.
+- **The page asks, the app answers.** content.js (top frame): after the engine LOADED the page again for a history move (`performance.getEntriesByType('navigation')[0].type === 'back_forward'` and `pageshow.persisted` false) it asks `{k:'bk', p}` once; the bridge answers the place the tab's memory holds for that address (text, or empty); the script then scrolls (`scrollTo` at 0/250/700/1500/3000 ms after the answer, only when more than 4 px off and the document is tall enough, the last try always), and stops at once when the owner touches the page (touchstart, wheel, keydown, mousedown). One question per page load.
+- **The saved picture stays until the page is painted AND at its place.** `BackScrollRules.coverGoes` = `LastLookRules.hideNow(..., stopped = false)`: never before the first paint; goes when the place is reached (4 px), when the page was at the top, or 1.5 s after the paint at the latest (the 20 s timeout of `showRestoring` is the last resort). The end of the load alone does NOT remove it any more (`pageFinished` counts it as "painted" and the place rule decides). A kept page (engine cache) has no first paint: its `pageshow persisted` report removes a picture that was put up on a wrong guess.
+- **0 ms picture for targets known not to be kept.** `BackLab.left/noStore/pending` remember per page whether it was still loading, sent `Cache-Control: no-store`, held a stream player or still had requests open when it was left; `armBackPicture` shows the picture at once for such a target instead of after 150 ms.
+- **The Back lab (BK1).** Every press is classified: kept (engine cache), loaded again from the cache, loaded again from the network, other. Health line `back press kind=... dir=... loc=<ms address committed> show=<ms pageshow report> paint=<ms first paint> y=<place after>/<place before> [MISSED] to=<host>`; Diagnostics line `Back: N presses, X% kept (instant), Y% reloaded from the cache, Z% from the network, median M ms to first paint, scroll kept in A of B`. Signals: content.js `bf` (pageshow, persisted, navigation type, transferSize), background.js `ns` (main response with `Cache-Control: no-store`) and `pend` (requests still open when the next main-frame request starts). Private tabs feed none of it.
+- Not built (by design): BK3 tuning, BK4 more pictures, BK5 (needs the owner's answer, see section 4).
+- Tests: core `BackScrollTest` (10), `BackLabTest` (19), `MediaListStreamTest` (2); web `back.test.js` (11), `background.test.js` (+5 for bk/bf/ns/pend); all green.
+
+## 2. Measured on the emulator (2026-11-14; NOT the tablet)
+Device: Android 10 (API 29) x86_64 emulator `kestrel29x64` (600x973 @170, 2 GB, no KVM, software GL, UI thread stalls of seconds), Kestrel G debug build (GeckoView 160, `-PgeckoAbi=x86_64`), lab `tools/sitelab/backlab.py` + `tools/emu/back_emu.py round <case>`. Each round: the page scrolls itself to y=1800 (`input swipe` does not scroll this emulator reliably), a link is tapped, Back is pressed. Ground truth = the page's own log (`persisted`, navigation type, place) and the server's request log; the app's Health lines are the app's view.
+
+| Case | What the page is | What Back did | Place after Back | App's classification |
+| :- | :- | :- | :- | :- |
+| static | 70 blocks, cacheable (`max-age=600`) | engine back/forward cache: `pageshow persisted=true`, no request | 1800 exactly | `kind=kept y=1800/1800` |
+| nostore | the same with `Cache-Control: no-store` | loaded again, GET to the server | 1800 (the engine restored it itself) | `kind=network` |
+| dynamic | no-store, only 8 blocks at load, 62 more 600 ms later | loaded again, GET | engine: 0. After the pull: 1800 (page's own last `scrolled` report) | `kind=network` |
+| loading | a request that hangs 90 s (an `<img>`) when the link is tapped | **still kept** by the engine (`persisted=true`) | 1800 | `kind=kept` |
+| mse | a `MediaSource` player | not kept (`persisted=false`), no GET (HTTP cache) | 1800 (engine restore) | `kind=cache` |
+
+What this says (emulator, Gecko 160):
+1. The engine's cache really keeps ordinary pages with the exact place, instantly. `no-store` pages and MSE pages are loaded again, as the research said.
+2. **A page that is still loading with a pending `<img>` request is kept anyway** (the research assumed "still loading = never kept", SPEED3.md 2.1). Other kinds of pending request (fetch, XHR, WebSocket) are not tested yet: add lab pages before concluding anything about BK3's "stop the remaining loads" experiment.
+3. For a page that grows after its load the engine does NOT get back to the place (it restores before the page is tall enough): this is the case the pull fixes. On the emulator the cover's 1.5 s bound ran out before the page was back (the emulator is very slow); on the tablet the order will differ: the owner's Diagnostics line says how often the place was missed.
+4. The app's guess "cannot have been kept: it was still loading" was wrong in the static run because the emulator delivered the engine's page-stop event about 24 s late (UI thread stalls). The picture then covered a page the engine had restored instantly, and went away when the `pageshow persisted` report arrived. Harmless, but it shows the guess is only a hint.
+5. Time numbers (`show=`, `paint=`, `loc=`) from the emulator are inflated by its stalls (73 of 78 frames janky) and say nothing about the tablet. Only the kinds and places are valid.
+
+Bugs this lab found in my own first version (fixed): the end of the load (`page-stop`) hid the cover before the page was at its place; a kept page left a wrongly guessed picture up until the 20 s timeout; the app's copy of the engine's session state lagged behind a quick Back (`back-arm index -1 of 1`), so nothing was armed and the pull was answered empty. The answer now comes from the tab's own memory of the page's address and needs no history index.
+
+## 3. What is still not known (needs the owner or more lab pages)
+- The real mix on the tablet (how many Back presses are kept, from the cache, from the network, and how often the place is missed): the owner's one Diagnostics copy (`Back:` line, and the `back` lines under Health) after a day of normal browsing.
+- Pending fetch/XHR/WebSocket pages (add `/back-loading-xhr` and `/back-loading-ws` to tools/sitelab/backlab.py), the `pend` and `ns` signals in a real run, Forward presses.
+- Whether `transferSize` is 0 for a cached navigation in Gecko 160 with the fingerprinting protection on (the cache/network split rests on it; if it is always 0 or always the file size the split is meaningless and only kept/reloaded counts).
+
+## 4. Open question for the owner (BK5, do not build before the answer)
+May Back be made instant for pages that tell the browser not to keep them (`Cache-Control: no-store`) on sites the owner picks? That keeps a copy of those pages on the tablet (unencrypted storage) and Back after logging out can show the page as it was. Off by default, a per-site list, never for password pages or private tabs, wiped by clear-data.
+
+## 5. How to rerun
+`python3 tools/sitelab/backlab.py 8089 <logfile>` (server), boot the emulator (HANDOFF.md section 3), build `./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64`, install, then `python3 -u -I tools/emu/back_emu.py round static --port 8089 --log <logfile>` for static | nostore | dynamic | loading | mse. Health lines: `adb logcat -d -s KestrelHealth`.

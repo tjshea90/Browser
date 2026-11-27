@@ -9,9 +9,9 @@ import org.junit.Test
 
 /** AW1b: which `+js(...)` lines are understood, how a call is stored, filed for its sites (entity domains, exceptions, exclusions) and sent to the page. */
 class ScriptletRulesTest {
-    private fun enc(inner: String) = ScriptletRules.encode(inner)
+    private fun enc(inner: String) = ScriptletRules.encode(inner, trusted = true)
     private fun call(inner: String) = ScriptletRules.decode(enc(inner)!!)!!
-    private fun set(vararg lines: String): FilterSet { val b = FilterSetBuilder(); b.addAbpList("t", Category.ADS, lines.asSequence()); return b.build(1L) }
+    private fun set(vararg lines: String): FilterSet { val b = FilterSetBuilder(); b.addAbpList("t", Category.ADS, lines.asSequence(), trusted = true); return b.build(1L) }
     private fun names(fs: FilterSet, host: String) = fs.scriptletsFor(host).map { ScriptletRules.decode(it)!!.name }
 
     @Test fun namesAndAliasesFoldToOneCanonicalName() {
@@ -50,7 +50,9 @@ class ScriptletRulesTest {
     }
 
     @Test fun limitsAndControlCharactersAreRefused() {
-        assertNull(enc("set, a, " + "x".repeat(501)))
+        assertNull("a list that is not trusted: 500 characters at most per argument", ScriptletRules.encode("set, a, " + "x".repeat(501), trusted = false))
+        assertNotNull("a trusted list: up to 4096 (RX3-Y1)", enc("set, a, " + "x".repeat(501)))
+        assertNull(enc("set, a, " + "x".repeat(ScriptletRules.MAX_ARG_TRUSTED + 1)))
         assertNull(enc("aopr, " + (1..11).joinToString(",") { "a$it" }))
         assertNull(enc("aopr, a\u0001b"))
         assertNull(enc("aopr, a\u0006b"))
@@ -192,5 +194,143 @@ class ScriptletRulesTest {
         val back = FilterSetCodec.read(FilterSetCodec.write(fs))
         assertEquals(fs.scriptletsFor("example.com"), back.scriptletsFor("example.com"))
         assertEquals(listOf("nowoif"), back.scriptletsFor("www.lookcam.co.uk").map { ScriptletRules.decode(it)!!.name })
+    }
+
+    // ---- RX3-B1 (research/REVIEW-EXTERNAL-3.md part B): trusted-* scriptlets only from lists whose maintainers also write the scriptlets
+
+    private val mixed = arrayOf(
+        "bank.example##+js(trusted-replace-fetch-response, /balance/g, 0, /api)",
+        "bank.example##+js(trusted-replace-xhr-response, /x/g, y, /api)",
+        "bank.example##+js(trusted-rpfr, /z/g, w)",
+        "bank.example##+js(trusted-set-cookie, a, b)",
+        "bank.example##+js(trusted-set-local-storage-item, k, v)",
+        "bank.example##+js(nowoif)",
+        "bank.example##+js(set-cookie, consent, yes)",
+    )
+
+    @Test fun aListThatIsNotTrustedCannotRewriteAnswersOrSetCookiesOnlyOrdinaryScriptletsPass() {
+        val b = FilterSetBuilder(); b.addAbpList("easylist-like", Category.ADS, mixed.asSequence())
+        assertEquals(listOf("nowoif", "set-cookie"), names(b.build(1L), "bank.example"))
+        assertEquals("every trusted-* line is skipped for ITS OWN reason, not as 'unsupported'", 5, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED))
+        assertEquals(5, b.report.untrustedByList["easylist-like"])
+        assertEquals(0, b.report.trustedScriptlets)
+    }
+
+    @Test fun aTrustedListKeepsEveryOneOfThem() {
+        val b = FilterSetBuilder(); b.addAbpList("ubo-quick-fixes", Category.ADS, mixed.asSequence(), trusted = true)
+        assertEquals(7, b.build(1L).scriptletsFor("bank.example").size)
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        assertEquals(5, b.report.trustedScriptlets)
+        assertTrue(b.report.untrustedByList.isEmpty())
+    }
+
+    @Test fun theAliasOfATrustedNameIsGatedToo() {
+        assertNull(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = false))
+        assertNotNull(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = true))
+        assertEquals("trusted-replace-fetch-response", ScriptletRules.decode(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = true)!!)!!.name)
+    }
+
+    @Test fun ordinaryNamesDoNotNeedTrustAndAnUnknownNameIsStillJustUnsupported() {
+        assertNotNull(ScriptletRules.encode("set-cookie, a, b", trusted = false))
+        assertNotNull(ScriptletRules.encode("json-prune, adPlacements", trusted = false))
+        assertTrue(ScriptletRules.needsTrust("trusted-set-cookie, a, b"))
+        assertTrue(ScriptletRules.needsTrust("trusted-rpfr, /x/g, y"))
+        assertFalse(ScriptletRules.needsTrust("set-cookie, a, b"))
+        assertFalse("a trusted-* name we do not implement is unsupported, not 'untrusted'", ScriptletRules.needsTrust("trusted-click-element, button"))
+        assertFalse(ScriptletRules.needsTrust(""))
+    }
+
+    @Test fun anExceptionLineFromAnUntrustedListCannotSwitchATrustedCallOff() {
+        val b = FilterSetBuilder()
+        b.addAbpList("ubo-quick-fixes", Category.ADS, sequenceOf("yt.example##+js(trusted-replace-fetch-response, /ad/g, x, /player)"), trusted = true)
+        b.addAbpList("fanboy-like", Category.ANNOYANCE, sequenceOf("yt.example#@#+js(trusted-replace-fetch-response, /ad/g, x, /player)"))
+        assertEquals(listOf("trusted-replace-fetch-response"), names(b.build(1L), "yt.example"))
+        assertEquals(1, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+    }
+
+    @Test fun addAbpLineOnItsOwnIsUntrustedByDefault() {
+        val b = FilterSetBuilder()
+        b.addAbpLine("a.example##+js(trusted-set-cookie, a, b)", Category.ADS)
+        assertTrue(b.build(1L).scriptletsFor("a.example").isEmpty())
+    }
+
+    // ---- RX3-Y1 (research/REVIEW-EXTERNAL-3.md part Y): the lists' own YouTube answer, from the real list lines
+
+    private fun youtubeLines(): List<String> =
+        ScriptletRulesTest::class.java.getResourceAsStream("/youtube-scriptlets.txt")!!.bufferedReader(Charsets.US_ASCII).readLines().filter { it.isNotBlank() && !it.startsWith("!") }
+
+    @Test fun everyScriptletLineTheListsHaveForYoutubeIsAcceptedFromATrustedList() {
+        val lines = youtubeLines()
+        assertTrue("the fixture holds the real lines", lines.size >= 25 && lines.any { it.contains("trusted-edit-inbound-object") } && lines.any { it.contains("json-edit-fetch-response") } && lines.any { it.length > 3000 })
+        val b = FilterSetBuilder(); b.addAbpList("ubo-youtube", Category.ADS, lines.asSequence(), trusted = true)
+        val fs = b.build(1L)
+        assertEquals("nothing is skipped as unsupported", 0, b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED))
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        for (host in listOf("www.youtube.com", "m.youtube.com")) {
+            val names = names(fs, host)
+            assertTrue("$host has calls", names.isNotEmpty())
+            assertTrue("$host: the payload stays inside the caps", fs.scriptletPayload(host).length <= ScriptletRules.MAX_PAYLOAD)
+        }
+        assertTrue("the mobile site gets the feed edit", names(fs, "m.youtube.com").contains("json-edit-fetch-response"))
+        assertTrue("the desktop site gets the enforcement answer", names(fs, "www.youtube.com").containsAll(listOf("trusted-edit-inbound-object", "trusted-prevent-dom-bypass", "rpnt")))
+    }
+
+    @Test fun theSameLinesFromAListThatIsNotTrustedKeepOnlyWhatIsSmallAndOrdinary() {
+        val b = FilterSetBuilder(); b.addAbpList("third-party", Category.ADS, youtubeLines().asSequence())
+        val fs = b.build(1L)
+        for (n in names(fs, "www.youtube.com") + names(fs, "m.youtube.com")) assertFalse("$n needs a trusted list", n.startsWith("trusted-"))
+        assertTrue("the trusted-only lines were skipped for that reason", b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED) >= 10)
+        assertTrue("the 3.5 KB script injection is too long for a list that is not trusted", b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED) >= 1)
+        assertTrue(names(fs, "www.youtube.com").none { it == "rpnt" && fs.scriptletPayload("www.youtube.com").length > 3000 })
+    }
+
+    @Test fun longArgumentsAreForTrustedListsOnly() {
+        val long = "x".repeat(ScriptletRules.MAX_ARG + 100)
+        assertNull(ScriptletRules.encode("rpnt, script, /a/, $long", trusted = false))
+        assertNotNull(ScriptletRules.encode("rpnt, script, /a/, $long", trusted = true))
+        val huge = "y".repeat(ScriptletRules.MAX_ARG_TRUSTED + 1)
+        assertNull("even a trusted list has a limit", ScriptletRules.encode("rpnt, script, /a/, $huge", trusted = true))
+        val many = (1..9).joinToString(", ") { "z".repeat(ScriptletRules.MAX_ARG_TRUSTED - 10) }
+        assertNull("and a total", ScriptletRules.encode("rpnt, $many", trusted = true))
+    }
+
+    @Test fun aHostMayHaveSixtyFourCallsInThirtyTwoThousandCharacters() {
+        val stored = (1..70).map { ScriptletRules.encode("set, a$it, true", trusted = true)!! }
+        val p = ScriptletRules.payload(stored)
+        assertEquals(64, p.count { it == '[' } - 1)
+        val fat = (1..20).map { ScriptletRules.encode("rpnt, script, /a$it/, " + "w".repeat(3000), trusted = true)!! }
+        assertTrue("never more than the payload cap", ScriptletRules.payload(fat).length <= ScriptletRules.MAX_PAYLOAD)
+    }
+
+    @Test fun theJsonEditFamilyAndTheTwoGuardsNeedTheirArgumentsToMeanSomething() {
+        for (n in listOf("json-edit", "json-edit-fetch-response", "json-edit-xhr-response", "trusted-json-edit", "trusted-json-edit-fetch-response", "trusted-json-edit-xhr-response")) {
+            assertNotNull(n, ScriptletRules.encode("$n, ..a.b[?.c], propsToMatch, /api", trusted = true))
+            assertNull("$n without a query does nothing", ScriptletRules.encode(n, trusted = true))
+        }
+        assertEquals("json-edit-fetch-response", ScriptletRules.decode(ScriptletRules.encode("json-edit-fetch-response, ..a.*[?.b], propsToMatch, /api", trusted = false)!!)!!.name)
+        assertNotNull(ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0, [?.a]+={\"b\":1}", trusted = true))
+        assertNull("an object path, an index and a query are all needed", ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0", trusted = true))
+        assertNull(ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify", trusted = true))
+        assertNotNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild, fetch", trusted = true))
+        assertNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild", trusted = true))
+        assertNull("the trusted-only names stay closed to a list that is not trusted", ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0, [?.a]", trusted = false))
+        assertNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild, fetch", trusted = false))
+    }
+
+    @Test fun theBuildReportNamesWhatItCouldNotUseSoDiagnosticsCanSayIt() {
+        val b = FilterSetBuilder()
+        b.addAbpList("ubo-test", Category.ADS, sequenceOf(
+            "a.com##+js(nowoif)", "b.com##+js(trusted-replace-fetch-response, /a/, b, /api)",
+            "c.com##+js(xml-prune, //x)", "d.com##+js(xml-prune, //y)", "e.com##+js(XML-Prune.js, //z)", "f.com##+js(trusted-create-html, a, b)", "g.com##+js(set, only)",
+        ), trusted = true)
+        b.addAbpList("easy-test", Category.ADS, sequenceOf("h.com##+js(trusted-set-cookie, a, b)", "i.com##+js(trusted-set-cookie, c, d)", "j.com##+js(aopr, x)"))
+        assertEquals(listOf("xml-prune" to 3, "set" to 1, "trusted-create-html" to 1), b.report.topUnsupported(5).sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first }))
+        val line = b.report.scriptletSummary()
+        assertTrue(line, line.startsWith("Scriptlets in the lists: 3 calls stored (1 of them trusted-only)"))
+        assertTrue(line, line.contains("skipped: 5 not supported (xml-prune 3, "))
+        assertTrue(line, line.contains("2 from lists that are not trusted"))
+        assertTrue("one line, plain ASCII", line.none { it == '\n' || it.code > 126 })
+        assertEquals("a list with no scriptlets at all says so", "Scriptlets in the lists: none", FilterSetBuilder().let { it.addAbpList("x", Category.ADS, sequenceOf("||a.example^")); it.report.scriptletSummary() })
     }
 }

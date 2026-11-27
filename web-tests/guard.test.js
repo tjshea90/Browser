@@ -168,13 +168,13 @@ test('the guard does not break an ordinary page: links, buttons and forms in the
   assert.equal(new URL(page.url()).hostname, 'movie.example');
 });
 
-test('every real tap is reported, with the link it landed on, so the app can tell the owner\'s jump from a script\'s', async () => {
+test('the page-side guard reports no taps at all: the owner\'s real taps are recorded by content.js in the isolated world (RX3-G2, tap.test.js), a page script could fake this report', async () => {
   const page = await open(`<div style="width:300px;height:80px">nothing here</div><a href="https://news.example/story" target="_blank" style="display:block;width:300px;height:80px">story</a>`);
   await page.mouse.click(50, 40);                                   // on the plain block
   const popup = page.waitForEvent('popup', { timeout: 3000 });
   await page.mouse.click(50, 120);                                  // on the link
   await popup;
-  assert.deepEqual(await taps(page), ['tap|', 'tap|https://news.example/story']);
+  assert.deepEqual(await taps(page), [], 'no tap report comes from the page world any more');
   assert.deepEqual(await notes(page), []);
 });
 
@@ -311,17 +311,21 @@ test('AP1: a press that was not on a player never starts a video, even when it m
   assert.equal(await plays(page), 0);
 });
 
-test('AP1: a player in a frame under a layer of the page: the refused press is passed to the frame, which starts its video', async () => {
+test('AP1/RX3-G3: a refused press on a player that is a frame makes the guard say "go" to the extension (a parameterless event), and it posts nothing into the frame', async () => {
   const page = await open(`<iframe src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>
-    <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px" onclick="window.open('${AD}')"></div>`,
-    { embed: `<video id="v" src="https://player.example/clip.mp4" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY}</script>` });
+    <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)" onclick="window.open('${AD}')"></div>`,   // a visible tint: RX3-G4 would switch an invisible layer off before the press and there would be no refusal to react to
+    { embed: `<video id="v" src="https://player.example/clip.mp4" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY} window.addEventListener('message', function (e) { window.__msg = (window.__msg || 0) + 1; });</script>` });
+  await page.evaluate(() => { window.__go = []; document.addEventListener('__kst_assist_v1', (e) => window.__go.push(String(e.detail)), true); });
   await settle(900);
   await page.mouse.click(100, 100);
   await settle(900);
   assert.equal(page.popups.length, 0);
   assert.deepEqual(await notes(page), ['open|' + AD]);
+  const go = await page.evaluate(() => window.__go);
+  assert.ok(go.length >= 1 && go.every((d) => d === ''), 'the guard says "go" and nothing else: ' + JSON.stringify(go));
   const frame = page.frames().find((f) => f.url().indexOf('player.example') >= 0);
-  assert.equal(await frame.evaluate(() => window.__plays || 0), 1, 'the frame started its own video');
+  assert.equal(await frame.evaluate(() => window.__msg || 0), 0, 'nothing was posted into the frame (the frame is asked through the extension, see assist.test.js)');
+  assert.equal(await frame.evaluate(() => window.__plays || 0), 0, 'the guard itself no longer starts a frame\'s video');
 });
 
 test('AP1: with the guard off for the site nothing is assisted (the page behaves as it would in any browser)', async () => {

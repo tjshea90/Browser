@@ -36,7 +36,8 @@ class ShieldsBridge(
     /** A video / audio file / playlist was loaded by a page (called on the worker thread: the receiver posts to the UI thread). */
     private val mediaSeen: (MediaCandidate) -> Unit = {},
     /** The page's own player told us about a file: page URL, file URL, picture width and height, length in ms, the label next to its <source>. */
-    private val mediaInfo: (String, String, Int, Int, Long, String?) -> Unit = { _, _, _, _, _, _ -> },
+    /** page, address, picture width, height, length in ms, label, and (RX3-V1) what the element is for; the facts are null when the page script sent none (an older one). */
+    private val mediaInfo: (String, String, Int, Int, Long, String?, app.kestrel.core.media.VideoFacts?) -> Unit = { _, _, _, _, _, _, _ -> },
     /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
     private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** The page's script named an origin the owner is likely to open next (EX-15): `https://host[:port]/`, the page's address, "touch" (finger on a link) or "result" (a top search result). Worker thread. */
@@ -51,6 +52,16 @@ class ShieldsBridge(
     private val pageScrolled: (String, Int) -> Unit = { _, _ -> },
     /** A long press landed on OPEN space of the page (no link, picture, video, field or text under the finger; AY2): the page's address. Worker thread. */
     private val openSpace: (String) -> Unit = {},
+    /** RX3-Y2: the YouTube ad skipper reports numbers (ads seen, skipped, ...) and the page of its tab: the whole message (a, s, c, o, d, f, g, r, p). Worker thread. */
+    private val adSkips: (JSONObject) -> Unit = {},
+    /** RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (the page's address). The answer is the place in CSS pixels as text, or "" when nothing is armed for that page. Worker thread: reads only immutable values. */
+    private val backPlace: (String) -> String = { "" },
+    /** RX3-BK1: a Back / Forward show: the page's address, kept by the engine's cache, the navigation type, the bytes its file cost (0 = from cache), the place at the show. Worker thread. */
+    private val backShown: (String, Boolean, String, Long, Int) -> Unit = { _, _, _, _, _ -> },
+    /** RX3-BK1: the main response of this page said Cache-Control: no-store, so no cache may keep it. Worker thread. */
+    private val noStore: (String) -> Unit = {},
+    /** RX3-BK1: the page that was just left still had this many requests open (the page's address, the count). Worker thread. */
+    private val leftPending: (String, Int) -> Unit = { _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -59,6 +70,7 @@ class ShieldsBridge(
     // fraction of one core while Gecko holds every request until this thread answers (research/HW_SPEED.md H1).
     // A HandlerThread (not an executor) so the GeckoResult can be created WITH its handler: its callbacks (the reply to Gecko) then run on this thread instead of being posted back to the
     // Android UI thread (the third UI task of every request; sendSuccess / sendError are dispatched to Gecko's own thread by the engine, any thread may call them).
+    @Volatile private var lastExtState = ""
     private val workerThread = android.os.HandlerThread("kestrel-shield", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
     private val workerHandler = android.os.Handler(workerThread.looper)
     // Element-hiding CSS is slow the first time a host is seen (the generic selector set is built once, about 2 s on the emulator): it must not hold up the verdicts queued behind it.
@@ -83,7 +95,7 @@ class ShieldsBridge(
                     "cfg" -> pageConfig(m.optString("h"))
                     "img" -> imageChunk(m.optInt("g"), m.optInt("i", -1))
                     "cnt" -> { counts(m); "" }
-                    "st" -> { stats = EngineStats.from(m); "" }
+                    "st" -> { stats = EngineStats.from(m); m.optString("w").let { w -> if (w != lastExtState) { lastExtState = w; app.kestrel.browser.diag.Health.log("shields", "ext-state", w) } }; "" }
                     "pop" -> { onPop(m); "" }
                     "sc" -> scriptletCalls(m.optString("h"))
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
@@ -96,6 +108,11 @@ class ShieldsBridge(
                     "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "os" -> { openSpace(m.optString("p")); "" }
+                    "yts" -> { adSkips(m); "" }
+                    "bk" -> backPlace(m.optString("p"))
+                    "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
+                    "ns" -> { noStore(m.optString("p")); "" }
+                    "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
                 }
@@ -137,6 +154,7 @@ class ShieldsBridge(
         }
         val len = if (kind == app.kestrel.core.media.MediaKind.FILE) m.optLong("l", -1L) else -1L
         val cand = MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis())
+        cand.fromMarkup = m.optString("s") == "dom" // RX3-V2: found in the page's text, never requested: not counted for the badge until it is checked or played
         cand.referer = MediaHeaders.refererOf(m.optString("rf")); cand.origin = MediaHeaders.originOf(m.optString("og")) // what the browser itself sent: the player's own Referer / Origin (origins only)
         cand.sourceName = app.kestrel.core.download.FileNames.fromContentDisposition(m.optString("n").takeIf { it.isNotBlank() })?.let { app.kestrel.core.download.FileNames.sanitize(it) } ?: "" // the name the server gave it
         mediaSeen(cand)
@@ -145,7 +163,8 @@ class ShieldsBridge(
     private fun onVid(m: JSONObject) {
         val url = m.optString("u")
         if (url.isEmpty()) return
-        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() })
+        val facts = if (m.has("f")) app.kestrel.core.media.VideoFacts.fromBits(m.optInt("f"), m.optInt("rw"), m.optInt("rh"), m.optInt("vp")) else null
+        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() }, facts)
     }
 
     /** The extension sends JSON text; tolerate the engine handing it over already parsed. */
@@ -179,8 +198,9 @@ class ShieldsBridge(
         if (host.isEmpty()) return "0:" + gen + "::0"
         val s = Shields.effective(prefs(), host)
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
-        // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0)
+        // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
+        // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players")
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }

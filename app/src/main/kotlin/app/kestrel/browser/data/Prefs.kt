@@ -30,6 +30,10 @@ class Prefs private constructor(ctx: Context) {
     var shieldCosmetic: Boolean get() = bool("sh_cos", true); set(v) = put("sh_cos", v)
     /** Kestrel G (AW1b): the scriptlets of the lists run in the page (anti-adblock walls, pop-up openers, ad injectors, countdowns). A site with Shields off is exempt. */
     var shieldScripts: Boolean get() = bool("sh_scripts", true); set(v) = put("sh_scripts", v)
+    /** Kestrel G (RX3-Y2): skip the ads inside video players (YouTube): mute, speed up, press Skip, close overlays, remove the "ad blockers are not allowed" box. A site with Shields off is exempt. */
+    var skipVideoAds: Boolean get() = bool("skip_video_ads", true); set(v) = put("skip_video_ads", v)
+    /** RX3-B2: AdGuard Tracking Protection (its tracking sections) and HaGeZi Light as two more block lists: more cookie-sync and tracker requests stopped, a few pages may need Shields off for the site. Default ON (owner 2026-11-14). */
+    var extraTrackerLists: Boolean get() = bool("extra_tracker_lists", true); set(v) = put("extra_tracker_lists", v)
     /** Kestrel G: refuse windows and tab redirects the user did not ask for (movie-site spam). A site with Shields off is exempt. */
     var blockPopups: Boolean get() = bool("block_popups", true); set(v) = put("block_popups", v)
     var shieldCookies: Boolean get() = bool("sh_cookies", true); set(v) = put("sh_cookies", v)

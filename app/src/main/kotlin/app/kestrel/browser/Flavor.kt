@@ -30,6 +30,8 @@ object Flavor {
     @JvmField var hasMiniNav = false
     /** Kestrel G: the page-world scriptlets of the filter lists (AW1b). */
     @JvmField var hasScriptlets = false
+    /** Kestrel G (RX3-Y2): the built-in ad skipper for video players (YouTube first): Settings shows its switch. */
+    @JvmField var hasAdSkipper = false
 
     /** The browser engine bundled in this build ("160.0", empty on the WebView build, whose engine is the system's) and where Mozilla lists the newest one; the daily look tells the owner when a newer one exists. */
     @JvmField var engineVersion = ""

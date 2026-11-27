@@ -107,6 +107,180 @@ class MediaListTest {
         assertEquals(0, MediaCandidate.heightOfLabel("fast"))
         assertEquals(0, MediaCandidate.heightOfLabel(null))
     }
+
+    // ---- RX3-V1: what the page's own element says it is for. A decoy (hover preview, hero loop, ad) stays in the list for "Other files" but is not counted for the dock badge.
+
+    private fun played(l: MediaList, c: MediaCandidate, role: VideoRole?, durMs: Long = 25_000, h: Int = 720) { l.add(c); l.applyInfo(c.url, h * 16 / 9, h, durMs, null, role) }
+
+    @Test fun aHoverPreviewOrHeroLoopThatReportedItselfIsNotCountedEvenWhenSharpAndLong() {
+        val l = MediaList()
+        played(l, file("https://c.test/hero.mp4", 6_000_000), VideoRole.DECOR, durMs = 90_000, h = 1080)        // long and sharp: the old exemptions would have counted it
+        assertEquals(0, l.usableCount())
+        played(l, file("https://c.test/film.mp4", 900_000_000), VideoRole.PLAYER, durMs = 5_400_000, h = 1080)
+        assertEquals(1, l.usableCount())
+        assertEquals(2, l.size)                                                                                   // nothing is deleted
+        assertEquals(listOf("https://c.test/film.mp4", "https://c.test/hero.mp4"), l.usable().map { it.url }.sortedBy { !it.contains("film") }) // the sheet still has it, to tuck under "Other files"
+    }
+
+    @Test fun aPreRollAdFlaggedByThePageIsNotCounted() {
+        val l = MediaList()
+        played(l, file("https://ads.test/pre.mp4", 9_000_000), VideoRole.AD, durMs = 30_000)
+        assertEquals(0, l.usableCount())
+    }
+
+    @Test fun aDecoyDoesNotGetTheRealVideoBonusButOneWithoutFactsDoes() {
+        val l = MediaList()
+        played(l, file("https://c.test/loop.mp4", 6_000_000), VideoRole.DECOR)
+        played(l, file("https://c.test/old.mp4", 6_000_000), null)                                              // an old extension / a report without facts: the old rule (a player reported it)
+        assertEquals(1, l.usableCount())
+        assertTrue(l.find("https://c.test/old.mp4")!!.touched); assertFalse(l.find("https://c.test/loop.mp4")!!.touched)
+    }
+
+    @Test fun theOwnerShowingInterestCountsADecoyAgain() {
+        val l = MediaList()
+        played(l, file("https://c.test/loop.mp4", 6_000_000), VideoRole.DECOR)
+        assertEquals(0, l.usableCount())
+        assertTrue(l.touch("https://c.test/loop.mp4"))                                                           // long-pressed, opened or downloaded
+        assertEquals(1, l.usableCount())
+    }
+
+    @Test fun theLatestReportWinsSoAPreviewThatTurnsIntoAPlayerCounts() {
+        val l = MediaList()
+        played(l, file("https://c.test/clip.mp4", 6_000_000), VideoRole.DECOR)
+        assertEquals(0, l.usableCount())
+        l.applyInfo("https://c.test/clip.mp4", 1280, 720, 25_000, null, VideoRole.PLAYER)                        // unmuted, controls shown: now it is a player
+        assertEquals(1, l.usableCount())
+    }
+
+    @Test fun aStreamIsAlsoNotCountedWhenItIsDecoration() {
+        val l = MediaList()
+        l.add(hls("https://c.test/hero.m3u8")); l.applyInfo("https://c.test/hero.m3u8", 1280, 720, 40_000, null, VideoRole.DECOR)
+        assertEquals(0, l.usableCount())
+        assertEquals(1, l.usable().size)
+    }
+
+    @Test fun aSmallDecoyNextToAStreamIsLeftOutOfTheSheetToo() {
+        val l = MediaList()
+        l.add(hls("https://c.test/master.m3u8"))
+        played(l, file("https://c.test/loop.mp4", 2_000_000), VideoRole.DECOR)                                   // the old rule hides small clips next to a stream; "long or sharp" no longer rescues a decoy
+        assertEquals(listOf("https://c.test/master.m3u8"), l.usable().map { it.url })
+    }
+
+    @Test fun whatTheElementSaidBeforeTheFileWasSeenIsKeptForIt() {            // the page reports on loadedmetadata, the extension on the response: either can come first (seen on the emulator)
+        val l = MediaList()
+        assertFalse(l.applyInfo("https://c.test/hero.mp4", 1280, 720, 90_000, "HD", VideoRole.DECOR))   // nothing to apply it to yet
+        assertFalse(l.applyInfo("https://c.test/film.mp4", 1280, 720, 5_400_000, null, VideoRole.PLAYER))
+        l.add(file("https://c.test/hero.mp4", 6_000_000)); l.add(file("https://c.test/film.mp4", 900_000_000))
+        assertEquals(1, l.usableCount())
+        assertEquals(VideoRole.DECOR, l.find("https://c.test/hero.mp4")!!.role); assertEquals("HD", l.find("https://c.test/hero.mp4")!!.label)
+        assertTrue(l.find("https://c.test/film.mp4")!!.touched); assertEquals(720, l.find("https://c.test/film.mp4")!!.height)
+    }
+
+    @Test fun keptInfoIsBoundedAndForgottenWithTheList() {
+        val l = MediaList()
+        for (i in 0 until 100) l.applyInfo("https://c.test/x$i.mp4", 0, 0, 1000, null, VideoRole.DECOR)
+        l.add(file("https://c.test/x0.mp4", 6_000_000)); l.add(file("https://c.test/x99.mp4", 6_000_000))
+        assertEquals(null, l.find("https://c.test/x0.mp4")!!.role)                  // the oldest were dropped: at most a few dozen are kept
+        assertEquals(VideoRole.DECOR, l.find("https://c.test/x99.mp4")!!.role)
+        l.applyInfo("https://c.test/y.mp4", 0, 0, 1000, null, VideoRole.DECOR); l.clear()
+        l.add(file("https://c.test/y.mp4", 6_000_000))
+        assertEquals(null, l.find("https://c.test/y.mp4")!!.role)                   // a new page: what was said about the old page's files is gone
+    }
+
+    // ---- RX3-V2: verify before counting. An address found only in the page's text (a link to teaser.mp4, a string in a script, an og tag) was never requested: nobody has seen what it is.
+
+    private fun markup(url: String, len: Long = -1, kind: MediaKind = MediaKind.FILE) = MediaCandidate(url, kind, "", len, "https://site.test/watch").also { it.fromMarkup = true }
+
+    @Test fun anAddressFoundOnlyInThePageTextIsNotCountedUntilItsLengthIsKnownToBeBig() {
+        val l = MediaList()
+        l.add(markup("https://c.test/teaser.mp4"))
+        assertEquals(0, l.usableCount())                                   // the old rule counted unknown length as usable: a page with a link to an animated preview showed the badge
+        assertEquals(1, l.usable().size)                                   // still offered under "Other files"
+        assertTrue(l.setLength("https://c.test/teaser.mp4", 30_000))       // a one-byte Range request said: 30 KB
+        assertEquals(0, l.usableCount())
+        assertTrue(l.usable().isEmpty())                                   // under 100 KB it is not even offered
+        l.add(markup("https://c.test/film.mp4"))
+        assertTrue(l.setLength("https://c.test/film.mp4", 700_000_000))
+        assertEquals(1, l.usableCount())
+    }
+
+    @Test fun aFileSeenOnTheWireStillCountsWhenItsLengthIsUnknown() {
+        val l = MediaList()
+        l.add(file("https://c.test/chunked.mp4", -1))                      // a response with a media type and no length (chunked): it was really requested
+        assertEquals(1, l.usableCount())
+    }
+
+    @Test fun thePlayerOrTheOwnerMakesAMarkupAddressReal() {
+        val l = MediaList()
+        l.add(markup("https://c.test/a.mp4")); l.add(markup("https://c.test/b.mp4"))
+        assertEquals(0, l.usableCount())
+        l.applyInfo("https://c.test/a.mp4", 1280, 720, 300_000, null, VideoRole.PLAYER)     // an element that plays it reported it
+        assertEquals(1, l.usableCount())
+        assertTrue(l.touch("https://c.test/b.mp4"))                                         // the owner long-pressed it
+        assertEquals(2, l.usableCount())
+    }
+
+    @Test fun aStreamFoundOnlyInTheTextWaitsForProofToo() {
+        val l = MediaList()
+        l.add(markup("https://c.test/master.m3u8", kind = MediaKind.HLS))
+        assertEquals(0, l.usableCount())
+        l.add(hls("https://c.test/other.m3u8"))                            // one that a player really asked for counts at once
+        assertEquals(1, l.usableCount())
+    }
+
+    @Test fun unverifiedAddressesAreListedForTheIdleCheckOnlyWhenNothingElseIsReal() {
+        val l = MediaList()
+        l.add(markup("https://c.test/a.mp4")); l.add(markup("https://c.test/b.mp4")); l.add(markup("https://c.test/c.mp4")); l.add(markup("https://c.test/d.mp4"))
+        assertEquals(listOf("https://c.test/d.mp4", "https://c.test/c.mp4", "https://c.test/b.mp4"), l.unverifiedToCheck(3).map { it.url })   // newest first, at most three
+        l.add(file("https://c.test/real.mp4", 80_000_000))
+        assertTrue(l.unverifiedToCheck(3).isEmpty())                       // a page that has a verified video needs no checking
+    }
+
+    // ---- RX3-V5: the early look at a stream's playlist says whether it can be saved and how long it is
+
+    @Test fun aLiveOrProtectedOrVeryShortStreamIsNotCountedOnceItsPlaylistWasRead() {
+        val l = MediaList()
+        l.add(hls("https://c.test/live.m3u8")); l.add(hls("https://c.test/drm.m3u8")); l.add(hls("https://c.test/ad.m3u8")); l.add(hls("https://c.test/film.m3u8"))
+        assertEquals(4, l.usableCount())                                                                          // nobody has looked yet: as before
+        assertTrue(l.applyStream("https://c.test/live.m3u8", live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0))
+        l.applyStream("https://c.test/drm.m3u8", live = false, drm = true, durationMs = 3_600_000, adMs = 0, breaks = 0)
+        l.applyStream("https://c.test/ad.m3u8", live = false, drm = false, durationMs = 15_000, adMs = 0, breaks = 0)
+        l.applyStream("https://c.test/film.m3u8", live = false, drm = false, durationMs = 5_400_000, adMs = 90_000, breaks = 2)
+        assertEquals(listOf("https://c.test/film.m3u8"), l.usable().filter { it.counts() }.map { it.url })
+        assertEquals(1, l.usableCount())
+        assertEquals(90_000L, l.find("https://c.test/film.m3u8")!!.adMs); assertEquals(2, l.find("https://c.test/film.m3u8")!!.adBreaks)
+        assertEquals(4, l.size)                                                                                   // nothing is deleted: the sheet still lists them and says why they cannot be saved
+    }
+
+    @Test fun aStreamWhosePlaylistWasReadAndIsALongRecordingStillCountsAndAnUnreadOneKeepsCounting() {
+        val l = MediaList()
+        l.add(hls("https://c.test/a.m3u8")); l.add(hls("https://c.test/b.m3u8"))
+        l.applyStream("https://c.test/a.m3u8", live = false, drm = false, durationMs = 20_000, adMs = 0, breaks = 0)    // exactly 20 s: not under the limit
+        assertEquals(2, l.usableCount())
+        assertFalse(l.applyStream("https://c.test/unknown.m3u8", live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)) // a stream the list does not hold changes nothing
+    }
+
+    @Test fun streamsToLookAtAreTheNewestUnreadOnesAtMostThree() {
+        val l = MediaList()
+        for (i in 1..5) l.add(hls("https://c.test/s$i.m3u8"))
+        assertEquals(listOf("s5", "s4", "s3"), l.streamsToLook(3).map { it.url.substringAfterLast('/').substringBefore('.') })
+        l.applyStream("https://c.test/s5.m3u8", live = false, drm = false, durationMs = 60_000, adMs = 0, breaks = 0)
+        assertEquals(listOf("s4", "s3", "s2"), l.streamsToLook(3).map { it.url.substringAfterLast('/').substringBefore('.') })      // a looked-at one is not asked again
+        l.add(file("https://c.test/film.mp4", 80_000_000))
+        assertEquals(3, l.streamsToLook(3).size)                                                                  // files are never looked at here
+    }
+
+    @Test fun aFullListEvictsDecoysBeforeAnythingElse() {
+        val l = MediaList(max = 4)
+        played(l, file("https://c.test/film.mp4", 80_000_000), VideoRole.PLAYER, durMs = 3_600_000)
+        played(l, file("https://c.test/loop1.mp4", 6_000_000), VideoRole.DECOR)
+        played(l, file("https://c.test/loop2.mp4", 6_000_000), VideoRole.DECOR)
+        l.add(file("https://c.test/plain.mp4", 8_000_000))
+        l.add(file("https://c.test/new.mp4", 9_000_000))                                                         // one too many: a decoy goes, not the film and not the plain file
+        val urls = l.keys()
+        assertTrue(urls.contains("https://c.test/film.mp4")); assertTrue(urls.contains("https://c.test/plain.mp4")); assertTrue(urls.contains("https://c.test/new.mp4"))
+        assertEquals(1, urls.count { it.contains("loop") })
+    }
 }
 
 class MediaListFramesTest {

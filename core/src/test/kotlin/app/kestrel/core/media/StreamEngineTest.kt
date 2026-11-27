@@ -32,8 +32,12 @@ class StreamEngineTest {
         val net = FakeNet()
         val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "test-control").also { it.isDaemon = true } }
         val engine = StreamEngine({ cdn }, sinks, store, net, exec, Clock.System, config, finisher = finisher)
-        init { harnesses.add(this) }
-        fun stop() { exec.shutdownNow(); store.cleanup() }
+        @Volatile var ticking = true
+        init {
+            harnesses.add(this)
+            Thread { while (ticking) { engine.tick(); try { Thread.sleep(20) } catch (e: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }   // RX3-D1: the engine resumes waiting jobs from its tick
+        }
+        fun stop() { ticking = false; exec.shutdownNow(); store.cleanup() }
         fun view(id: Long) = engine.view(id)
         fun await(id: Long, what: String, ms: Long = 30_000, p: (DownloadView?) -> Boolean): DownloadView? {
             val end = System.currentTimeMillis() + ms
@@ -71,6 +75,113 @@ class StreamEngineTest {
         assertTrue(h.sinks.sinks[v.destUri]!!.published)
         h.eventually("staging is cleaned up") { h.store.stagedFiles(id).isEmpty() }
         h.eventually("the row is stored as completed") { h.store.rows[id]?.state == DlState.COMPLETED }
+    }
+
+    // ---- RX3-V5: advertising found in the playlist is never fetched
+
+    /** The same CDN layout as [plainStream], with a marked advertising break around segments [from] until [to] (exclusive): the bytes of the film only, in order. */
+    private fun markedStream(h: H, n: Int, size: Int, from: Int, to: Int): Pair<String, ByteArray> {
+        val film = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+        for (i in 0 until n) {
+            val b = testBytes(size, 100L + i); h.cdn.files["https://cdn.test/v/s$i.ts"] = b
+            if (i == from) sb.append("#EXT-X-CUE-OUT:DURATION=${(to - from) * 4}\n")
+            if (i == to) sb.append("#EXT-X-CUE-IN\n")
+            if (i !in from until to) film.write(b)
+            sb.append("#EXTINF:4.0,\ns$i.ts\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        return sb.toString() to film.toByteArray()
+    }
+
+    @Test(timeout = 60_000) fun segmentsInsideAMarkedAdvertisingBreakAreNeverRequestedAndTheRowSaysSo() {
+        val h = H()
+        val (pl, film) = markedStream(h, 14, 30_000, 5, 8)
+        val id = h.enqueue(pl)
+        val v = h.completed(id)
+        assertArrayEquals(film, h.out(v))                                           // the film only, in order
+        for (i in 5 until 8) assertEquals("segment $i is advertising: not requested", 0, h.cdn.count("https://cdn.test/v/s$i.ts"))
+        for (i in (0 until 5) + (8 until 14)) assertEquals("segment $i is film: fetched once", 1, h.cdn.count("https://cdn.test/v/s$i.ts"))
+        assertTrue("the advertising note comes first (the test bytes are not real MPEG-TS, so the writer adds its own sentence): ${v.note}", v.note!!.startsWith("Left out 0:12 of advertising (1 break)"))
+    }
+
+    @Test(timeout = 60_000) fun aRunFromAnotherSiteIsLeftOutBeforeItsFirstSegmentIsFetched() {
+        val h = H()
+        val film = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+        for (i in 0 until 24) {
+            if (i == 10) { for (k in 0 until 3) { h.cdn.files["https://ads.adnet.test/a/a$k.ts"] = testBytes(30_000, 900L + k); sb.append("${if (k == 0) "#EXT-X-DISCONTINUITY\n" else ""}#EXTINF:4.0,\nhttps://ads.adnet.test/a/a$k.ts\n") } }
+            val b = testBytes(30_000, 100L + i); h.cdn.files["https://cdn.test/v/s$i.ts"] = b; film.write(b)
+            sb.append("${if (i == 10) "#EXT-X-DISCONTINUITY\n" else ""}#EXTINF:4.0,\ns$i.ts\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals(film.toByteArray(), h.out(v))
+        for (k in 0 until 3) assertEquals(0, h.cdn.count("https://ads.adnet.test/a/a$k.ts"))
+        assertTrue("the advertising note comes first (the test bytes are not real MPEG-TS, so the writer adds its own sentence): ${v.note}", v.note!!.startsWith("Left out 0:12 of advertising (1 break)"))
+    }
+
+    @Test(timeout = 60_000) fun aPlaylistWithoutMarkersOrForeignRunsIsDownloadedWholeWithNoNote() {
+        val h = H()
+        val (pl, all) = plainStream(h, 10, 20_000)
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(all, h.out(v)); assertTrue(v.note?.contains("advertising") != true)
+    }
+
+    // ---- RX3-D1: the hotspot loses its upstream for a while; the tablet still sees it (net.online stays true). The download WAITS instead of failing, then carries on.
+
+    private fun cfgOutage(giveUpMs: Long = 60_000) = Config(maxActive = 2, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4,
+        denyDelaysMs = listOf(1L, 2L, 3L), outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = giveUpMs, outageQuietMs = 30)
+
+    private fun killAll(h: H, n: Int) { for (i in 0 until n) h.cdn.failFirst["https://cdn.test/v/s$i.ts"] = 1_000_000 }
+
+    @Test(timeout = 60_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
+        val h = H(config = cfgOutage()); h.cdn.chunkDelayMs = 2
+        val (pl, expected) = plainStream(h, 16, 30_000)
+        val id = h.enqueue(pl)
+        h.await(id, "some progress") { it != null && it.done >= 3 * 30_000L }
+        killAll(h, 16)                                                              // every part now ends in a connection reset, like a dead upstream
+        h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
+        // the ladder is tiny here (40-80 ms), so the job looks again several times in the next 400 ms: it is sometimes RUNNING, never FAILED
+        val seen = HashSet<DlState>(); val end = System.currentTimeMillis() + 400
+        while (System.currentTimeMillis() < end) { h.view(id)?.let { seen.add(it.state) }; Thread.sleep(3) }
+        assertFalse("never failed: $seen", seen.contains(DlState.FAILED)); assertFalse(seen.contains(DlState.COMPLETED))
+        assertTrue("waited again after looking: $seen", seen.contains(DlState.WAITING_NETWORK))
+        h.cdn.failFirst.clear()
+        val v = h.completed(id)
+        assertArrayEquals(expected, h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun aLongOutageEndsAsStalledAndRetryContinuesFromWhatWasKept() {
+        val h = H(config = cfgOutage(giveUpMs = 300)); h.cdn.chunkDelayMs = 2
+        val (pl, expected) = plainStream(h, 16, 30_000)
+        val id = h.enqueue(pl)
+        h.await(id, "some progress") { it != null && it.done >= 3 * 30_000L }
+        killAll(h, 16)
+        val failed = h.await(id, "gave up", 30_000) { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.STALLED, failed.reason)
+        h.cdn.failFirst.clear()
+        h.engine.resume(id)
+        val v = h.completed(id)
+        assertArrayEquals(expected, h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun aFreshDownloadFromADeadHostStillFailsFast() {
+        val h = H(config = cfgOutage())
+        val (pl, _) = plainStream(h, 6, 20_000)
+        killAll(h, 6)                                                               // nothing ever arrives: a typo in the address, a dead host
+        val id = h.enqueue(pl)
+        val v = h.await(id, "failed", 30_000) { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.NETWORK, v.reason)
+    }
+
+    @Test(timeout = 60_000) fun anHttpErrorStatusKeepsItsOwnHandlingAndIsNotAnOutage() {
+        val h = H(config = cfgOutage())
+        val (pl, _) = plainStream(h, 6, 20_000)
+        h.cdn.statusFor["https://cdn.test/v/s3.ts"] = 404
+        val id = h.enqueue(pl)
+        val v = h.await(id, "failed", 30_000) { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.HTTP, v.reason)
     }
 
     @Test(timeout = 60_000) fun aes128SegmentsAreDecrypted() {

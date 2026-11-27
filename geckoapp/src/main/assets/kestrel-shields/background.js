@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -167,7 +167,7 @@ function shortUrl(u) {
 }
 function newLog(tabId, url) {
   pageLog.delete(tabId); // a new page: the old lines are history
-  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
   if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
   var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
 }
@@ -189,17 +189,21 @@ function logBlocked(d) {
   L.nb++; if (L.blocked.length < LOG_MAX) L.blocked.push(d.type + ' ' + shortUrl(d.url));
   reportLater(d.tabId);
 }
+// RX3-BK1: requests the page started minus the ones that ended = what is still pending when the page is left (a page with pending requests cannot enter the engine's back/forward cache).
+function noteDone(d) { var L = pageLog.get(d.tabId); if (L && !stale(d)) L.done++; }
 function logFailed(d, what) {
   var L = pageLog.get(d.tabId); if (!L) return;
   if (L.failed.length < LOG_MAX) L.failed.push(d.type + ' ' + shortUrl(d.url) + ' ' + what);
   reportLater(d.tabId);
 }
 browser.webRequest.onErrorOccurred.addListener(function (d) {
+  noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
 }, { urls: ['http://*/*', 'https://*/*'] });
 browser.webRequest.onCompleted.addListener(function (d) {
+  noteDone(d);
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
 }, { urls: ['http://*/*', 'https://*/*'] });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
@@ -249,19 +253,25 @@ function legacy(d, page) {
 // guard-main.js (registered below, runs inside every page and frame) refuses windows the user did not ask for, and reports every real tap with the link it was on. The app decides about a page that sends
 // its tab to another site right after such a tap (core/.../guard/JumpGuard): the decision needs the app's own touch times and happens BEFORE the navigation starts, so nothing of the page state is disturbed.
 var guardState = 'page guard: starting';
+var assistAsked = 0, assistSent = 0, assistFail = ''; // RX3-G3: how often a frame player was asked to start, how often the relay reached it, and why not
+function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + assistAsked + (assistFail ? ' (' + assistFail + ')' : '') : ''; }
+var skipAsked = 0, skipYes = 0, skipReports = 0; // RX3-Y2 / RX3-G7: how often the ad skippers (youtube.js, players.js) asked whether they may run, how often the answer was yes, how many of their reports reached the app
+function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked ' + skipAsked + ', allowed ' + skipYes + ', reports ' + skipReports : ''; }
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
-function guardAnswer(host, topHost) {
+function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch)
   var f = cfgFlags.get(host);
-  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host });
-  return askCfg(host).then(function () { return { on: ((cfgFlags.get(host) || 0) & 1) !== 0, top: topHost || host }; });
+  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0 });
+  return askCfg(host).then(function () { var g = cfgFlags.get(host) || 0; return { on: (g & 1) !== 0, top: topHost || host, skip: (g & 8) !== 0 }; });
 }
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m) return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   if (m.k === 'guard') {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
-    return guardAnswer((top && pageHost(top)) || m.h, (top && pageHost(top)) || '');
+    var gh = (top && pageHost(top)) || m.h;
+    if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
+    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var fid = sender ? sender.frameId : 0;
@@ -282,11 +292,10 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   }
   return undefined;
 });
-try {
-  browser.contentScripts.register({
-    matches: ['http://*/*', 'https://*/*'], js: [{ file: 'guard-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
-  }).then(function () { guardState = 'page guard on'; }, function (e) { guardState = 'page guard FAILED: ' + (e && e.message); });
-} catch (e) { guardState = 'page guard FAILED: ' + (e && e.message); }
+// RX3-G1: guard-main.js is DECLARED in manifest.json (content_scripts, world MAIN, document_start, every frame, about:blank frames too), not registered here at run time. A script registered from this page exists only
+// after this page has started and its promise resolved, so a document that began before that (the first page after a cold start, opened from a link) had no pop-up guard. Proven on the emulator
+// 2026-11-14 (research/GUARD_FIRST_PAGE.md): with ONLY the manifest copy, the page-world marker is there at the page's first script, and an about:blank frame made by the page has it too.
+guardState = 'page guard: declared in the manifest (page world, every frame, from the first script)';
 
 // ---------------------------------------------------------------- scriptlets (AW1b)
 // scriptlets-main.js (registered here, runs inside every page and frame like the guard) holds our own implementations of the list's scriptlets. The calls the lists have for a site reach it two ways:
@@ -305,12 +314,10 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   markStats();
   return undefined;
 });
-var slLib = null; // promise of the library's registration (resolves true/false): the per-host scripts are registered after it so they run after it
-try {
-  slLib = browser.contentScripts.register({
-    matches: ['http://*/*', 'https://*/*'], js: [{ file: 'scriptlets-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
-  }).then(function () { slState = 'scriptlets on'; return true; }, function (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; return false; });
-} catch (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; }
+// RX3-G1: the library is DECLARED in manifest.json like the guard (page world, document_start, every frame): it is there before this page has run a line, and the per-host scripts registered below always
+// run after it (scripts declared in the manifest come first). slLib stays null: nothing to wait for.
+var slLib = null;
+slState = 'scriptlets: declared in the manifest (page world, every frame)';
 
 // Early delivery. A host's script is a one-liner in the page world that hands the calls to the library with the same DOM event content.js uses. It is registered for the exact host (every frame of it, and the
 // about:blank / srcdoc frames it creates), kept for the most recent SL_MAX hosts and dropped when the lists change.
@@ -509,7 +516,9 @@ function decide(d, page, host, mode) {
 function onRequest(d) {
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
-    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
+    var left = pageLog.get(d.tabId);
+    if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
+    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -625,6 +634,7 @@ var SNIFFED_PER_TAB = 300;
 var navId = new Map();       // tabId -> numeric id of the newest main_frame request
 var frameParent = new Map(); // tabId -> Map(frameId -> parentFrameId), from the sub_frame requests (and from candidates)
 var mediaFrames = new Map(); // tabId -> Map(frameId -> document address) of the frames (not the top one) that reported a candidate
+var frameDoc = new Map();    // tabId -> Map(frameId -> address the frame was asked to load), from the sub_frame requests (RX3-G3: which frame is the player the owner pressed)
 function stale(d) { var n = navId.get(d.tabId), r = Number(d.requestId); return n !== undefined && r === r && r < n; } // r === r: not NaN
 // The page a tab is on is learned from its main-frame request. The FIRST page after a cold start loads before the extension is active (emulator lab, 2026-11-13: tabTop was empty, so an address named in a
 // player frame's script was filed under the PLAYER's address and a server switch never dropped it): a request of a frame carries its ancestors, the last of which is the top page, and a content script of the top frame knows it.
@@ -653,6 +663,8 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   learnTop(d);
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
+  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); }
+  if (fd.size < 80 || fd.has(f)) fd.set(f, docOf(d.url));
   var mf = mediaFrames.get(tabId);
   if (!mf || !mf.size) return;
   var gone = [], ids = [];
@@ -736,7 +748,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (SEGMENT.test(url)) return;
   if (stale(d)) return; // an answer for a document the tab has left (see navId)
   if (d.frameId > 0) learnTop(d);
-  var ct = '', len = -1, total = -1, cd = '', h = d.responseHeaders || [];
+  var ct = '', len = -1, total = -1, cd = '', nostore = false, h = d.responseHeaders || [];
   for (var i = 0; i < h.length; i++) {
     var nl = h[i].name.length;
     if (nl !== 12 && nl !== 13 && nl !== 14 && nl !== 19) continue; // content-type (12), content-range (13), content-length (14), content-disposition (19): most header names are never lower-cased
@@ -745,7 +757,9 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
     else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
+    else if (n === 'cache-control' && d.type === 'main_frame' && /no-store/i.test(h[i].value || '')) nostore = true; // 13 letters like content-range: it passes the length filter above
   }
+  if (nostore) send({ k: 'ns', p: url.slice(0, 600) }).catch(function () {}); // RX3-BK1: this page forbids every cache, so Back has to load it again (the Back lab and the early picture use it)
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) { maybeMedia(d, url, ct, size, ref, org); return; }
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
@@ -767,7 +781,11 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'vid' || !m.u) return undefined;
-  send({ k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' }).catch(function () {});
+  // RX3-V1: what the element is for (content.js factsOf): small whole numbers, clamped here again because the message comes from a web page's frame
+  function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
+  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' };
+  if (typeof m.f === 'number') { o.f = ci(m.f, 63); o.rw = ci(m.rw, 20000); o.rh = ci(m.rh, 20000); o.vp = ci(m.vp, 100); }
+  send(o).catch(function () {});
   return undefined;
 });
 
@@ -781,10 +799,54 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
+// RX3-G3: the assist of a player inside a frame. The content script of the PARENT frame decided (from the owner's own press) and names the place inside the iframe and the iframe's address; this relays
+// to that ONE frame of the tab (a unique child of the sender: by address, or the only child), whose own content script plays its video or presses through. Nothing the page says is relayed.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'assist' || !sender || !sender.tab || !(sender.tab.id >= 0)) return undefined;
+  var tabId = sender.tab.id, from = sender.frameId | 0, pm = frameParent.get(tabId), fd = frameDoc.get(tabId);
+  var x = Math.round(m.x), y = Math.round(m.y);
+  assistAsked++;
+  if (!pm || !(x >= 0 && y >= 0 && x < 10000 && y < 10000)) { assistFail = pm ? 'bad place' : 'no frame known'; markStats(); return undefined; }
+  var kids = [], exact = [], want = docOf(m.s);
+  pm.forEach(function (parent, id) { if (parent === from) { kids.push(id); if (want && fd && fd.get(id) === want) exact.push(id); } });
+  var target = exact.length === 1 ? exact[0] : (kids.length === 1 ? kids[0] : -1); // several frames and no unique address: no guess
+  if (target <= 0) { assistFail = 'frame not found among ' + kids.length; markStats(); return undefined; }
+  try {
+    if (!browser.tabs || typeof browser.tabs.sendMessage !== 'function') { assistFail = 'tabs.sendMessage is not there'; markStats(); return undefined; }
+    browser.tabs.sendMessage(tabId, { k: 'assist', x: x, y: y }, { frameId: target }).then(function () { assistSent++; assistFail = ''; markStats(); }, function (e) { assistFail = String((e && e.message) || e).slice(0, 60); markStats(); });
+  } catch (e) { assistFail = String((e && e.message) || e).slice(0, 60); markStats(); }
+  return undefined;
+});
+
 // EY-1: the page's scroll place from the content script (top frame), for the app's saved view of the page. A number and the page address; nothing else.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'scroll' || typeof m.y !== 'number' || !isFinite(m.y) || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   send({ k: 'scroll', y: Math.max(0, Math.round(m.y)), p: String(m.p || '').slice(0, 600) }).catch(function () {});
+  return undefined;
+});
+
+// RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (content.js, top frame). The app answers with the place as text, or "" when nothing is armed for that page.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'bk' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  return send({ k: 'bk', p: String(m.p || '').slice(0, 600) }).then(function (r) { return typeof r === 'string' ? r : ''; }, function () { return ''; });
+});
+
+// RX3-Y2 / RX3-G7: the YouTube ad skipper (youtube.js; w 'y') and the one for other players (players.js; w 'p') report NUMBERS: ads seen, skipped, skip buttons pressed, overlays closed, dialogs removed, jumps, give-ups and the last problem in a few words. Never an address.
+// The page of the tab goes along so that the app can drop the report of a private tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
+  function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
+  skipReports++; markStats();
+  // the page the tab is on; the FIRST page after a cold start (and a restored tab nobody navigated) loads before the extension knows it, so the top frame's own address stands in (found on the emulator 2026-11-14: every report was dropped as "private")
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// RX3-BK1: what kind of show a Back / Forward was (content.js, top frame): kept by the engine or loaded again, what the page's file cost, where the page was. Numbers and the address; nothing else.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'bf' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  send({ k: 'bf', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, nt: String(m.nt || '').slice(0, 20), ts: Math.max(0, m.ts | 0), y: Math.max(0, Math.round(m.y) || 0) }).catch(function () {});
   return undefined;
 });
 

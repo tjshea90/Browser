@@ -21,12 +21,12 @@ mkdir -p "$R/build/lists" "$R/app/src/main/assets/filters"
 --psl-in $U/thirdparties/publicsuffix.org/list/effective_tld_names.dat --psl-out $R/build/lists/psl.txt \
 abp:ads:$U/thirdparties/easylist/easylist.txt \
 abp:privacy:$U/thirdparties/easylist/easyprivacy.txt \
-abp:ads:$U/filters/filters.txt \
-abp:privacy:$U/filters/privacy.txt \
-abp:privacy:$U/filters/privacy-removeparam.txt \
-abp:malware:$U/filters/badware.txt \
-abp:ads:$U/filters/unbreak.txt \
-abp:ads:$U/filters/quick-fixes.txt \
+abp-trusted:ads:$U/filters/filters.txt \
+abp-trusted:privacy:$U/filters/privacy.txt \
+abp-trusted:privacy:$U/filters/privacy-removeparam.txt \
+abp-trusted:malware:$U/filters/badware.txt \
+abp-trusted:ads:$U/filters/unbreak.txt \
+abp-trusted:ads:$U/filters/quick-fixes.txt \
 abp:annoyance:$U/thirdparties/easylist/easylist-cookies.txt" 2>&1 | grep -v '^Picked up' | cut -c1-220 | tail -14
 
 cp "$R/build/lists/default.kfs" "$R/app/src/main/assets/filters/default.kfs"

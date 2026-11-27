@@ -106,4 +106,56 @@ class MediaRankTest {
         val r = MediaRank.rank(emptyList(), "https://x.example/a.mp4")
         assertTrue(r.main.isEmpty() && r.other.isEmpty()); assertFalse(r.exact != null)
     }
+
+    // ---- RX3-V1: a hero loop, hover preview or ad that the page said so about goes under "Other files", however big or long it is
+
+    @Test fun aBigDecoyIsTuckedAwayAndTheRealVideoComesFirst() {
+        val hero = file("https://cdn.example/hero.mp4", 40 * MB, h = 1080, dur = 120_000).also { it.role = VideoRole.DECOR }
+        val film = file("https://cdn.example/film.mp4", 300 * MB, h = 720, dur = 5_400_000)
+        val r = MediaRank.rank(listOf(hero, film))
+        assertEquals(listOf(film.url), urls(r.main))
+        assertEquals(listOf(hero.url), urls(r.other))
+    }
+
+    @Test fun anAdFlaggedByThePageIsTuckedAwayToo() {
+        val ad = file("https://cdn.example/pre.mp4", 20 * MB, h = 720, dur = 30_000).also { it.role = VideoRole.AD }
+        val film = file("https://cdn.example/film.mp4", 200 * MB)
+        assertEquals(listOf(ad.url), urls(MediaRank.rank(listOf(ad, film)).other))
+    }
+
+    @Test fun aDecoyTheOwnerTouchedIsNotTuckedAway() {
+        val loop = file("https://cdn.example/loop.mp4", 40 * MB, h = 1080, dur = 120_000).also { it.role = VideoRole.DECOR; it.touched = true; it.interest = true }
+        val film = file("https://cdn.example/film.mp4", 300 * MB)
+        assertTrue(urls(MediaRank.rank(listOf(loop, film)).main).contains(loop.url))
+    }
+
+    @Test fun whenTheDecoyIsAllThereIsItStaysOnTopSoTheSheetIsNeverEmpty() {
+        val hero = file("https://cdn.example/hero.mp4", 40 * MB).also { it.role = VideoRole.DECOR }
+        val r = MediaRank.rank(listOf(hero))
+        assertEquals(listOf(hero.url), urls(r.main))
+    }
+
+    // ---- RX3-V2: an address nobody has seen (only in the page's text) goes under "Other files"
+
+    @Test fun anAddressFoundOnlyInTheTextIsTuckedAwayNextToARealVideo() {
+        val link = MediaCandidate("https://cdn.example/teaser.mp4", MediaKind.FILE, "", -1, page).also { it.fromMarkup = true }
+        val film = file("https://cdn.example/film.mp4", 300 * MB)
+        val r = MediaRank.rank(listOf(link, film))
+        assertEquals(listOf(film.url), urls(r.main)); assertEquals(listOf(link.url), urls(r.other))
+    }
+
+    @Test fun aLoneUnverifiedAddressStaysOnTopSoTheSheetIsNeverEmpty() {
+        val link = MediaCandidate("https://cdn.example/teaser.mp4", MediaKind.FILE, "", -1, page).also { it.fromMarkup = true }
+        assertEquals(listOf(link.url), urls(MediaRank.rank(listOf(link)).main))
+    }
+
+    // ---- RX3-V5: a stream whose playlist was read and cannot be saved (live, protected) or is a clip goes under "Other files"
+
+    @Test fun aLiveStreamAndAnAdClipGoUnderOtherFilesNextToTheRealOne() {
+        val live = hls("https://cdn.example/live.m3u8").also { it.looked = true; it.live = true }
+        val clip = hls("https://cdn.example/ad.m3u8").also { it.looked = true; it.durationMs = 15_000 }
+        val film = hls("https://cdn.example/film.m3u8").also { it.looked = true; it.durationMs = 5_400_000 }
+        val r = MediaRank.rank(listOf(live, clip, film))
+        assertEquals(listOf(film.url), urls(r.main)); assertEquals(setOf(live.url, clip.url), urls(r.other).toSet())
+    }
 }
