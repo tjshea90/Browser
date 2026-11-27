@@ -1,21 +1,22 @@
-# CHECKPOINT 3407 — read me first, then TASKS.md
+# CHECKPOINT 3420 — read me first, then TASKS.md
 
-**Written:** 2026-11-27T05:24:07Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `3ec31a12` (this checkpoint is the commit after it)
+**Written:** 2026-11-27T05:43:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `8376c81e` (this checkpoint is the commit after it)
 
 ## Just done
-ND1 (owner: 'Use the newest diagnostics and improve the browser as much as possible') written into TASKS.md; synced to alpha109 (checkpoint 3381); digest read (48 uploads, newest 2026-11-27T05:17Z); branch claude/eager-hawking-6z6tcf
+ND1: Settings lazy sections (SettingsView.section(title){rows}, Chevron, OPEN set, openAll/openSection for tests) + core LocalStamp (3 tests green) replacing DateFormat.getDateTimeInstance in both BrowserActivity filterStatus; restored selected-tab preview now carries thumbPage; SettingsLazyTest (6 Robolectric: 5 pass, ratio threshold fixed to 4x, rerun needed) ; :geckoapp:compileDebugKotlin green with GeckoView 161 fetched online; research/DIAG_2026-11-27.md written (findings + decisions)
 
 ## Do this next
-ND1a: read the 7 alpha109 uploads in /home/user/Kestrel-Private/diag/2026-11-26 and 2026-11-27 (python3 -B -I tools/diag_digest.py, full output saved by hand), find what is NEW vs research/OPT4_ACTIONS.md and PAINT_GLITCH.md, write research/DIAG_2026-11-27.md; then ND1b
+1) rerun ./gradlew --offline -q :app:testDebugUnitTest --tests 'app.kestrel.browser.Settings*' (background, poll log) 2) build KR1 keep-ready: core KeepReady rule+test, geckoapp KeepReadyService + manifest (specialUse) + Prefs.keepReady + Settings row in Appearance + BrowserActivity onStop/onStart + ProcessLife.keepReady (exitIfIdle must return while on) + Health lines 3) tools/diag_digest.py: advice only from newest build family, SELF-CHECKS ('must be 0'), KILLS section 4) whole suite, lint, web-tests, ship alpha110 (versionCode 211) per HANDOFF.md section 2
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+     M research/DIAG_2026-11-27.md
 
 ## Last ten checkpoints
 ```
+  2f0ab8fc ckpt 3407: ND1 (owner: 'Use the newest diagnostics and improve the browser as much as p
   7c753c88 ckpt 3381: VPS2a-c DONE: research/VPS_PLAN.md written (P40 facts + ToS limits, evidence
   af9b1f64 ckpt 3378: VPS2 (owner: NoBull P.40, in depth research for every repo + Claude + LinkMe
   3affc266 ckpt 3377: VPS1 written into TASKS in the owner's words + research/VPS_IDEAS.md (ranked
@@ -25,5 +26,7 @@ ND1a: read the 7 alpha109 uploads in /home/user/Kestrel-Private/diag/2026-11-26 
   a7ea25d4 ckpt 3368: GL2d digest DRAWING section written and run on the real uploads (alpha108 = 
   f9debce0 ckpt 3365: GL2b/c coded (not compiled yet): core DrawGuard + PaintReports, Prefs drawNo
   12d8b35b ckpt 3358: GL2 written into TASKS (owner words) + research/PAINT_GLITCH.md 2026-11-26 s
-  d033d956 ckpt 3339: alpha108 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha108, run 455502
 ```
+
+(12 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
