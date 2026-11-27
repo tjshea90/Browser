@@ -160,4 +160,15 @@ class SettingsLazyTest {
             assertEquals(0, p.keepReady)
         } finally { app.kestrel.browser.Flavor.hasKeepReady = old; p.keepReady = kept }
     }
+
+    @Test fun settingsMeasuresLaysOutAndDrawsClosedAndOpenWithoutAnError() {
+        for (open in listOf(false, true)) {
+            val v = view()
+            if (open) v.openAll()
+            v.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY))
+            v.layout(0, 0, v.measuredWidth, v.measuredHeight)
+            v.draw(android.graphics.Canvas(android.graphics.Bitmap.createBitmap(600, 900, android.graphics.Bitmap.Config.ARGB_8888)))      // runs the chevrons' onDraw too
+            assertEquals(600, v.measuredWidth)
+        }
+    }
 }
