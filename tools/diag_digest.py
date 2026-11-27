@@ -719,24 +719,23 @@ def kills_analysis(batches):
         for e in b.get('events', []):
             if not isinstance(e, str):
                 continue
-            t, layer, ev, detail = split(e)
-            txt = (layer + ' ' + ev + ' ' + detail) if layer != '?' else detail
+            layer, ev, detail = split(e)
+            tm = re.match(r'^\+([\d.]+)s ', e)
+            t = float(tm.group(1)) if tm else None
+            txt = (layer + ' ' + ev + ' ' + detail).strip() if layer != '?' else detail
             if txt.startswith('run start') or txt.startswith('run recording-on'):
                 run_away, stop_at = False, None
             elif txt == 'life pause' or txt == 'life stop':
                 if not run_away:
-                    run_away = True; stop_at = float(t.strip('+s')) if t.startswith('+') else None
+                    run_away = True; stop_at = t
             elif txt == 'life resume':
                 run_away, stop_at = False, None
             elif txt.startswith('gecko onKill'):
                 total += 1
                 if run_away:
                     away += 1
-                    try:
-                        if stop_at is not None:
-                            gaps.append((float(t.strip('+s')) - stop_at) / 60.0)
-                    except ValueError:
-                        pass
+                    if stop_at is not None and t is not None:
+                        gaps.append((t - stop_at) / 60.0)
                 else:
                     front += 1
             elif txt.startswith('gecko kill-state'):
