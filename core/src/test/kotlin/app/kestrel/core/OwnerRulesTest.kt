@@ -715,15 +715,15 @@ class OwnerRulesTest {
         assertTrue("the new gate test has its own file (handover.test.js is near the 60 s limit)", java.io.File("../web-tests/handover2.test.js").exists() || java.io.File("web-tests/handover2.test.js").exists())
     }
 
-    /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle): "Safe drawing" is ON by default and writes the four engine graphics prefs into the start-up config. */
-    @Test fun perf7SafeDrawingIsOnByDefaultAndWritesTheGraphicsPrefs() {
-        assertTrue("the switch defaults to ON", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("var labDraw: Boolean get() = bool(\"lab_draw\", true)"))
+    /** PERF7c (owner 2026-11-22, screenshots of bands of text left undrawn on claude.ai and a cut loading circle) + GL2b (owner 2026-11-26: "undrawn cut off pictures and text"): the engine's partial-update shortcuts are ALWAYS written, the old Safe drawing switch is gone from Settings. */
+    @Test fun perf7TheGraphicsShortcutsAreAlwaysOffAndTheSafeDrawingSwitchIsGone() {
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
         for (name in listOf("gfx.webrender.scissored-cache-clears.enabled: false", "gfx.webrender.batched-texture-uploads: false", "gfx.webrender.max-partial-present-rects: 0", "gfx.webrender.allow-partial-present-buffer-age: false", "gfx.webrender.pbo-uploads: false"))
             assertTrue("drawLines writes $name", gp.contains(name))
-        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("if (p.labDraw) {"))
-        assertTrue("the person can switch it off in Settings", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
-        assertTrue("it is part of a backup", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
+        assertTrue("the config file gets them", gp.contains("+ drawLines(app.kestrel.browser.data.Prefs.get(ctx))"))
+        assertTrue("GL2b: whatever the old switch says (alpha108 ran with it OFF = the mode that cut text and pictures)", !gp.contains("if (p.labDraw)") && !gp.contains("p.labDraw"))
+        assertTrue("the old key stays so a backup still restores", source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_draw\", T.BOOL)"))
+        assertTrue("the switch left Settings (one choice replaced it)", !source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Safe drawing\""))
         assertTrue("the pref check reads the names GeckoPrefs.kt writes", source("tools/check-gecko-prefs.sh").contains("GeckoPrefs.kt"))
     }
 
@@ -808,7 +808,7 @@ class OwnerRulesTest {
         assertTrue("Software drawing is a switch that defaults to OFF", prefs.contains("var labSoft: Boolean get() = bool(\"lab_soft\", false)"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
         assertTrue("it writes the engine's CPU-drawing pref only when switched on and no hardware trial runs (PERF25)", gp.contains("if (app.kestrel.core.gfx.DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)) append(\"  gfx.webrender.software: true\\n\")"))
-        assertTrue("it is in Settings and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Software drawing (slower)\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
+        assertTrue("it is in Settings (GL2b: as the first answer of the one drawing choice) and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"How pages are drawn\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"lab_soft\", T.BOOL)"))
         val man = source("geckoapp/src/main/AndroidManifest.xml")
         assertTrue("PERF14: no storage permission is declared any more: the picked file is COPIED into the app's own cache, so the engine never needs a raw path into shared storage (research/ATTACH_ROOT_CAUSE.md)", !man.contains("READ_EXTERNAL_STORAGE") && !man.contains("READ_MEDIA") && !man.contains("MANAGE_EXTERNAL_STORAGE"))
         val pt = source("geckoapp/src/main/assets/kestrel-shields/pagetime.js")
@@ -942,11 +942,11 @@ class OwnerRulesTest {
         assertTrue("the trial is OFF by default and limited to 0..1 (trial 2 was measured on the tablet in the first Auto-tune run: 3.5x the processor time and WebGL broken, so it is gone; a saved 2 reads as 1)", prefs.contains("var drawTrial: Int get() = sp.getInt(\"draw_trial\", 0).coerceIn(0, 1); set(v) = put(\"draw_trial\", v.coerceIn(0, 1))"))
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
         assertTrue("its engine prefs come from the pure rule, and CPU drawing is not written while a trial runs", gp.contains("DrawTrial.lines(p.drawTrial)") && gp.contains("DrawTrial.overrides(p.drawTrial)") && gp.contains("DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)"))
-        assertTrue("the start guard runs before the config is written, once per process", gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") in 1 until gp.indexOf("var yaml = yaml(text, sweep") && gp.contains("if (trialGuarded) return") && gp.contains("DrawTrial.startFailed(trial, p.drawTrialStart)"))
+        assertTrue("the start guard runs before the config is written, once per process", gp.indexOf("guardTrial(ctx, app.kestrel.browser.data.Prefs.get(ctx))") in 1 until gp.indexOf("var yaml = yaml(text, sweep") && gp.contains("if (trialGuarded) return") && gp.contains("DrawTrial.startFailed(trial, p.drawTrialStart)"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("a steady start takes the mark away (after the steady time, or when the app is left after its first picture) and an early page-process crash ends the trial", act.contains("DrawTrial.STABLE_MS") && act.contains("drawTrialSteadyNow(\"left after its first picture\")") && act.contains("DrawTrial.crashEndsTrial(prefs.drawTrial"))
         assertTrue("the first picture of the engine starts the steady timer", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("a.drawTrialComposited()"))
-        assertTrue("it is in Settings (Off first) and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Hardware drawing trial (experiment)\", listOf(\"Off: as now\"") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"draw_trial\", T.INT, 0, 2)"))
+        assertTrue("it is in Settings (GL2b: as the second answer of the one drawing choice) and in a backup", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("DrawGuard.valuesOf(it)") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"draw_trial\", T.INT, 0, 2)"))
         assertTrue("the Diagnostics read-back names the trial's prefs", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.use-optimized-shaders") && source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("gfx.webrender.draw-calls-for-texture-copy"))
         assertTrue("the digest compares page loads with and without the trial", source("tools/diag_digest.py").contains("'draw_trial'") && source("tools/diag_digest.py").contains("hardware trial"))
     }
@@ -954,7 +954,7 @@ class OwnerRulesTest {
     /** OPT1 (owner 2026-11-24: "an automated system ... that tries all different experiments and settings ... finds the best speed"; research/OPTIMIZER.md): the wiring that makes Auto-tune safe. */
     @Test fun opt1AutoTuneIsWiredSoThatNoRunCanLeaveTheOwnerInABrokenOrTestSetting() {
         val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
-        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
+        assertTrue("the run's start guard runs before the engine config is built and before the trial guard", gp.indexOf("OptimizerGuard.beforeEngine(ctx)") in 1 until gp.indexOf("guardTrial(ctx, app.kestrel.browser.data.Prefs.get(ctx))") && gp.contains("parseEngine(p.optPrefs)"))
         val guard = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerGuard.kt")
         assertTrue("the guard asks the pure machine and writes the configuration it returns", guard.contains("RunMachine().onProcessStart(st)") && guard.contains("OptimizerApply.write(Prefs.get(ctx), cfg)") && guard.contains("if (st.status == Status.DONE) return"))
         val apply = source("geckoapp/src/main/kotlin/app/kestrel/browser/optimizer/OptimizerApply.kt")
@@ -972,5 +972,18 @@ class OwnerRulesTest {
         assertTrue("pages on the loopback address (the benchmark pages) are not gated: they cost no mobile data", gate.contains("location.hostname === '127.0.0.1'") && gate.contains("if (LOCAL) d = '0';"))
         assertTrue("the digest for Claude exists", source("tools/optimizer_digest.py").contains("kestrel-autotune"))
         assertTrue("the optimizer's engine names are checked against the pinned engine", source("tools/check-gecko-prefs.sh").contains("Auto-tune experiment names it"))
+    }
+
+    /** GL2 (owner 2026-11-26: "Today i saw undrawn cut off pictures and text"; research/PAINT_GLITCH.md section 2026-11-26): the plain graphics-chip mode cannot be reached, a failed trial lands on the processor, the report button exists. */
+    @Test fun gl2ThePlainGraphicsChipModeIsUnreachableAndTheReportButtonFallsBackToTheProcessor() {
+        val gp = source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoPrefs.kt")
+        assertTrue("a start moves the plain mode to the trial with the fixes (not while an Auto-tune run is active)", gp.contains("DrawGuard.leavePlain(p.labSoft, p.drawTrial)") && gp.contains("if (!autoTuneActive(ctx))"))
+        assertTrue("a trial that switches itself off lands on the processor", gp.contains("fun trialSwitchedOff(") && gp.contains("p.labSoft = app.kestrel.core.gfx.DrawGuard.TRIAL_FALLBACK_SOFT"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the early crash of the page process uses the same fallback", act.contains("GeckoPrefs.trialSwitchedOff(applicationContext, prefs,"))
+        assertTrue("the menu has the report tile and the handler counts, logs the mode and falls back", act.contains("MenuItemSpec(M.PAINT, \"Parts of the page are missing\"") && act.contains("M.PAINT -> paintReport()") && act.contains("PaintReports.fallBack(mode, list, now)") && act.contains("Health.log(\"paint\", \"report\""))
+        assertTrue("the report line names the page only outside a private tab", act.contains("t != null && !t.isPrivateTab && !h.isNullOrEmpty()"))
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("Settings has ONE drawing choice, and says when Kestrel changed it by itself", set.contains("choice(\"How pages are drawn\"") && set.contains("info(\"Kestrel changed this by itself\"") && !set.contains("choice(\"Hardware drawing trial"))
     }
 }
