@@ -22,7 +22,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (confirm != null) {
                     // On screen: open it at once. In the background (an automatic install attempt): a screen cannot be started from there on Android 10+, so the notification carries it.
-                    if (app.kestrel.browser.ProcessLife.uiVisible) try { try { UpdateManager.beforeInstallScreen?.invoke() } catch (e: Throwable) { /* the installer screen still opens */ }; ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
+                    if (app.kestrel.browser.ProcessLife.uiVisible) try { ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); UpdateManager.stepOutOfTheWayOfTheInstaller() } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
                     else UpdateNotifier.confirm(ctx, confirm)
                 }
             }

@@ -125,6 +125,15 @@ object UpdateManager {
      */
     @Volatile var beforeInstallScreen: (() -> Unit)? = null
 
+    /**
+     * Called by [InstallResultReceiver] right AFTER the installer's screen was started (never before: an app that has already stepped back may not be allowed to start a screen from the background on Android 10,
+     * and the update would wait for a confirmation that never appears). Half a second later the screen in front steps out of the way; by then the installer's dialog is on top and the person is looking at it.
+     */
+    fun stepOutOfTheWayOfTheInstaller() {
+        val hook = beforeInstallScreen ?: return
+        Handler(Looper.getMainLooper()).postDelayed({ try { hook() } catch (e: Throwable) { /* the installer screen is open and the update goes on */ } }, 500L)
+    }
+
     /** What the system's installer says about this app's own install sessions (one short line; "none" when there is no session): a start while one is still active and committed is a start DURING the install. */
     fun sessionsLine(ctx: Context): String = try {
         val ss = ctx.applicationContext.packageManager.packageInstaller.mySessions
