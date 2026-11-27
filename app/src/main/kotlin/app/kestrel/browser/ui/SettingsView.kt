@@ -396,19 +396,19 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
     private fun liveDiagSection() {
         val ld = app.kestrel.browser.diag.LiveDiag
         section("Live diagnostics (for Claude)") {
-        toggle("Live diagnostics", "On: while you browse, the browser notes crashes, freezes, slow page loads, pages that do not work and video problems, and sends a small scrubbed file to your PRIVATE GitHub repository at most 4 times a day, so Claude can fix what really goes wrong on this tablet. Off: nothing is recorded, what was kept is erased now, and nothing is ever sent.", ld.isEnabled()) { ld.setEnabled(it); rebuild() }
-        info("What is never recorded or sent", "Passwords, anything you type, cookies, page text, page titles, file or video names, card numbers, e-mail addresses, phone numbers, tokens. Web addresses are cut down to the site name (never the path or what follows it). Banking, health, mail, government and sign-in sites are not named at all. Private tabs are never named. Nothing is sent without the token below, and nothing is sent unless the repository is private.")
-        info("Status", ld.statusLine())
-        if (!ld.isEnabled()) return@section
-        val advice = ld.advice()
-        if (advice.isEmpty()) info("Suggested changes", "None right now. The tablet adds up the crashes, slow pages and video problems it has seen and suggests a setting here when the numbers show one.")
-        for (a in advice) {
-            if (a.key != null) button("Suggested: " + a.setting + ", " + a.now + " to " + a.change, a.why + ". Tap to change it (" + a.where + ").") { if (ld.applyAdvice(a)) l.prefsChanged(); rebuild() }
-            else info("Suggested: " + a.where + " > " + a.setting, a.change + ". " + a.why + ".")
-        }
-        button("GitHub token", if (ld.hasToken()) "Saved on this tablet only. Tap to replace it or forget it." else "Required for sending. Tap to type it (one time).") { liveDiagTokenDialog() }
-        if (ld.hasToken()) button("Send now", "Sends what is waiting to the private repository right away (normally it sends by itself, at most 4 times a day, while you use the browser)") { liveDiagSendNow() }
-        button("Erase what is stored here", "Deletes the events kept on the tablet that have not been sent yet. What was already sent stays in your private repository until you delete it there.") { ld.erase(); rebuild() }
+            toggle("Live diagnostics", "On: while you browse, the browser notes crashes, freezes, slow page loads, pages that do not work and video problems, and sends a small scrubbed file to your PRIVATE GitHub repository at most 4 times a day, so Claude can fix what really goes wrong on this tablet. Off: nothing is recorded, what was kept is erased now, and nothing is ever sent.", ld.isEnabled()) { ld.setEnabled(it); rebuild() }
+            info("What is never recorded or sent", "Passwords, anything you type, cookies, page text, page titles, file or video names, card numbers, e-mail addresses, phone numbers, tokens. Web addresses are cut down to the site name (never the path or what follows it). Banking, health, mail, government and sign-in sites are not named at all. Private tabs are never named. Nothing is sent without the token below, and nothing is sent unless the repository is private.")
+            info("Status", ld.statusLine())
+            if (!ld.isEnabled()) return@section
+            val advice = ld.advice()
+            if (advice.isEmpty()) info("Suggested changes", "None right now. The tablet adds up the crashes, slow pages and video problems it has seen and suggests a setting here when the numbers show one.")
+            for (a in advice) {
+                if (a.key != null) button("Suggested: " + a.setting + ", " + a.now + " to " + a.change, a.why + ". Tap to change it (" + a.where + ").") { if (ld.applyAdvice(a)) l.prefsChanged(); rebuild() }
+                else info("Suggested: " + a.where + " > " + a.setting, a.change + ". " + a.why + ".")
+            }
+            button("GitHub token", if (ld.hasToken()) "Saved on this tablet only. Tap to replace it or forget it." else "Required for sending. Tap to type it (one time).") { liveDiagTokenDialog() }
+            if (ld.hasToken()) button("Send now", "Sends what is waiting to the private repository right away (normally it sends by itself, at most 4 times a day, while you use the browser)") { liveDiagSendNow() }
+            button("Erase what is stored here", "Deletes the events kept on the tablet that have not been sent yet. What was already sent stays in your private repository until you delete it there.") { ld.erase(); rebuild() }
         }
     }
 
