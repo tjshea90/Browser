@@ -177,6 +177,21 @@
 
   // ---------------------------------------------------------------- ANS54e: ask the app whether Kestrel's own player takes the film the person pressed
   function pauseEl(el) { try { if (oPause) oPause.call(el); } catch (e) { /* ignore */ } }
+  // ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): a pre-roll plays on the page's own element, so the address reported at the press can be the AD's. The app is told
+  // when the page's own player says an ad plays: an ad-state class on the element or an ancestor that the player's own source sets (JW Player 8, videojs-contrib-ads, YouTube's player), or the element inside the ad's
+  // container (Google IMA / videojs-ima, Plyr). The same words as players.js; class names only, nothing read from the page's text. The app then leaves the ad to the page (its ad plugin has to see it finished).
+  var AD_STATE = ['jw-flag-ads', 'jw-flag-ads-vpaid', 'jw-flag-ads-googleima', 'vjs-ad-playing', 'ad-showing', 'ad-interrupting', 'ima-ad-container', 'plyr__ads'];
+  function adNow(el) {
+    try {
+      for (var n = el, i = 0; n && n.nodeType === 1 && i < 9 && n !== document.body && n !== document.documentElement; i++) {
+        var c = n.classList;
+        if (c) for (var j = 0; j < AD_STATE.length; j++) if (c.contains(AD_STATE[j])) return true;
+        var rn = n.getRootNode ? n.getRootNode() : null;
+        n = n.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null);
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
   function factsOf(el, why) {
     var r = peek(el) || {}, s = '', mime = '', blob = false, w = 0, h = 0, t = 0, d = 0, lp = 0;
     try {
@@ -189,7 +204,7 @@
     } catch (e) { s = ''; }
     try { var rc = el.getBoundingClientRect(); w = Math.round(rc.width); h = Math.round(rc.height); } catch (e) { /* ignore */ }
     try { t = el.currentTime || 0; d = isFinite(el.duration) ? (el.duration || 0) : 0; lp = el.loop ? 1 : 0; } catch (e) { /* ignore */ }
-    return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d, g: geomOf(el) };
+    return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d, g: geomOf(el), a: adNow(el) ? 1 : 0 };
   }
   // ANS55f (owner message 55: "Can the player be inside the website ... I still see the website around it?"): where the film's box is, so that the app can draw Kestrel's own player over it. [x, y, w, h] of the box in the
   // layout viewport (CSS px), the visual viewport's scale, offset x / y and width, where the visual viewport sits in the document (x, y), and fx = 1 when the box does NOT move with the page's own scroll: the element

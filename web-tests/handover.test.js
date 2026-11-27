@@ -361,3 +361,60 @@ test('the content script drops a box that is not eleven numbers in range (the fi
   assert.deepEqual(q.slice(0, 4).map((x) => x.g), [null, null, null, null]);
   assert.deepEqual(q[4].g, [0.12, -20.5, 320, 180, 1, 0, 0, 564, 0, 12.99, 0]);
 });
+
+// ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): a pre-roll plays on the page's own element, so the question must say when the page's player is in an ad state
+test('ANS61: the question says when the player is in an ad state (ad-state class on an ancestor, or inside the ad container), and says nothing of it for a plain player', async () => {
+  const wrap = (cls, inner) => `<div class="${cls}">${inner}</div>`;
+  const cases = [
+    ['jw-flag-ads', 1], ['jw-flag-ads-vpaid', 1], ['jw-flag-ads-googleima', 1], ['vjs-ad-playing', 1], ['ad-showing', 1], ['ad-interrupting', 1],
+    ['ima-ad-container', 1], ['plyr__ads', 1],
+    ['vjs-ad-loading', 0],                    // a waiting state with no ad stream
+    ['jw-flag-paused', 0], ['advertisement-banner', 0], ['', 0],
+  ];
+  for (const [cls, want] of cases) {
+    const page = await open(wrap(cls, PLAYER), GUARD_HO, 'no');
+    await settle(page, 300);
+    await tapOn(page, '#btn'); await settle(page, 500);
+    const q = await vhand(page);
+    assert.equal(q.length, 1, cls + ': one question ' + JSON.stringify(q));
+    assert.equal(q[0].a, want, 'class "' + cls + '" -> a=' + q[0].a);
+    await page.context().close();
+  }
+});
+
+test('ANS61: an ad-state class on the element itself, or on the host of a shadow root around it, counts too; the class of a far-away branch does not', async () => {
+  const shadow = '<div id="player" style="position:relative;width:320px;height:180px"><div id="host" class="vjs-ad-playing"></div>'
+    + '<button id="btn" style="position:absolute;left:100px;top:60px;width:120px;height:50px">Play</button></div>'
+    + '<script>(function () { var r = document.getElementById("host").attachShadow({ mode: "open" });'
+    + 'r.innerHTML = \'<video id="sv" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>\';'
+    + 'document.getElementById("btn").onclick = function () { r.getElementById("sv").play().catch(function () {}); }; })();</script>';
+  const cases = [
+    ['the host of a shadow root', shadow, 1],
+    ['the element itself', PLAYER.replace('<video id="v"', '<video id="v" class="ad-showing"'), 1],
+    ['a far-away branch', '<div class="jw-flag-ads"><div style="width:10px;height:10px"></div></div>' + PLAYER, 0],
+  ];
+  for (const [name, html, want] of cases) {
+    const page = await open(html, GUARD_HO, 'no');
+    await settle(page, 300);
+    await tapOn(page, '#btn'); await settle(page, 500);
+    const q = await vhand(page);
+    assert.equal(q.length, 1, name + ': one question ' + JSON.stringify(q));
+    assert.equal(q[0].a, want, name + ' -> a=' + q[0].a);
+    await page.context().close();
+  }
+});
+
+test('ANS61: content.js passes the ad bit on as 0 or 1 only', async () => {
+  const page = await open('<div>x</div>', GUARD_HO, 'no');
+  await settle(page, 300);
+  await page.evaluate(() => {
+    const ask = (d) => document.dispatchEvent(new CustomEvent('__kst_gate_ask_v1', { detail: JSON.stringify(d) }));
+    ask({ i: 1, y: 'play', s: 'https://x.example/a.mp4', a: 1 });
+    ask({ i: 2, y: 'play', s: 'https://x.example/a.mp4', a: 'yes' });
+    ask({ i: 3, y: 'play', s: 'https://x.example/a.mp4', a: 2 });
+    ask({ i: 4, y: 'play', s: 'https://x.example/a.mp4' });
+  });
+  await settle(page, 500);
+  const q = await vhand(page);
+  assert.deepEqual(q.map((x) => x.a), [1, 0, 0, 0]);
+});
