@@ -18,8 +18,8 @@ object ProfileRule {
     /** A recording bigger than this stays on the tablet (the upload is base64 inside a JSON request on a hotspot). */
     const val MAX_BYTES = 12 * 1024 * 1024
 
-    /** The threads the engine samples (name parts; a thread whose name contains one of them): the page's main thread, its workers and style threads, drawing, network and the disk cache. */
-    val THREADS = arrayOf("GeckoMain", "DOM Worker", "StyleThread", "Compositor", "Renderer", "Socket Thread", "Cache2 I/O", "URL Classifier", "Classifier Update", "IPDL Background", "AndroidUI")
+    /** The threads the engine samples (name parts; a thread whose name contains one of them): the page's main thread, its workers and style threads, the script engine's helper threads (parsing, compiling and garbage collection off the main thread), drawing, network and the disk cache. The names are the ones the owner's CPU lines show on this tablet (RenderThread, Cache2 I/O, Socket Thread, Classifier Upda...). */
+    val THREADS = arrayOf("GeckoMain", "DOM Worker", "StyleThread", "JS Helper", "BackgroundThreadPool", "TaskController", "Compositor", "RenderThread", "Renderer", "Socket Thread", "Cache2 I/O", "URL Classifier", "Classifier Update", "IPC I/O", "IPDL Background", "AndroidUI")
 
     /** What it records per sample: script stacks (with the script's file) and the processor time each thread used. No native stack walking: it slows a weak processor down and cannot be read without symbols. */
     val FEATURES = arrayOf("js", "cpu")
