@@ -68,7 +68,7 @@ object PageProfiler {
             Io.main.postDelayed(release, ProfileRule.LOAD_MAX_MS - ProfileRule.RELEASE_BEFORE_END_MS)
         }
         if (load) {
-            a.toast("Recording the first ${ProfileRule.LOAD_MAX_MS / 1000} seconds of this page's load: it reloads now. Please leave Kestrel open until it says it was sent.")
+            a.toast("Recording the first ${ProfileRule.LOAD_MAX_MS / 1000} seconds of this page's load: it reloads now. Please leave Kestrel open until it says it was sent. The page may feel slow for a minute afterwards (the engine is told to give memory back).")
             try { tab.session?.reload() } catch (e: Throwable) { /* the hard stop ends it */ }
         } else a.toast("Recording for ${ProfileRule.NOW_MS / 1000} seconds: use the page now (type, scroll).")
     }

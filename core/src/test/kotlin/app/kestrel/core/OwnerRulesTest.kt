@@ -1019,6 +1019,18 @@ class OwnerRulesTest {
         assertTrue("when the real notification cannot be built a plain one keeps the startForeground contract before stopping", svc.contains("plainest notification") && svc.indexOf("plainest notification") < svc.indexOf("try { stopSelf() } catch (x: Throwable)"))
     }
 
+    @Test fun nd4TheAppStepsOutOfTheWayBeforeTheInstallerScreenSoNothingIsRestartedBehindItAndKilledAgain() {
+        // owner 2026-11-27 "The app still crashes after update": the first start after an update died 13 to 34 s after the install in 27 of 27 updates (research/DG1_FIRST_RUN_AFTER_INSTALL.md section 4)
+        val um = source("app/src/main/kotlin/app/kestrel/browser/update/UpdateManager.kt")
+        assertTrue("the hook exists and the sessions line exists", um.contains("@Volatile var beforeInstallScreen: (() -> Unit)? = null") && um.contains("fun sessionsLine(ctx: Context): String"))
+        val rx = source("app/src/main/kotlin/app/kestrel/browser/update/InstallResultReceiver.kt")
+        val i = rx.indexOf("UpdateManager.beforeInstallScreen?.invoke()")
+        assertTrue("the receiver calls the hook BEFORE the installer screen is started, and logs every result", i > 0 && i < rx.indexOf("ctx.startActivity(confirm") && rx.contains("\"install-result\""))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the screen in front sets the hook to moveTaskToBack and clears it when it is destroyed", act.contains("UpdateManager.beforeInstallScreen = {") && act.contains("moveTaskToBack(true)") && act.contains("UpdateManager.beforeInstallScreen = null"))
+        assertTrue("every note of the first 90 s says whether an install was still running", source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt").contains("inst{"))
+    }
+
     @Test fun nd1SettingsBuildsOnlyTheSectionsThatAreOpenAndTheDateNeedsNoLocale() {
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("a section's rows run only while it is open", set.contains("private fun section(text: String, rows: () -> Unit)") && set.contains("if (isOpen) fill()") && set.contains("val nowOpen = text !in OPEN"))
