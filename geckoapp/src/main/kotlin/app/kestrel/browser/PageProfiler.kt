@@ -8,6 +8,8 @@ import app.kestrel.browser.diag.Health
 import app.kestrel.browser.diag.LiveDiag
 import app.kestrel.browser.diag.PrivateGuard
 import app.kestrel.browser.web.Tab
+import app.kestrel.browser.web.isPrivateTab
+import app.kestrel.browser.web.session
 import app.kestrel.core.livediag.DiagScrub
 import app.kestrel.core.livediag.ProfileRule
 import org.json.JSONObject
