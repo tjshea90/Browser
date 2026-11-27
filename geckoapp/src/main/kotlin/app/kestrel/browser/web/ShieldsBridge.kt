@@ -198,6 +198,8 @@ class ShieldsBridge(
         cand.frameChain = app.kestrel.core.media.MediaNames.frameChainOf(m.optString("fa"))   // NM1: the frames around the player that asked (their addresses name the season and episode)
         cand.fromMarkup = m.optString("s") == "dom" // RX3-V2: found in the page's text, never requested: not counted for the badge until it is checked or played
         cand.referer = MediaHeaders.refererOf(m.optString("rf")); cand.origin = MediaHeaders.originOf(m.optString("og")) // what the browser itself sent: the player's own Referer / Origin (origins only)
+        cand.alias = m.optString("ru").takeIf { it.length <= 1000 && (it.startsWith("http://", true) || it.startsWith("https://", true)) } ?: ""   // RVW2 F16: the address before a redirect
+        cand.label = m.optString("lb").trim().takeIf { it.isNotEmpty() }?.take(24)   // RVW1 F11: the quality a <source> said it is ("720p", "HD")
         cand.sourceName = app.kestrel.core.download.FileNames.fromContentDisposition(m.optString("n").takeIf { it.isNotBlank() })?.let { app.kestrel.core.download.FileNames.sanitize(it) } ?: "" // the name the server gave it
         mediaSeen(cand)
     }

@@ -27,6 +27,12 @@ object Health {
     private val startedAt = SystemClock.elapsedRealtime()
     private val counters = ConcurrentHashMap<String, AtomicInteger>()
 
+    /**
+     * RVW1 S6: how a page is named in a log line. A private tab never names its address (the last-run note is written to disk and Diagnostics is pasted into public repositories); any other tab names it without the
+     * query and fragment (tokens live there), cut at [max] characters.
+     */
+    fun where(isPrivate: Boolean, url: String, max: Int = 60): String = if (isPrivate) "private tab" else url.substringBefore('#').substringBefore('?').take(max)
+
     const val WARN_MS = 700L
     const val STALL_MS = 2000L
     @Volatile private var stackBudget = 24   // LAB4b: stack samples of slow (not yet stalled) UI beats, per process
@@ -91,18 +97,21 @@ object Health {
         if (!profiled) { profiled = true; startupProfile() }
         dog = Thread({
             var postedAt = 0L; var warned = false; var stacked = false; var blockSamples = 0; var lastSampleAt = 0L
+            var calm = false   // RVW2 P9: the last beat was answered at once: the next one waits in ONE sleep of 500 ms (two wake-ups per beat before), the old 250 ms look comes back the moment a beat is late
             while (watching) {
                 val now = SystemClock.uptimeMillis()
                 try { LastRun.tick() } catch (e: Exception) { /* a help, never a risk */ }                  // CR1g: the memory sample every 15 s, from THIS thread
                 if (postedAt == 0L) { postedAt = now; ackAt = 0L; main.post { ackAt = SystemClock.uptimeMillis() } }
-                try { Thread.sleep(250) } catch (e: InterruptedException) { break }
+                try { Thread.sleep(if (calm) 500L else 250L) } catch (e: InterruptedException) { break }
                 val n = SystemClock.uptimeMillis()
                 if (ackAt != 0L) {
                     val lag = ackAt - postedAt
                     if (lag >= WARN_MS) { log("ui", "late-beat", "${lag}ms"); count("ui.late") }
                     postedAt = 0L; warned = false; stacked = false; blockSamples = 0
-                    try { Thread.sleep(250) } catch (e: InterruptedException) { break }
+                    if (!calm) { try { Thread.sleep(250) } catch (e: InterruptedException) { break } }
+                    calm = lag < WARN_MS
                 } else {
+                    calm = false
                     val waiting = n - postedAt
                     if (waiting >= STALL_MS && !stacked) {
                         stacked = true; count("ui.stall")

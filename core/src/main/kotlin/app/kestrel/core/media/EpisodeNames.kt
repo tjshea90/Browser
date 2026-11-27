@@ -120,7 +120,7 @@ object EpisodeNames {
      * A page title without the site's noise: "Watch Dune: Part Two (2024) Full Movie Online Free - Doraby" -> "Dune - Part Two (2024)". The first part of the title that is not the site's name or only noise
      * words; "" when nothing is left (the caller falls back to the plain title).
      */
-    fun cleanTitle(pageTitle: String, pageHost: String): String = firstSegmentTitle(pageTitle.replace(Regex("""\s+"""), " ").trim(), pageHost, dropYear = false)
+    fun cleanTitle(pageTitle: String, pageHost: String): String = firstSegmentTitle(pageTitle.replace(Regex("""\s+"""), " ").trim(), pageHost, dropYear = false, join = true)
 
     /**
      * A release-style file name made readable: "Ozark.S02E05.1080p.WEB.H264-NTb" -> "Ozark S02E05", "Dune.Part.Two.2024.1080p.WEB-DL.DDP5.1-FLUX" -> "Dune Part Two (2024)". Null unless the name really is
@@ -175,12 +175,36 @@ object EpisodeNames {
     /** The show's name out of the text in front of an episode marker ("Watch Ozark", "Doraby - Ozark (TV Series 2017-2022)"). */
     private fun showBefore(before: String, host: String): String = firstSegmentTitle(before, host, last = true, dropYear = true)
 
-    private fun firstSegmentTitle(text: String, host: String, last: Boolean = false, dropYear: Boolean): String {
-        var t = SERIES_NOTE.replace(text, " ")
+    /** RVW1 N3: a notification counter the browser tab shows in front of a title: "(3) Funny cat video", "[12] Inbox". */
+    private val COUNTER = Regex("""^\s*[(\[]\d{1,3}\+?[)\]]\s*""")
+    /** RVW1 N1: a segment that ends with a year in brackets is a complete film title ("Dune: Part Two (2024)"): nothing after it belongs to the name. */
+    private val ENDS_WITH_YEAR = Regex("""[(\[](?:19|20)\d{2}[)\]]\s*$""")
+
+    /**
+     * [last]: the show's name is the last piece before an episode marker; otherwise the first piece. [join] (RVW1 N1, film and clip titles only): "Rick Astley - Never Gonna Give You Up (Official Music Video) - YouTube"
+     * lost everything after the first " - " and was saved as "Rick Astley - 720p". With [join] the first TWO pieces that are not the site's own name are kept ("Artist - Title"), and the join stops after a
+     * piece that ends with a year in brackets (a complete film title).
+     */
+    private fun firstSegmentTitle(text: String, host: String, last: Boolean = false, dropYear: Boolean, join: Boolean = false): String {
+        var t = COUNTER.replace(SERIES_NOTE.replace(text, " "), "")
         if (dropYear) t = PAREN_WITH_YEAR.replace(t, " ")
         val segments = t.split(SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }.filterNot { isSite(it, host) }
-        var s = (if (last) segments.lastOrNull() else segments.firstOrNull()) ?: return ""
-        s = LEADING_NOISE.replace(s, "")
+        if (join && !last) {
+            val parts = ArrayList<String>()
+            for (seg in segments) {
+                val one = tidySegment(seg)
+                if (one.isEmpty()) continue
+                parts.add(one)
+                if (parts.size >= 2 || ENDS_WITH_YEAR.containsMatchIn(one)) break
+            }
+            return parts.joinToString(" - ")
+        }
+        return tidySegment((if (last) segments.lastOrNull() else segments.firstOrNull()) ?: return "")
+    }
+
+    /** One piece of a title without the words around a title that are not part of it (a leading "Watch", "online free" at the end, an "HD" tag); "" when nothing is left. */
+    private fun tidySegment(piece: String): String {
+        var s = LEADING_NOISE.replace(piece, "")
         var changed = true
         while (changed) {
             changed = false

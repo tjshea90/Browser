@@ -818,4 +818,13 @@ class EngineTest {
         val w1 = h1.sink(v1).writes.get(); val w2 = h2.sink(v2).writes.get()
         assertTrue("writes with coalescing $w1, without $w2", w1 * 4 <= w2) // 64 KiB per write instead of 8 KiB
     }
+
+    @Test(timeout = 60_000) fun aWindowedReplyThatDoesNotSayTheTotalSizeIsNotTakenForTheWholeFile() {
+        // RVW2 V3: `206 Content-Range: bytes 0-N/*`: the first window used to end the download at N + 1 bytes
+        val data = testBytes(3 * MiB, 77)
+        val s = FakeServer(data).also { it.probeWindow = 1L shl 20; it.unknownTotal = true }
+        val h = H(s); val id = h.enqueue()
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
 }

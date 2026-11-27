@@ -36,6 +36,7 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
     @Volatile var failKind: FetchException.Kind? = null
     @Volatile var connLimit = 0                   // > 0: a request that arrives while this many replies are open is refused with [overLimitStatus] (a server that caps connections per client)
     @Volatile var overLimitStatus = 503
+    @Volatile var unknownTotal = false            // a 206 says `bytes a-b/*` (a server that cannot tell the size of the whole)
     @Volatile var down = false                    // every request throws a timeout (the hotspot's upstream is dead while Wi-Fi stays up)
     val refused = AtomicInteger()
     @Volatile override var probeWindow = 0L
@@ -69,7 +70,7 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
         if (req.from >= 0 && supportRange) {
             if (req.from >= d.size) { h["Content-Range"] = "bytes */${d.size}"; return Resp(416, finalUrl, h, ByteArray(0), 0, 0) }
             val last = if (req.toInclusive >= 0) minOf(req.toInclusive, d.size - 1L) else d.size - 1L
-            h["Content-Range"] = "bytes ${req.from}-$last/${d.size}"
+            h["Content-Range"] = "bytes ${req.from}-$last/${if (unknownTotal) "*" else d.size.toString()}"
             if (acceptRangesHeader) h["Accept-Ranges"] = "bytes"
             h["Content-Length"] = (last - req.from + 1).toString()
             return Resp(206, finalUrl, h, d, req.from.toInt(), (last + 1).toInt())

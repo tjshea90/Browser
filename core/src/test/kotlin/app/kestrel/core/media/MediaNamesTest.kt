@@ -73,5 +73,30 @@ class MediaNamesTest {
         assertEquals("Holiday_Clip.mp4", MediaNames.friendlyFileName("Holiday_Clip.mp4", "video/mp4", "Page", "https://x.test/", "x.test"))
         assertEquals("noext", MediaNames.friendlyFileName("noext", "video/mp4", "Ozark Season 2 Episode 5", "", ""))
     }
-}
 
+    // ---- RVW1 N2 / N8 / N5
+
+    @Test fun aQualityTagAHashOrAnIdIsNotARealName() {
+        for (stem in listOf("720p", "1080p_h264", "480", "3f2b8c1e-5a4d-4c9e-9b1a-0f6d2e7a8b3c", "10000000_1234567890_n", "high", "HD", "original", "mobile", "AB12CD34EF56AB78"))
+            assertFalse("$stem is no name", MediaNames.isRealName(stem))
+        for (stem in listOf("Sintel", "My Holiday 2019", "Ozark.S02E05.1080p.WEB.H264-GRP", "12 Years a Slave 2013", "lecture-01-intro", "Dune Part Two"))
+            assertTrue("$stem is a name", MediaNames.isRealName(stem))
+    }
+
+    @Test fun theNameOfAVideoNeverCarriesTheScreenLabelOfItsQuality() {
+        assertEquals("Dune - 2160p", MediaLabels.fileStem("Dune", "site.example", "2160p  \u00B7  4K"))
+        assertEquals("Dune - 720p60", MediaLabels.fileStem("Dune", "site.example", "720p60"))
+        assertEquals("no 'Stream' in a name", "Dune", MediaLabels.fileStem("Dune", "site.example", "Stream"))
+        assertEquals("Dune", MediaLabels.fileStem("Dune", "site.example", "1280px wide"))
+        assertEquals("Dune - Audio only", MediaLabels.fileStem("Dune", "site.example", "Audio only"))
+    }
+
+    @Test fun aLongTitleWithAnEmojiAtTheCutIsNeverLeftWithALoneSurrogate() {
+        val title = "a".repeat(119) + "\uD83D\uDE00 and more words after it"          // the emoji's two halves sit at positions 119 and 120
+        val c = MediaNames.clean(title)
+        assertTrue(c.none { Character.isSurrogate(it) && !(Character.isHighSurrogate(it) && c.indexOf(it) + 1 < c.length && Character.isLowSurrogate(c[c.indexOf(it) + 1])) })
+        assertEquals(119, c.length)
+        val stem = MediaLabels.fileStem("b".repeat(79) + "\uD83D\uDE00 tail", "h.example", "")
+        assertEquals(79, stem.length)
+    }
+}
