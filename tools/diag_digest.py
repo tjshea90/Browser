@@ -722,12 +722,33 @@ def kills_analysis(batches):
     """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
     Newer builds say it themselves (`gecko kill-away held=..` / `gecko kill-front held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
     more within 2 minutes is the system's "cached process" signal (the app was away); else the life lines (`life pause` / `life stop` until `life resume` in the same run) say it, which the journal thinning can drop."""
-    total, away, front, held, said = 0, 0, 0, 0, 0
+    total, away, front, held, said, swipes = 0, 0, 0, 0, 0, 0
     gaps = []
+
+    def evtime(line):
+        m = re.match(r'^\+([\d.]+)s ', line)
+        return float(m.group(1)) if m else None
     for b in batches:
         run_away, stop_at = False, None
         evs = [e for e in b.get('events', []) if isinstance(e, str)]
+        swiped = set()                       # ND3d: an engine "kill" with the activity destroyed (finishing) within 2 s is the TASK BEING SWIPED AWAY from the recent apps (the content process goes with it), not a memory kill
         for idx, e in enumerate(evs):
+            if 'gecko onKill' in e:
+                t0 = evtime(e)
+                for j in range(idx + 1, min(len(evs), idx + 12)):
+                    if 'life destroy finishing=true' in evs[j]:
+                        t1 = evtime(evs[j])
+                        if t0 is not None and t1 is not None and 0 <= t1 - t0 <= 2.0:
+                            swiped.add(idx)
+                            for k in range(idx + 1, min(len(evs), idx + 4)):
+                                if 'gecko kill-away' in evs[k] or 'gecko kill-front' in evs[k]:
+                                    swiped.add(k)
+                        break
+        for idx, e in enumerate(evs):
+            if idx in swiped:
+                if 'gecko onKill' in e:
+                    swipes += 1
+                continue
             layer, ev, detail = split(e)
             tm = re.match(r'^\+([\d.]+)s ', e)
             t = float(tm.group(1)) if tm else None
@@ -759,6 +780,8 @@ def kills_analysis(batches):
                 if 'held=true' in txt:
                     held += 1
     print('\n== KILLS (the page engine ended by Android: a memory kill when the app was away is the cached-process rule; KR1 keep-ready holds the process) ==')
+    if swipes:
+        print('  (%d more engine "kill(s)" came with the app being swiped away from the recent apps within 2 s: not memory kills, not counted below)' % swipes)
     if not total:
         print('  none in these files')
         return

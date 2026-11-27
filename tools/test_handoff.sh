@@ -383,5 +383,14 @@ open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app
 PYEOF
 python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd1/diag" > "$T/nd1/out.txt"; grep -q "FAILED .*Tab previews: 2 tabs, 1 with a preview, 1 for the WRONG page" "$T/nd1/out.txt" && grep -q "2 content-process kill(s): 1 while the app was away, 1 with the app in front" "$T/nd1/out.txt"'
 
+check "digest KILLS does not count the task being swiped away as a memory kill (ND3d)" 'mkdir -p "$T/nd3/diag/2026-11-27" && python3 -I - "$T/nd3/diag/2026-11-27/205115-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha112", "code": 213, "android": 29, "model": "x", "at": "2026-11-27T20:51:15Z", "dropped": 0, "thinned": 0,
+  "snapshot": [], "events": ["+10.0s life stop", "+20.0s gecko onKill h2.nexus", "+20.01s gecko kill-away held=true", "+20.02s gecko recover-after-kill n=1 state=true current=true avail=1300MB thr=144MB low=false trim=20@134s h2.nexus", "+20.05s gecko onKill claude.ai", "+20.06s gecko kill-away held=true", "+20.2s life destroy finishing=true",
+             "+0.5s run start utc=2026-11-27T21:00:00Z build=0.3.0-alpha112 code=213", "+30.0s life stop", "+900.0s gecko onKill claude.ai", "+900.01s gecko kill-away held=true", "+900.02s gecko recover-after-kill n=1 state=true current=true avail=1100MB thr=144MB low=false trim=20@870s claude.ai"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd3/diag" > "$T/nd3/out.txt"; grep -q "1 content-process kill(s): 1 while the app was away, 0 with the app in front; the newest builds said it themselves 1 time(s), 1 of them while keep-ready was holding" "$T/nd3/out.txt" && grep -q "2 more engine .kill(s). came with the app being swiped away" "$T/nd3/out.txt"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
