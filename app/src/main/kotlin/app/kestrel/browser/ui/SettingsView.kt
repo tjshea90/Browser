@@ -2,6 +2,8 @@ package app.kestrel.browser.ui
 
 import android.app.AlertDialog
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -48,6 +50,18 @@ interface SettingsListener {
 /** Settings: plain scrolling rows, no AndroidX preference library. */
 class SettingsView(private val ctx: Context, private val pal: Pal, private val prefs: Prefs, private val l: SettingsListener) : LinearLayout(ctx) {
     private val body = LinearLayout(ctx)
+    /** The titles of the sections, in order, as the last [rebuild] listed them (tests and [openAll]). */
+    private val titles = ArrayList<String>()
+
+    companion object {
+        /**
+         * ND1 (owner 2026-11-27: "Use the newest diagnostics and improve the browser as much as possible"): the newest upload caught the UI thread blocked for 2.4 s while Settings opened (`ui STALL 2360ms`:
+         * about 130 rows with long explanations, every one of them built and measured on the UI thread of a 4 x Cortex-A53 tablet, on every open and on every [rebuild] after a switch). A section's rows are now
+         * built only while the section is open: Settings opens with the headers only (a few dozen views), a tap on a header builds that one section (about ten rows), and the choice is remembered until the app
+         * is closed. The rows themselves, their texts and what they do are unchanged.
+         */
+        private val OPEN = HashSet<String>()
+    }
 
     init {
         orientation = VERTICAL
@@ -65,6 +79,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
     fun rebuild() {
         body.removeAllViews()
         card = null
+        titles.clear()
         section("Search") {
             choice("Search engine", Prefs.ENGINES.map { it.name }, Prefs.ENGINES.indexOfFirst { it.id == prefs.searchId }.coerceAtLeast(0)) { prefs.searchId = Prefs.ENGINES[it].id }
         }
@@ -259,15 +274,69 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
     /** The card the rows of the current section go into (a section is one chamfered card, like the rows of the Downloads screen and the tiles of the menu); null before the first section. */
     private var card: LinearLayout? = null
 
-    private fun section(text: String) {
-        body.addView(label(ctx, text.uppercase(), 12f, pal.accent, bold = true).apply { setPadding(ctx.dp(20), ctx.dp(22), ctx.dp(20), ctx.dp(8)); includeFontPadding = true })
+    /**
+     * One collapsible section: a tappable header (the title and a chevron) and a card with the rows. [rows] runs only while the section is open (at once when it was open before, else at the first tap), so a
+     * closed section costs two views. Open or closed is remembered in [OPEN] and survives [rebuild] and a closed and reopened Settings. An instant change, no animation (owner rule).
+     */
+    private fun section(text: String, rows: () -> Unit) {
+        titles.add(text)
+        val chevron = Chevron(ctx, pal.accent)
+        val head = LinearLayout(ctx).apply {
+            orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = ctx.dp(52)
+            setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(18), ctx.dp(6))
+            isClickable = true; isFocusable = true
+            background = ripple(pal.fg, null, 0f)
+        }
+        head.addView(label(ctx, text.uppercase(), 12f, pal.accent, bold = true).apply { includeFontPadding = true }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(chevron, LayoutParams(ctx.dp(24), ctx.dp(24)))
         val c = LinearLayout(ctx).apply {
             orientation = VERTICAL
             setPadding(0, ctx.dp(6), 0, ctx.dp(6))
             background = ChamferDrawable(pal.card, ctx.dpf(14f), ChamferDrawable.TL or ChamferDrawable.BR, pal.divider, ctx.dpf(1f))
         }
+        var built = false
+        fun fill() {
+            if (built) return
+            built = true
+            val outer = card
+            card = c
+            try { rows() } finally { card = outer }
+        }
+        fun show(open: Boolean) {
+            chevron.open = open
+            head.contentDescription = text + (if (open) ", open" else ", closed") + ". Tap to " + (if (open) "close" else "open") + "."
+            c.visibility = if (open) View.VISIBLE else View.GONE
+        }
+        head.setOnClickListener {
+            val nowOpen = text !in OPEN
+            if (nowOpen) { OPEN.add(text); fill() } else OPEN.remove(text)
+            show(nowOpen)
+        }
+        body.addView(head, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         body.addView(c, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(12); marginEnd = ctx.dp(12) })
-        card = c
+        val isOpen = text in OPEN
+        if (isOpen) fill()
+        show(isOpen)
+    }
+
+    /** Opens every section (tests; a later "open all" could use it too). */
+    internal fun openAll() { OPEN.addAll(titles); rebuild() }
+    internal fun openSection(title: String) { OPEN.add(title); rebuild() }
+    internal fun closeAll() { OPEN.clear(); rebuild() }
+    internal fun sectionTitles(): List<String> = titles.toList()
+
+    /** The small arrow at the end of a section header: down = closed, up = open. Drawn, not a font glyph, so no font lookup happens while Settings opens. */
+    private class Chevron(ctx: Context, color: Int) : View(ctx) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2.2f); strokeCap = Paint.Cap.ROUND }
+        private val arm = ctx.dpf(5.5f)
+        var open: Boolean = false
+            set(v) { if (field != v) { field = v; invalidate() } }
+        override fun onDraw(canvas: Canvas) {
+            val cx = width / 2f; val cy = height / 2f; val half = arm / 2f
+            if (open) { canvas.drawLine(cx - arm, cy + half, cx, cy - half, paint); canvas.drawLine(cx, cy - half, cx + arm, cy + half, paint) }
+            else { canvas.drawLine(cx - arm, cy - half, cx, cy + half, paint); canvas.drawLine(cx, cy + half, cx + arm, cy - half, paint) }
+        }
     }
 
     private fun rowBase(title: String, subtitle: String?): Pair<LinearLayout, LinearLayout> {
@@ -326,11 +395,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
      */
     private fun liveDiagSection() {
         val ld = app.kestrel.browser.diag.LiveDiag
-        section("Live diagnostics (for Claude)")
+        section("Live diagnostics (for Claude)") {
         toggle("Live diagnostics", "On: while you browse, the browser notes crashes, freezes, slow page loads, pages that do not work and video problems, and sends a small scrubbed file to your PRIVATE GitHub repository at most 4 times a day, so Claude can fix what really goes wrong on this tablet. Off: nothing is recorded, what was kept is erased now, and nothing is ever sent.", ld.isEnabled()) { ld.setEnabled(it); rebuild() }
         info("What is never recorded or sent", "Passwords, anything you type, cookies, page text, page titles, file or video names, card numbers, e-mail addresses, phone numbers, tokens. Web addresses are cut down to the site name (never the path or what follows it). Banking, health, mail, government and sign-in sites are not named at all. Private tabs are never named. Nothing is sent without the token below, and nothing is sent unless the repository is private.")
         info("Status", ld.statusLine())
-        if (!ld.isEnabled()) return
+        if (!ld.isEnabled()) return@section
         val advice = ld.advice()
         if (advice.isEmpty()) info("Suggested changes", "None right now. The tablet adds up the crashes, slow pages and video problems it has seen and suggests a setting here when the numbers show one.")
         for (a in advice) {
@@ -340,6 +409,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("GitHub token", if (ld.hasToken()) "Saved on this tablet only. Tap to replace it or forget it." else "Required for sending. Tap to type it (one time).") { liveDiagTokenDialog() }
         if (ld.hasToken()) button("Send now", "Sends what is waiting to the private repository right away (normally it sends by itself, at most 4 times a day, while you use the browser)") { liveDiagSendNow() }
         button("Erase what is stored here", "Deletes the events kept on the tablet that have not been sent yet. What was already sent stays in your private repository until you delete it there.") { ld.erase(); rebuild() }
+        }
     }
 
     private fun liveDiagTokenDialog() {
