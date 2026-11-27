@@ -1165,7 +1165,7 @@ test('ND2: the end-of-request listeners ask only for scripts, styles, frames and
     assert.ok(f && Array.isArray(f.types), k + ' is registered with a types filter');
     for (const ty of ['main_frame', 'sub_frame', 'script', 'stylesheet', 'xmlhttprequest']) assert.ok(f.types.indexOf(ty) >= 0, k + ' keeps ' + ty);
     for (const ty of ['image', 'imageset', 'font', 'ping', 'websocket', 'csp_report']) assert.ok(f.types.indexOf(ty) < 0, k + ' does not ask for ' + ty);
-    assert.deepEqual(f.urls, ['http://*/*', 'https://*/*']);
+    assert.equal(JSON.stringify(f.urls), JSON.stringify(['http://*/*', 'https://*/*']));      // (an array made inside the vm is not the same realm: compare as text)
   }
 });
 
