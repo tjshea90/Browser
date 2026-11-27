@@ -37,7 +37,7 @@ class ShieldsBridge(
     private val mediaSeen: (MediaCandidate) -> Unit = {},
     /** The page's own player told us about a file: page URL, file URL, picture width and height, length in ms, the label next to its <source>. */
     /** page, address, picture width, height, length in ms, label, and (RX3-V1) what the element is for; the facts are null when the page script sent none (an older one). */
-    private val mediaInfo: (String, String, Int, Int, Long, String?, app.kestrel.core.media.VideoFacts?) -> Unit = { _, _, _, _, _, _, _ -> },
+    private val mediaInfo: (String, String, Int, Int, Long, String?, app.kestrel.core.media.VideoFacts?, Boolean, Int) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
     private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** The page's script named an origin the owner is likely to open next (EX-15): `https://host[:port]/`, the page's address, "touch" (finger on a link) or "result" (a top search result). Worker thread. */
@@ -164,7 +164,8 @@ class ShieldsBridge(
         val url = m.optString("u")
         if (url.isEmpty()) return
         val facts = if (m.has("f")) app.kestrel.core.media.VideoFacts.fromBits(m.optInt("f"), m.optInt("rw"), m.optInt("rh"), m.optInt("vp")) else null
-        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() }, facts)
+        // RX3-V3: ev = "played": the element really played this file for 3 s; el = the element's number on its page (0 = not told)
+        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() }, facts, m.optString("ev") == "played", m.optInt("el"))
     }
 
     /** The extension sends JSON text; tolerate the engine handing it over already parsed. */
@@ -314,11 +315,13 @@ class ShieldsBridge(
     class EngineStats(
         val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val slow: Long, val perRequestAsks: Long, val perRequestUs: Long, val errors: Int,
         val loadMs: Long, val imageBytes: Int, val transfers: Int, val off: Boolean, val note: String, val at: Long,
+        /** RX3-S2: how often each web request listener of the extension ran and how long it held the thread ("req 120 (5400 us), rcv 14 (200 us)"); empty until one ran. Its own field: the app logs `note` whenever it changes. */
+        val listeners: String = "",
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
                 m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
-                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240),
             )
         }
     }
@@ -350,7 +353,7 @@ class ShieldsBridge(
                 s.generation > 0 && s.imageBytes > 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, loaded in ${s.loadMs} ms, ${s.transfers} transfer(s)"
                 else -> "list not loaded yet"
             }
-            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one${if (s.perRequestAsks > 0) " (each held ${s.perRequestUs / s.perRequestAsks} us on average)" else ""}, ${s.errors} errors. ${s.note}".trim()
+            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one${if (s.perRequestAsks > 0) " (each held ${s.perRequestUs / s.perRequestAsks} us on average)" else ""}, ${s.errors} errors.${if (s.listeners.isNotEmpty()) " Extension listeners (calls, time held): ${s.listeners}." else ""} ${s.note}".trim()
         }
 
         private const val ASSET_URI = "resource://android/assets/kestrel-shields/"

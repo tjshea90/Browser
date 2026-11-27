@@ -48,3 +48,59 @@ Problem (read in the code): `Hls.parseMedia` ignored every advertising tag; an a
 ### 3.4 Proof
 JVM: `AdMarkersTest` (5, incl. the real SCTE-35 vector), `HlsTest` (+8), `AdRunsTest` (14), `StreamEngineTest` (+3: marked break never requested and the row says so; a foreign-site run never requested; no markers = whole file, no note), `MediaListTest` (+3), `MediaRankTest` (+1). Emulator lab `/hls-lab` (three playlists, segments never requested; Android 10 x86_64 emulator, GeckoView 160, NOT the tablet): `media look live=false length=120s advertising=12s in 1 breaks counted=3 of 3`, then `length=12s ... counted=2 of 3`, then `live=true ... counted=1 of 3` - only the 2-minute film stays counted.
 NOT done: a real encrypted stream with real MPEG-TS ads through the MP4 writer on the device (the engine tests use plain bytes); the sheet does not yet show the advertising time next to a quality row.
+
+## 4. RX3-V3 - which element actually plays (alpha44)
+`content.js`: every element gets a small whole number (`el`, a WeakMap counter: nothing else about it leaves the page) and every metadata report carries it; a trusted `playing` event starts a 3 s check, and when the element is still playing THAT file and its clock moved 2.5 s, the same report goes again with `ev:'played'` (once per element and file; a seek, a loop or a pause under 3 s sends nothing). `background.js` passes `ev` ('played' only) and `el` (clamped) on.
+App: `MediaCandidate.played / element / areaPx / playedSeq`; `MediaList.applyInfo(..., played, element, areaPx)` (the area is the part of the picture that was on screen: width x height x view percent). `MediaList.primary()` = the played, non-decoy file with the largest area, then the longest; `MediaRank.rank(..., primary)` moves it to the top of the sheet. The duration jump: the SAME element played a file under 90 s and LATER plays one at least three times as long -> the earlier file is an advertisement (role AD: not counted, "Other files"); never when the owner showed interest in it, never between two different elements, never for an earlier file of 90 s or more (two parts of one film).
+Tests: web `played.test.js` (5, real Chromium), `background.test.js` (+1), core `MediaListTest` (+6), `MediaRankTest` (+2). Emulator lab `/preroll-main` (section 4.1 when run).
+
+### 4.1 Emulator proof (2026-11-15; Android 10 x86_64 emulator, GeckoView 160 debug build: NOT the tablet)
+Lab `/preroll-main` (tools/sitelab/guardlab.py): ONE `<video>` plays a 15 s clip, and after 8 s of REAL playback (tied to `timeupdate`: the emulator stalls for seconds at a time) the page gives the same element a 60 s file. App Health:
+`video info el=1 role=PLAYER length=15s counted=1 of 1` -> `video info PLAYED el=1 role=PLAYER length=15s counted=1 of 1` -> `video info el=1 role=PLAYER length=60s counted=2 of 2` -> `video info PLAYED el=1 role=PLAYER length=60s counted=1 of 2`: the same element number on all four lines, and after the film's played report only ONE of the two files counts (the 15 s clip became an advertisement).
+Defect found by the first runs and fixed (with a JS test): the 3 s check looked at the clock ONCE; on a slow tablet 3 s of waiting can be less than 2.5 s of film and the report was lost for good. It now looks again every 1.5 s, up to 8 more times, while the element still plays the same file.
+Lab lesson: a switch timed by a clock (6.5 s) came before the first file even loaded on the cold-started emulator; tying it to `timeupdate` made the run meaningful.
+NOT done: a real site's pre-roll (the sandbox gets none), the tablet.
+
+## 5. RX3-V4 + RX3-V6 - blob: players matched to playlists, clips next to a film, soft words (alpha45)
+Problem (read in `content.js` and `MediaRank`): a player that feeds a `blob:` address (a MediaSource: hls.js, shaka, dash.js, most embeds) reported NOTHING, because `content.js` dropped every `src` that did not start with "http" (twice: the metadata report and the 3 s "played" report), so the app could never say which of the playlists
+the page loaded is the one playing; and every HLS/DASH playlist went to the top of the sheet, an advertising playlist and a trailer next to the film.
+V4 change: (1) `content.js` reports a blob: element as `u:'blob'` (only the word, never the address) with the element's length, picture height, facts and element number, and says "played" after 3 s of real playback (the played key of a blob also holds its
+length, so an advertisement and then the film on one blob address are two reports). (2) `MediaList.applyBlob(height, durationMs, role, played, element, areaPx)` matches the player to the stream playlists the early look has read: the length within 1.5 s or 3 percent of the
+player's, then (a tie-breaker only, never a reason to lose the match) the playlists whose variants list that picture height; the matched playlists get the element's role / played / number, so `primary()` and the pre-roll rule of V3 work for them. What a player said is
+remembered (8 players, newest kept): a playlist the early look reads LATER is matched when its look arrives (on the slow tablet the player reports well before the look). (3) The early look now also reads DASH manifests (`Dash.parse`: length, representations' heights, live/protected) and keeps the
+heights of an HLS master's variants (`MediaCandidate.heights`). (4) `MediaList.clipNextToFilm`: a stream playlist, read, under 60 s, while another readable stream of 5 minutes or more (saveable, not decoration) is on the page is not counted and goes under "Other files"; never what really played, never what the owner pressed.
+V6 change (`MediaRank.SOFT_WORDS`): vast, vpaid, imasdk, adunit, ad_type, adid, creative, bumper, intro, idle, loop, bg, hero, background, snippet, trailer as WHOLE words of the path or query count only when the file is ALSO under a quarter of the biggest
+file and nobody vouches for it (not touched by a player, not played, not pressed by the owner); never alone, never the biggest, never a file of unknown size. Found by the first run: an existing test (a pressed `loop.mp4`) failed, hence the vouching rule.
+Proof: core `MediaListBlobTest` (14: matching, tolerance 1.5 s / 3 percent, height tie-breaker, no match lost to an unlisted height, no heights known, report before the look, DASH, ad then film on one element, decoy role, live element, bounded memory, clip rule, what is spared, a protected long stream is no film),
+`MediaRankTest` (+4), web `blob.test.js` (4, real Chromium: the word blob and never the address, played once, ad then film on one element, paused < 3 s not played and http sources unchanged).
+### 5.1 Emulator proof (2026-11-15; Android 10 x86_64 emulator, GeckoView 160 debug build: NOT the tablet)
+Lab `/blob-lab` (tools/sitelab/guardlab.py): a `<video>` on a blob: address made from a 300 s silent file, next to two playlists the page fetched (45 s and 300 s). App Health, in the order the slow emulator produced them (the PLAYER reported BEFORE the look, the rematch path):
+`video info-blob el=1 role=PLAYER length=300s h=0 matched=0 counted=2 of 3` -> `video info-blob PLAYED el=1 ... matched=0 counted=2 of 3` -> `media look HLS ... length=300s heights=0 ... counted=2 of 3 playing=300s` (the film's look matches the waiting player: `primary()` is the 300 s stream)
+-> `media look HLS ... length=45s ... counted=1 of 3 playing=300s` (the 45 s clip next to the film is no longer counted). (heights=0: the lab's playlists are media playlists without a master.)
+NOT done: a real site's hls.js / shaka page (the sandbox cannot reach one that plays), the tablet; DASH is unit-proven only (no DASH lab page); the order "playlist read first, then the player" is unit-proven only on the emulator run.
+
+## 6. RX3-V7 - a finder corpus with two numbers (alpha45)
+`core/src/test/.../FinderCorpusTest.kt`: 14 pages as MODELS of what real sites do (the sandbox gets no real site), each with the files a person really wants. Two views: the SHEET's top list (`MediaRank.rank(...).main` that counts: precision = real videos shown / videos shown,
+recall = real videos shown / real videos) and the dock BUTTON (gray when the page has nothing to save, lit when it has: only zero / not zero is visible, the number is only in the button's spoken description). The test FAILS when any page loses recall, when the sheet's precision drops below
+the page's floor (1.0 on every page today), when the button is lit with nothing real or gray with something real, or when the first row of the sheet is not a real video. The table is written to `core/build/finder-corpus.txt`; today's:
+```
+page                                                                             sheetP sheetR badgeP badgeR sheet / badge / list
+plain page: a film, a tracking script, an ad clip                                  1.00   1.00   0.33   1.00 1 / 3 / 3
+a feed: the film and twelve hover previews                                         1.00   1.00   1.00   1.00 1 / 1 / 13
+a hero loop over the page and a player                                             1.00   1.00   1.00   1.00 1 / 1 / 2
+two links in the page text: a teaser and a real file (nothing played)              1.00   1.00   1.00   1.00 1 / 1 / 2
+hls.js page: an ad playlist then the film on ONE blob player                       1.00   1.00   1.00   1.00 1 / 1 / 2
+a trailer playlist next to a feature, nobody played anything yet                   1.00   1.00   1.00   1.00 1 / 1 / 2
+a live stream and a film                                                           1.00   1.00   1.00   1.00 1 / 1 / 2
+a protected film only (nothing can be saved)                                       1.00   1.00   1.00   1.00 0 / 0 / 1
+a two-part film: two long playlists                                                1.00   1.00   1.00   1.00 2 / 2 / 2
+a short clip site: ONE 45 s playlist and nothing to compare it with                1.00   1.00   1.00   1.00 1 / 1 / 1
+soft words: an intro, a trailer file and the film                                  1.00   1.00   0.33   1.00 1 / 3 / 3
+an advertising server's creative next to the film                                  1.00   1.00   0.50   1.00 1 / 2 / 2
+two real videos on one page (a series page)                                        1.00   1.00   1.00   1.00 2 / 2 / 2
+a blob player whose playlist was read AFTER the player reported (the slow tablet   1.00   1.00   1.00   1.00 1 / 1 / 2
+MEAN over 14 pages                                                                 1.00   1.00   0.87   1.00
+```
+Reading it: the sheet is exact on all 14 modelled pages; the COUNT behind the button is coarse on three (a film with a tracking script and an ad clip counts 3, with an intro and a trailer file 3, with an advertising server's creative 2) because the badge counts what is usable
+and verified, not what the sheet's ranking would tuck away: harmless while the button only lights up or not (it does), a thing to know if the number is ever shown. A pure model: it pins the V1-V6 decisions, it measures no real site.
+A change to MediaList / MediaRank that lowers recall on any page here is rejected; add the page that showed a real miss FIRST (its real-world data goes into the table), then fix.

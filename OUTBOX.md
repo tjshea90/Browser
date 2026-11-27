@@ -2079,3 +2079,181 @@
 >
 > **Next:** leaving advertising out of downloaded video streams before it is fetched. The first part is written and tested here, but it isn't in alpha42.
 <!-- sha:c703eeb60dc6 -->
+
+## 2026-11-15T00:20:56Z
+> **Kestrel G alpha43 is built and published.** GitHub's tests and builds all passed, and it installs over alpha42.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha43
+>
+> **What changed**
+> 1. **The glow holds still while a video with sound plays.** A muted video still lets it pulse, because the engine only reports videos that make sound.
+> 2. **Two more tracker block lists.** These are AdGuard Tracking Protection and HaGeZi Light, with a new switch at Settings > Filter lists > Extra tracker lists, **on by default**. The first update downloads about 3 MB and rebuilds the lists, which roughly doubles the rule count (112k to 211k).
+> 3. **A page jump to an advertising site is stopped even long after your last tap.** The blocked-page icon shows, and one tap on it opens the site anyway.
+> 4. **A new window opened by a button now needs one tap on the small blocked-window icon.** This applies when the button opens a different site. Links you tap, windows on the same site and sign-in or payment windows work as before.
+> 5. **Downloads wait out a lost connection instead of failing.** This covers video streams and files that use several connections. The wait starts at 10 seconds, doubles up to a minute, and gives up after 30 minutes with the part already downloaded kept.
+> 6. **Video downloads skip advertising breaks.** Breaks that the stream's own list gives away are left out before they are downloaded, and the row says "Left out 0:30 of advertising". Live, copy-protected and clip-sized streams no longer count for the download badge.
+>
+> **What I tested, and what I didn't**
+> - **Emulator (real Firefox engine):**
+>   - The glow's busy state followed a real video's play and pause.
+>   - A page that jumped to an ad site with no touch for hours was stopped.
+>   - The playlist check found 12 seconds of advertising in a test film. A live stream and a 12-second clip did not count (1 of 3 counted).
+> - **Real list files:** I compiled them and checked the rule counts and that the safety checks still pass. The extra lists add about 8 MB of working memory while building.
+> - **Test suites only, not on the emulator:** the download wait, the new-window rule and leaving advertising out of a download.
+> - **Not run on your tablet at all.** No real dropped connection was tried.
+>
+> **Please watch for this:** the first list update after installing compiles about 211,000 rules on the tablet. If lists stop updating, switch "Extra tracker lists" off and tell me. A page that stops working with the extra lists: turn Shields off for that site and tell me which site.
+>
+> **Still waiting on you**
+> 1. **Back for "no copy" pages (yes/no).** Banks, mail and some shops tell the browser not to keep a copy, so Back has to ask the site again. I can make Back instant on sites you pick, but then a copy of those pages stays on the tablet. Do you want that, and for which sites?
+> 2. **Separate keyboard app (yes/no).** Do you want the keyboard as a system keyboard app for all your apps?
+> 3. **Tablet feedback on alpha40 to alpha43.** Back keeping your place, ad skipping, the download list, the glow, the new-window icon, and downloads after a connection drop.
+>
+> **Next:** making one tap play a video when an invisible ad layer sits on top of it. It is coded and tested, and goes in alpha44.
+<!-- sha:4ff9b1a7fd63 -->
+
+## 2026-11-15T01:03:40Z
+> alpha44 is built, signed and published, and it's recorded in the build log.
+>
+> Install it over the old one (same signing certificate):
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha44
+>
+> **What changed in alpha44**
+> 1. **One tap plays a video even when an invisible ad layer lies over it.** The layer is switched off the moment your finger touches the player. An ad frame hidden over a player is found too.
+> 2. **A short clip that plays first and is then replaced by a much longer film on the same player (a "pre-roll") is now treated as an ad.** It no longer counts toward the download badge, and in the download sheet the file that really plays comes first.
+> 3. **The helper that hides ad boxes now stops after a short time budget.** A busy page can no longer slow itself down with it.
+>
+> **What was and wasn't proven**
+> - **Emulator:** on the test pages, a tap plays the video under an invisible layer, and a tap on a real link under another layer is not swallowed. A pre-roll page counted 1 of its 2 video files.
+> - **Test browser only:** the time budget on the ad-box helper.
+> - **Automatic tests:** the web tests (362) and the Kotlin tests all pass, and GitHub's own build and signature check passed.
+> - **Not run:** none of this has been on your tablet. I have also not seen a real ad from a real site, so how a real site's invisible layer behaves is still unconfirmed.
+>
+> **Not in alpha44, queued for the next release:** counters that show how long each of the extension's web-request checks holds the thread. They will appear on the Diagnostics "Blocker" line. I'm continuing with the download-list work on blob-based video players.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40–44:** especially Back (scroll place and speed), ad skipping, and the download list.
+> 4. **One Diagnostics copy:** after a Proton Mail session, once the counters release is on the tablet.
+>
+> Next I'm running an independent review of the page-facing ad-layer code, then the blob-player row.
+<!-- sha:29d252566b5c -->
+
+## 2026-11-15T02:18:13Z
+> alpha45 is built, signed and published, and it's recorded. Install it over the old one; the signing certificate is the same.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha45
+>
+> **Please update from alpha44.** I had an independent reviewer try to break alpha44's code that runs on every page, and it found real problems, all on test pages (you hadn't reported any):
+> - **Ad-layer code:** it could switch off a page's own invisible button or menu lying over a video, for good.
+> - **Ad skipper:** in some cases it could take a short film for an ad and speed it up.
+>
+> alpha45 fixes both:
+> 1. **Invisible layers:** Kestrel no longer switches off invisible layers that belong to the page itself. It only switches off an invisible frame from another site lying over a video, and gives it back if it was just fading in. So when a page puts an invisible ad layer over a video, the first tap goes to that layer, as before alpha44. Kestrel refuses the ad it opens and then starts the video itself (as in alpha40 to 43).
+> 2. **Links:** a big link to another site that has words on it, like a news card with a title, works normally again. Only picture-only or empty full-screen links to other sites, and empty links lying over a video, count as ad layers.
+> 3. **Skipper for JW Player, Video.js and Plyr:** a short film is not taken for an ad, and when the film returns after an ad it is put back at once. The skip button is pressed once, not in turns.
+>
+> **Also in alpha45:**
+> - **Blob players:** many embeds play through a hidden "blob" address. Kestrel now matches the playing video to the right playlist by length, so the film that really plays comes first in the download sheet. A clip under a minute next to a film no longer counts.
+> - **Playlists:** DASH playlists are read early too.
+> - **Words like trailer, intro, hero, loop:** they push a file down only when it is also much smaller than the biggest file, and never when it played or you pressed it.
+> - **Diagnostics:** the Blocker line now shows how often each of the extension's request checks ran and how long it held the thread. That number decides whether I slim them down.
+>
+> **What was and wasn't proven**
+> - **Tested:** the ad-layer, link and skipper fixes were tested in test browsers (all 373 web tests and the Kotlin suites pass), and GitHub's build and signature check passed.
+> - **Emulator:** the blob-player matching ran in the real app on the emulator, on my own lab page.
+> - **Not run:** none of it has been on your tablet or a real site.
+> - **Unproven:** the new numbers in Diagnostics, and DASH matching, are not proven on the emulator.
+>
+> **YouTube ad skipping:** YouTube's terms forbid it, so YouTube may show a warning or limit playback, more likely when you're signed in. "Skip ads inside video players" in Settings turns it off. This is a moving target, and your reports decide what I fix next.
+>
+> **The file and screenshot you sent again:** the review file is byte-identical to the first one; the session restarted and delivere
+> [... 121 characters omitted ...]
+> let or your answers below. The screenshot is the same YouTube page as before ("Stolen from the Suburbs", Preview only). That "not available on your mobile browser" text comes from YouTube, which sends some Movies & TV titles to its app, and this tablet has none. I didn't test that exact title. "Desktop site" in the menu may or may not help, and I can't promise it.
+>
+> I deleted the scheduled auto-resume, and nothing is half-done.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40 to 45:** especially Back (scroll place and speed), ad skipping, and the download list.
+> 4. **One Diagnostics copy** after a Proton Mail session, so I can read the new "Extension listeners" numbers.
+<!-- sha:01e7e65fcbdf -->
+
+## 2026-11-15T02:18:57Z
+> Yes, this is the first time these have reached me. I'm checking whether an earlier mini-panel message was recorded that I missed, then writing all five requests into the task list in your words before touching any code.
+<!-- sha:b3fc19885441 -->
+
+## 2026-11-15T03:25:14Z
+> alpha46 is out. Install it over the old one; the signing certificate is the same.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha46
+>
+> **Did I get your earlier mini panel and X message?** No. I searched my record of your messages and the first mention of the closing X is in the message you just sent. It's written down now and done.
+>
+> **Why the panel wouldn't close:** the empty spot straight above the panel was being counted as part of the panel's top bar. A long press there never reached the page, so it neither closed nor moved the panel. Presses above but off to the side worked, which is why it looked random. I found this on the emulator and fixed it.
+>
+> **What changed**
+> 1. **Close by long press:** a long press on an empty spot above the open panel closes it. A long press beside or below it still moves it under your finger.
+> 2. **Close by X:** long press the panel and drag it, and a large X appears at the bottom of the screen. Let go over the X and the panel closes and stays hidden until you long press an empty spot again. I didn't add a Settings switch for this; the existing "Mini navigation panel" switch still turns the whole feature off.
+> 3. **Top bar tap:** tapping the little bar on top of the panel is more forgiving of slow taps and a drifting thumb. The Settings text now lists all three ways to close it.
+> 4. **Tab left on Home:** it now comes back as the Home screen when you switch back to it.
+> 5. **Private box:** it disappears when there are no private tabs, and the regular Tabs page shows. A private tab is still opened from the menu.
+> 6. **Start-up picture:** the starting screen now shows the app's own symbol (the shield with the bird from the app drawer) instead of a plain shield. It glows for about a third of a second as the screen comes up, and nothing waits for it. The Home screen shows the same symbol next to "Kestrel". I didn't do spreading wings, just the glow.
+>
+> **What was and wasn't proven**
+> - **Emulator, real touches:** a long press straight above the panel closed it. Carrying it onto the X showed the lit X, and lifting there removed the panel. A long press on an empty spot brought it back. A tap on the top bar closed it.
+> - **Emulator, other changes:** the Home tab, Private box and start-up picture also worked there.
+> - **Start-up glow:** I only saw it in slow motion on a debug build; at real speed it was not seen.
+> - **Slow top-bar tap:** proven only by automatic tests; the emulator tooling is too slow to time it.
+> - **Automatic tests:** all pass.
+> - **Not run:** none of it has been on your tablet.
+>
+> **The YouTube screenshot again:** I tried to settle it from here, but YouTube served my test browser a bot-check page, so I couldn't tell whether Kestrel plays a part. Please try "Desktop site" in the menu on that page, and tell me if it plays.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40 to 46:** does a long press above the panel close it, the X, the Home tab, the Private box, and the start-up picture?
+> 4. **One Diagnostics copy** after a Proton Mail session. Its "Extension listeners" numbers tell me whether to slim down the extension's request checks. Diagnostics also now logs what each long press did to the panel.
+> 5. **YouTube:** the "Desktop site" check above.
+<!-- sha:fcc3c0968633 -->
+
+## 2026-11-15T03:25:32Z
+> Nothing to do. Those two notifications are old firings of the auto-resume I created, which asked me to resume and finish the alpha41 release. I deleted that auto-resume earlier, and a lookup now confirms it no longer exists, so it can't fire again.
+>
+> The work it was set up for is all done:
+> - **Releases:** alpha41 through alpha46 are released and recorded in the build log.
+> - **Latest:** alpha46 is out, with the Release link in my previous message.
+> - **Open items:** nothing is running or half-done. The only open items are the questions I listed for you (BK5 and AX1g), your tablet feedback, and one Diagnostics copy.
+<!-- sha:60aef8d0ce21 -->
+
+## 2026-11-15T04:52:35Z
+> I've written the report as one file you can upload to the other Claude account as is. Nothing was run: no build, tests, emulator or tablet. My claims come from reading the code and a few public web pages, and each marks what is unverified and the check that would settle it.
+>
+> The repo was not changed. I wrote the file outside it, so the auto-save hooks couldn't commit anything. The project's own session-start hook did sync and merge other branches into my session's branch before I began, but I made no edits and touched no other account's branch.
+>
+> ## What's in the file
+> The first section, "START HERE", tells the receiving Claude exactly what to do. It saves the file into the repo as `research/REVIEW-EXTERNAL-4.md`, adds a ready-made task block to `TASKS.md`, makes a checkpoint, and finishes the work already in flight first. The rest is a ranked list of rows, each with evidence, the change, the proof needed and the risk. It follows the same layout earlier outside reviews used, which that Claude already works from.
+>
+> ## What I found
+> The engine settings, scrolling, caching and ad-blocking code are already tuned about as far as settings can take them, so the report doesn't re-tune them. The tablet already measured 64–65 scroll frames a second and 0 dropped frames on hardware-decoded video, with the first screen up 520 ms after launch. The report instead lists:
+>
+> - **Fullscreen video never rotates the screen.** Nothing in the code listens for a site's "lock landscape" request, so a film fills about a third of the portrait screen.
+> - **A fake "Kestrel update" file could install over the app.** The signing key is public, and an APK downloaded in the browser gets only a generic warning.
+> - **Downloads no one tapped for are silent** for ordinary file types.
+> - **The About page says Safe Browsing doesn't work on this tablet,** while the earlier security research says it does. Nobody has tested it.
+> - **Navigation to a site that has ad-fix scripts can wait up to 250 ms** from the second visit on.
+> - **The real Firefox engine can't be tested automatically.** The repo is public, so GitHub's free runners could run an accelerated Android emulator, which would close most "not run" gaps.
+> - **No way to measure real-site video smoothness.** The test pages were removed at your request, so the report proposes passive counters in Diagnostics.
+> - **Safe order for the signing key.** The private key must not be added before the release approval gate, or any session branch could read it.
+> - **Smaller items:** engine start timing, a pre-compiled startup profile, a cache-freshness experiment, and what "Shields off for this site" really turns off.
+>
+> ## One question for you
+> Should sound keep playing when you leave the app or the screen turns off? It currently stops. The report flags this as the only open owner question.
+>
+> Files are in `/tmp/claude-0/-home-user-Browser/d9c0c79e-0ff7-5c2c-9ab9-daefb6ae1d02/scratchpad/`:
+> - `REVIEW-EXTERNAL-4.md`
+<!-- sha:564051041b6f -->

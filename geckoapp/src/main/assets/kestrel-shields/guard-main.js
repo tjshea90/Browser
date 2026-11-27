@@ -74,9 +74,11 @@
       var big = r.width * r.height >= 0.35 * innerWidth * innerHeight;
       if (big) {
         if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
-        var empty = !(a.textContent || '').trim() && !a.querySelector('img,svg,video,canvas,picture,button,input');
-        if (empty && (cs.position === 'fixed' || cs.position === 'absolute')) return true;
-        if (crossSiteLink(a)) return true;                // a link to another site that fills the screen is an advertisement layer, whatever it shows
+        var words = !!(a.textContent || '').trim();
+        var empty = !words && !a.querySelector('img,svg,video,canvas,picture,button,input');
+        // an empty positioned link is a layer over the page only when it is for ANOTHER site or lies over a player: the empty stretched link of a card of the site's own ("the whole card is the link") is not
+        if (empty && (cs.position === 'fixed' || cs.position === 'absolute') && (crossSiteLink(a) || overPlayer(r))) return true;
+        if (crossSiteLink(a) && !words) return true;     // a link to another site that fills the screen and has no words of its own (a picture) is an advertisement layer; a card with a title is a link
       }
       // the spoof play button: a link to ANOTHER site with no words of its own (an image, an icon) whose centre sits on a player
       if (crossSiteLink(a) && !(a.textContent || '').trim() && overPlayer(r)) return true;
@@ -250,78 +252,65 @@
       return true;
     } catch (e) { return false; }
   }
-  // press through at a point: the pointer events of a press, to what lies beneath (a layer on top is switched off for a moment so it does not take the press again)
-  // ---- RX3-G4: a fake play layer is switched off BEFORE the press. The assist above is refusal-driven: the FIRST press always went to the layer, the ad was refused, and only the second press played. Now the touch
-  // itself (touchstart / pointerdown, trusted only) looks at what lies over the player under the finger and switches the layer off (pointer-events:none !important) while the finger is still down: the click that
-  // follows is hit-tested again and reaches the player. A fake layer is positioned, has no words, no picture or control and holds no media, and is invisible (opacity under 0.05, hidden, or a transparent
-  // background); or it is an invisible frame of ANOTHER site. Not the player's own controls: inside a container that calls itself a player they stay; inside the video's plain wrapper they stay until this
-  // document has refused an ad (evidence that a layer there is hostile). Never for a press that is not on a player.
+  // ---- RX3-G4 (version 2): an INVISIBLE FRAME of another site laid over a player is switched off. The first version (alpha44) also looked, at every touch, for invisible layers of this document over a player and
+  // switched them off before the press; an independent review the same day showed that to be unsafe (it disabled a page's own transparent click layers, dialog backdrops, touch pads and icon boxes, for good), and
+  // the assist above already answers the same-document layers from EVIDENCE (a press that made the page open an ad). So the touch path is gone. What stays needs no guess: a touch that lands inside a FRAME never
+  // reaches this document (events do not leave a frame), a frame of ANOTHER site that nobody can see (opacity under 0.05 or hidden), positioned, covering at least 60 percent of a player, is not a thing a person
+  // put there, and it is found by a look at the page: when it is parsed, when it has loaded and a few times in the seconds after (ad scripts add their frames late), for each player of the page (a <video> or canvas
+  // of player size, or a container that calls itself a player). A frame that is later seen (a lazy embed that fades in) is given back by the next look and by a slow check for half a minute.
   var fakeSeen = (typeof WeakSet === 'function') ? new WeakSet() : null;
-  function playerRootOf(p) {
-    for (var n = p, d = 0; n && n !== document.body && n !== document.documentElement && d < 6; n = n.parentElement, d++) {
-      if (typeof n.className === 'string' && PLAYERISH.test(n.className + ' ' + (n.id || ''))) return n;
-    }
-    return null;
+  var offFrames = [], giveBackRounds = 0;
+  function frameHidden(cs) { return parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden'; }
+  function coversMostOf(el, player) {
+    var a = el.getBoundingClientRect(), b = player.getBoundingClientRect();
+    var w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    return w > 0 && h > 0 && b.width > 0 && b.height > 0 && w * h >= 0.6 * b.width * b.height;
   }
-  function invisibleBox(el) {
-    var cs = getComputedStyle(el);
-    if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
-    var bg = cs.backgroundColor, m = /^rgba\(\s*\d+,\s*\d+,\s*\d+,\s*([0-9.]+)\s*\)$/.exec(bg);
-    var clear = bg === 'transparent' || (m && parseFloat(m[1]) < 0.05);      // a background nobody can see (rgba alpha under 0.05 counts: "invisible but hit-testable" is the trick)
-    return clear && (!cs.backgroundImage || cs.backgroundImage === 'none') && !(el.textContent || '').trim();
-  }
-  function fakeLayerOver(el, player) {
+  function fakeFrameOver(el, player) {
     try {
-      if (!el || el === player || (player.contains && player.contains(el))) return false;
+      if (!el || el.tagName !== 'IFRAME' || el === player || (player.contains && player.contains(el))) return false;
       var cs = getComputedStyle(el);
-      if (cs.position !== 'fixed' && cs.position !== 'absolute') return false;
-      var own = playerRootOf(player);
-      if (own && own.contains(el)) return false;                       // the named player's own controls and posters stay
-      var plain = player.tagName === 'VIDEO' ? player.parentElement : null;
-      if (!own && plain && plain !== document.body && plain.contains(el) && !refusedAt) return false;   // the video's plain wrapper: only once an ad was refused here
-      if (el.tagName === 'IFRAME') {                                    // an invisible frame of another site laid over the player
-        if (!(parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden')) return false;
-        var h = hostOf(absolute(el.getAttribute('src') || ''));
-        return !!h && !sameSite(h, pageHost());
-      }
-      if (!isLayer(el, player)) return false;                          // words, controls, media inside, not positioned: not a layer in this sense
-      if (el.querySelector && el.querySelector('img,svg,picture,button,input,a')) return false;
-      return invisibleBox(el);
+      if ((cs.position !== 'fixed' && cs.position !== 'absolute') || !frameHidden(cs)) return false;
+      var h = hostOf(absolute(el.getAttribute('src') || ''));
+      if (!h || sameSite(h, pageHost())) return false;
+      return coversMostOf(el, player);
     } catch (e) { return false; }
   }
-  function switchOffAt(x, y, framesOnly, known) {
-    var player = known || playerAt(x, y);   // (a look at the page names the player itself: an invisible frame on top would be taken for the player by playerAt)
-    if (!player) return;
+  function giveBack() { // a frame that can be seen now was only fading in: it gets its touches back
+    giveBackRounds++;
+    for (var i = offFrames.length - 1; i >= 0; i--) {
+      var f = offFrames[i];
+      try {
+        if (!f.isConnected) { offFrames.splice(i, 1); continue; }
+        if (!frameHidden(getComputedStyle(f))) { f.style.removeProperty('pointer-events'); if (fakeSeen) fakeSeen.delete(f); offFrames.splice(i, 1); }
+      } catch (e) { offFrames.splice(i, 1); }
+    }
+    if (offFrames.length && giveBackRounds < 15) setTimeout(giveBack, 2000);
+  }
+  function switchOffFrames(x, y, player) {
     var list = document.elementsFromPoint(x, y), n = 0;
     for (var i = 0; i < list.length && i < 8 && n < 4; i++) {
       var el = list[i];
-      if (el === player || (player.contains && player.contains(el))) break;      // reached the player: what lies beneath is not a layer over it
+      if (el === player || (player.contains && player.contains(el))) break;      // reached the player: what lies beneath is not over it
       if (fakeSeen && fakeSeen.has(el)) continue;
-      if (framesOnly && el.tagName !== 'IFRAME') continue;
-      if (fakeLayerOver(el, player)) { if (fakeSeen) fakeSeen.add(el); el.style.setProperty('pointer-events', 'none', 'important'); n++; }
+      if (fakeFrameOver(el, player)) {
+        if (fakeSeen) fakeSeen.add(el);
+        el.style.setProperty('pointer-events', 'none', 'important');
+        offFrames.push(el); n++;
+        if (offFrames.length === 1) { giveBackRounds = 0; setTimeout(giveBack, 2000); }
+      }
     }
   }
-  function switchOffFakeLayers(e) {
-    try {
-      if (!on || !e.isTrusted) return;
-      var pt = pointOf(e);
-      if (pt && document.elementsFromPoint) switchOffAt(pt.x, pt.y, false);
-    } catch (x) { /* never break the page */ }
-  }
-  window.addEventListener('touchstart', switchOffFakeLayers, { capture: true, passive: true });
-  window.addEventListener('pointerdown', switchOffFakeLayers, { capture: true, passive: true });
-  // A touch that lands inside a FRAME never reaches this document (events do not leave a frame), so an invisible frame of another site laid over the player is switched off by a look at the page instead of
-  // by the touch: when the page is parsed, when it has loaded and a few times in the seconds after (ad scripts add their frames late), for each player of the page (a <video> or canvas of player size, or a
-  // container that calls itself a player). A handful of cheap checks, then nothing more.
   function sweepFrames() {
     try {
       if (!on || !document.elementsFromPoint || !document.querySelector('iframe')) return;
+      giveBack();
       var cands = document.querySelectorAll('video, canvas, [class*="player" i], [id*="player" i]');
       for (var i = 0; i < cands.length && i < 12; i++) {
         var r = cands[i].getBoundingClientRect();
         if (r.width < 120 || r.height < 80 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
         var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1), y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
-        switchOffAt(x, y, true, cands[i]);
+        switchOffFrames(x, y, cands[i]);
       }
     } catch (e) { /* ignore */ }
   }
@@ -329,6 +318,7 @@
   document.addEventListener('DOMContentLoaded', sweepFrames, true);
   window.addEventListener('load', sweepFrames, true);
 
+  // press through at a point: the pointer events of a press, to what lies beneath (a layer on top is switched off for a moment so it does not take the press again)
   function pressThrough(x, y, layer) {
     try {
       if (x < 0 || y < 0) return;

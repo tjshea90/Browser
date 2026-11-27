@@ -1194,6 +1194,35 @@ test('RX3-V1: the video report carries the element facts as clamped whole number
   assert.equal('f' in got[2], false, 'no facts were sent, none are invented');
 });
 
+test('RX3-V3: the played report and the element number are relayed as small whole numbers, nothing else of the element', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'vid', ev: 'played', el: 7, u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 300, l: '', p: PAGE, f: 8, rw: 300, rh: 170, vp: 100, junk: 'x'.repeat(3000) }, 1, PAGE, 0);
+  h.message({ k: 'vid', ev: 'weird', el: -4, u: 'https://cdn.example/b.mp4', w: 1, h: 1, d: 1, l: '', p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'vid', el: 99999999999, u: 'https://cdn.example/c.mp4', w: 1, h: 1, d: 1, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 3);
+  assert.equal(got[0].ev, 'played'); assert.equal(got[0].el, 7); assert.equal(got[0].junk, undefined);
+  assert.equal(got[1].ev, undefined, 'only "played" is passed on'); assert.equal(got[1].el, 0);
+  assert.equal(got[2].el, 1000000, 'clamped');
+});
+
+test('RX3-S2: the numbers for Diagnostics say how often each web request listener ran and how long it held the thread', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  for (let i = 0; i < 3; i++) h.req('script', PLAIN, PAGE);
+  h.listeners.headers({ statusCode: 200, url: 'https://cdn.example/movie.mp4', tabId: 1, documentUrl: PAGE, requestId: 'r9', responseHeaders: [{ name: 'content-type', value: 'video/mp4' }, { name: 'Content-Length', value: '5000000' }] });
+  await h.flushTimers();
+  const st = h.of('st'), last = st[st.length - 1];
+  assert.ok(last, 'a state message went out');
+  const req = /req (\d+) \((\d+) us\)/.exec(last.lt);
+  assert.ok(req && Number(req[1]) >= 4, 'the request listener ran for the page and for every judged request: ' + last.lt);
+  assert.match(last.lt, /rcv 1 \(\d+ us\)/, last.lt);
+  assert.doesNotMatch(last.lt, /snd \d/, 'a listener that never ran is not mentioned');
+  assert.doesNotMatch(st.map((m) => m.w).join(' | '), /\d+ us\)/, 'the numbers change at every report: they stay out of the text the app logs when it changes');
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {

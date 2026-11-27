@@ -158,4 +158,54 @@ class MediaRankTest {
         val r = MediaRank.rank(listOf(live, clip, film))
         assertEquals(listOf(film.url), urls(r.main)); assertEquals(setOf(live.url, clip.url), urls(r.other).toSet())
     }
+
+    // ---- RX3-V3: the file that really plays comes first
+
+    @Test fun thePlayedPrimaryFileIsOnTopEvenWhenAnotherFileIsBigger() {
+        val big = file("https://cdn.example/other.mp4", 500 * MB, h = 1080, dur = 600_000)
+        val film = file("https://cdn.example/film.mp4", 120 * MB, h = 480, dur = 3_000_000).also { it.played = true; it.areaPx = 100_000 }
+        val r = MediaRank.rank(listOf(big, film), primary = film)
+        assertEquals(film.url, r.main.first().url)
+        assertTrue(urls(r.main).contains(big.url))
+    }
+
+    @Test fun withoutAPlayedFileTheOrderIsAsBefore() {
+        val a = file("https://cdn.example/a.mp4", 100 * MB, h = 480, dur = 600_000); val b = file("https://cdn.example/b.mp4", 300 * MB, h = 1080, dur = 600_000)
+        assertEquals(listOf(b.url, a.url), urls(MediaRank.rank(listOf(a, b)).main))
+    }
+
+    // ---- RX3-V6: soft words (vast, creative, bumper, intro, hero, trailer ...) count only when the file is ALSO clearly smaller than the biggest one
+
+    @Test fun aSoftWordAloneDoesNotHideAFileButASoftWordAndAClearlySmallerSizeDoes() {
+        val film = file("https://cdn.example/v/film.mp4", 100 * MB)
+        assertEquals("a trailer of 60 MB is as big as a film: it stays", setOf(film.url, "https://cdn.example/v/trailer.mp4"), urls(MediaRank.rank(listOf(film, file("https://cdn.example/v/trailer.mp4", 60 * MB))).main).toSet())
+        val r = MediaRank.rank(listOf(film, file("https://cdn.example/v/trailer.mp4", 20 * MB), file("https://adserver.example/vast/creative/77.mp4", 15 * MB), file("https://cdn.example/v/intro.mp4", 6 * MB)))
+        assertEquals(listOf(film.url), urls(r.main))
+        assertEquals(3, r.other.size)
+    }
+
+    @Test fun aSoftWordNeverHidesTheOnlyOrTheBiggestVideoNorAFileOfUnknownSize() {
+        val intro = file("https://cdn.example/v/intro.mp4", 40 * MB)
+        assertEquals(listOf(intro.url), urls(MediaRank.rank(listOf(intro)).main))
+        val unknown = file("https://cdn.example/v/hero.mp4", -1)
+        assertEquals(setOf(intro.url, unknown.url), urls(MediaRank.rank(listOf(intro, unknown)).main).toSet())
+    }
+
+    @Test fun aSoftWordNamedFileThatAPlayerPlayedOrThatTheOwnerShowedInterestInStays() {
+        val film = file("https://cdn.example/v/film.mp4", 100 * MB)
+        val trailer = file("https://cdn.example/v/trailer.mp4", 20 * MB).also { it.touched = true }                                   // a visible player reported it
+        val intro = file("https://cdn.example/v/intro.mp4", 15 * MB).also { it.played = true }
+        val loop = file("https://cdn.example/v/loop.mp4", 14 * MB).also { it.interest = true; it.touched = true }                      // the owner pressed it
+        assertEquals(setOf(film.url, trailer.url, intro.url, loop.url), urls(MediaRank.rank(listOf(film, trailer, intro, loop)).main).toSet())
+    }
+
+    @Test fun aSoftWordIsAWholeWordOfThePathOrTheQuery() {
+        val film = file("https://cdn.example/v/film.mp4", 100 * MB)
+        for (name in listOf("introduction.mp4", "heroes.mp4", "looping.mp4", "backgrounds.mp4", "creatively.mp4", "bgm.mp4")) {
+            assertTrue("$name is not a soft word", urls(MediaRank.rank(listOf(film, file("https://cdn.example/v/$name", 20 * MB))).main).contains("https://cdn.example/v/$name"))
+        }
+        for (u in listOf("https://cdn.example/v/clip.mp4?ad_type=2", "https://cdn.example/v/clip.mp4?x=1&imasdk=1", "https://cdn.example/bg/clip.mp4", "https://cdn.example/v/idle-loop.mp4", "https://cdn.example/v/bumper_12.mp4", "https://cdn.example/v/vpaid.mp4", "https://cdn.example/v/adunit.mp4?adid=5")) {
+            assertTrue("$u is a soft word and 20 MB next to 100 MB", urls(MediaRank.rank(listOf(film, file(u, 20 * MB))).other).contains(u))
+        }
+    }
 }

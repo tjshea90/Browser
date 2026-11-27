@@ -25,6 +25,11 @@ class MediaCandidate(
     var label: String? = null
     /** Somebody showed interest in it (the page's player reported it, it was long-pressed, opened in the sheet or downloaded): it is never pushed out of a full list and never hidden as a preview ([MediaList]). */
     var touched = false
+    /** RX3-V3: an element really PLAYED this file (3 s of playback, reported by the page): [element] is that element's number on its page, [areaPx] the part of its box that was on screen, [playedSeq] the order of such reports. */
+    var played = false
+    var element = 0
+    var areaPx = 0L
+    var playedSeq = 0
     /** RX3-V2: found only in the page's text (a link, an og tag, a string in a script): never requested, so nobody has seen what it is. See [verified]. */
     var fromMarkup = false
     /**
@@ -38,6 +43,8 @@ class MediaCandidate(
     var drm = false
     var adMs = 0L
     var adBreaks = 0
+    /** RX3-V4: the picture heights of the stream's variants (an HLS master's variants, a DASH manifest's video representations) the early look read; empty = not known. A player that feeds a blob: address is matched by them. */
+    var heights: IntArray = IntArray(0)
     /** RX3-V5: a stream whose playlist was read and that cannot be saved (live, protected) or is only a clip (under 20 s: an ad, a preview) is not offered to the badge. Before the look nothing is known and it counts as before. */
     val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS))
     /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. */
@@ -82,14 +89,19 @@ class MediaCandidate(
 class MediaList(private val max: Int = 48) {
     private val items = ArrayList<MediaCandidate>()
     /** What a page's element said about a file the sniffer has not reported yet (the element reports on loadedmetadata, the extension on the response: either can come first). Bounded; applied when the file is added. */
-    private class Said(val width: Int, val height: Int, val durationMs: Long, val label: String?, val role: VideoRole?)
+    private class Said(val width: Int, val height: Int, val durationMs: Long, val label: String?, val role: VideoRole?, val played: Boolean, val element: Int, val areaPx: Long)
+    private var playSeq = 0
     private val pending = LinkedHashMap<String, Said>()
+    /** RX3-V4: what a player that feeds a blob: address said last (picture height, length, role, whether it plays), by element number; newest last, bounded. A playlist the early look reads later is matched against it too. */
+    private class Blob(val height: Int, val durationMs: Long, val role: VideoRole?, val played: Boolean, val areaPx: Long)
+    private val blobs = LinkedHashMap<Int, Blob>()
+    internal fun blobElements(): Int = blobs.size
 
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
     /** The candidate for exactly this address (the #fragment aside), or null. */
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
-    fun clear() { items.clear(); pending.clear(); version++ }
+    fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
     /** The addresses of everything in the list (for forgetting what was learned about them). */
     fun keys(): List<String> = items.map { it.key }
 
@@ -115,7 +127,7 @@ class MediaList(private val max: Int = 48) {
     fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
 
     fun usableCount(): Int {
-        if (countVersion != version) { countCache = usableUnsorted().count { it.counts() }; countVersion = version }
+        if (countVersion != version) { countCache = usableUnsorted().count { it.counts() && !clipNextToFilm(it, items) }; countVersion = version }
         return countCache
     }
 
@@ -135,7 +147,7 @@ class MediaList(private val max: Int = 48) {
             return changed
         }
         items.add(0, c)
-        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role) }
+        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
@@ -172,13 +184,44 @@ class MediaList(private val max: Int = 48) {
     }
 
     /** RX3-V5: what the early look at a stream's playlist found. @return true if the list changed. */
-    fun applyStream(url: String, live: Boolean, drm: Boolean, durationMs: Long, adMs: Long, breaks: Int): Boolean {
+    fun applyStream(url: String, live: Boolean, drm: Boolean, durationMs: Long, adMs: Long, breaks: Int, heights: IntArray = IntArray(0)): Boolean {
         val c = find(url) ?: return false
         c.looked = true; c.live = live; c.drm = drm
         if (durationMs > 0) c.durationMs = durationMs
         c.adMs = adMs; c.adBreaks = breaks
+        if (heights.isNotEmpty()) c.heights = heights
+        for ((e, b) in blobs) matchBlob(e, b)          // RX3-V4: a player that was already waiting for a playlist of its length
         version++
         return true
+    }
+
+    /**
+     * RX3-V4: a player that feeds a blob: address (hls.js, shaka, dash.js: most embeds) cannot say which playlist it plays, but its LENGTH and picture HEIGHT can match one of the playlists the early look read:
+     * the length within 1.5 s or 3 percent, then, among those, the ones whose variants list that height (a tie-breaker only: a picture size the master never listed does not lose the match). The matched playlists
+     * get what the element says (its role, whether it really plays, the element number: the pre-roll rule of [markEarlierAds] works for them too). What the element said is kept, so a playlist that is read later is
+     * matched when its look arrives. @return true if the list changed.
+     */
+    fun applyBlob(height: Int, durationMs: Long, role: VideoRole?, played: Boolean, element: Int, areaPx: Long): Boolean {
+        if (durationMs <= 0) return false
+        blobs.remove(element)
+        val b = Blob(height, durationMs, role, played, areaPx)
+        blobs[element] = b
+        while (blobs.size > BLOB_MAX) blobs.remove(blobs.keys.first())
+        val changed = matchBlob(element, b)
+        if (changed) version++
+        return changed
+    }
+
+    /** RX3-V4: how many stream playlists the player with this element number was matched to (for the Diagnostics events). */
+    fun matchedBy(element: Int): Int = items.count { it.kind != MediaKind.FILE && it.element == element }
+
+    private fun matchBlob(element: Int, b: Blob): Boolean {
+        val tol = maxOf(BLOB_TOL_MS, b.durationMs * 3 / 100)
+        var cands = items.filter { it.kind != MediaKind.FILE && it.looked && it.durationMs > 0 && Math.abs(it.durationMs - b.durationMs) <= tol }
+        if (b.height > 0) cands.filter { b.height in it.heights }.takeIf { it.isNotEmpty() }?.let { cands = it }
+        var changed = false
+        for (c in cands) if (applyTo(c, 0, 0, 0L, null, b.role, b.played, element, b.areaPx)) changed = true
+        return changed
     }
 
     /** RX3-V5: up to [n] stream playlists nobody has read yet, newest first. */
@@ -199,20 +242,20 @@ class MediaList(private val max: Int = 48) {
     }
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
-    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null): Boolean {
+    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         val key = MediaCandidate.keyOf(url)
         val c = items.firstOrNull { it.key == key }
         if (c == null) { // the file has not been reported yet: what the element said waits for it
-            pending[key] = Said(width, height, durationMs, label, role)
+            pending[key] = Said(width, height, durationMs, label, role, played, element, areaPx)
             while (pending.size > PENDING_MAX) pending.remove(pending.keys.first())
             return false
         }
-        val changed = applyTo(c, width, height, durationMs, label, role)
+        val changed = applyTo(c, width, height, durationMs, label, role, played, element, areaPx)
         if (changed) version++
         return changed
     }
 
-    private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?): Boolean {
+    private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         var changed = false
         if (width > 0 && c.width != width) { c.width = width; changed = true }
         if (height > 0 && c.height != height) { c.height = height; changed = true }
@@ -222,8 +265,29 @@ class MediaList(private val max: Int = 48) {
         if (role != null && c.role != role) { c.role = role; changed = true }
         if (role == null || role == VideoRole.PLAYER) { if (!c.touched) { c.touched = true; changed = true } }
         else if (!c.interest && c.touched) { c.touched = false; changed = true }
+        // RX3-V3: which element really plays
+        if (element > 0 && c.element != element) { c.element = element; changed = true }
+        if (areaPx > 0 && c.areaPx != areaPx) { c.areaPx = areaPx; changed = true }
+        if (played && !c.played) { c.played = true; c.playedSeq = ++playSeq; changed = true }
+        if (played && c.element > 0 && markEarlierAds(c)) changed = true
         return changed
     }
+
+    /**
+     * RX3-V3: the SAME element that played a file under 90 s earlier and now plays one at least three times longer: the earlier one was an advertisement (a pre-roll, then the film). Never when the owner showed interest
+     * in it. @return true if something changed.
+     */
+    private fun markEarlierAds(c: MediaCandidate): Boolean {
+        var changed = false
+        for (o in items) {
+            if (o === c || o.element != c.element || !o.played || o.playedSeq >= c.playedSeq || o.interest) continue
+            if (o.durationMs in 1 until AD_MAX_MS && c.durationMs >= 3 * o.durationMs && o.role != VideoRole.AD) { o.role = VideoRole.AD; o.touched = false; changed = true }
+        }
+        return changed
+    }
+
+    /** RX3-V3: the file that really plays: the played one with the largest part of its picture on screen, then the longest. Null when nothing played (or only decoration). */
+    fun primary(): MediaCandidate? = items.filter { it.played && !it.decoy }.maxWithOrNull(compareBy<MediaCandidate>({ it.areaPx }, { it.durationMs }))
 
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
@@ -256,6 +320,24 @@ class MediaList(private val max: Int = 48) {
         /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
         const val MIN_STREAM_MS = 20_000L
         private const val PENDING_MAX = 32
+        /** RX3-V3: a file that played under this long, then replaced on the same element by one three times longer, was an advertisement. */
+        private const val AD_MAX_MS = 90_000L
+        /** RX3-V4: a blob: player's length matches a playlist within this (or 3 percent of the player's length, whichever is more); at most this many players are remembered. */
+        /** What a player that feeds a blob: address reports as its address (the address itself is never sent). */
+        const val BLOB = "blob"
+        private const val BLOB_TOL_MS = 1_500L
+        private const val BLOB_MAX = 8
+        /** RX3-V4: a stream under [CLIP_MS] next to one of at least [FILM_MS] is a clip (an advertisement, a trailer), not the film. */
+        const val CLIP_MS = 60_000L
+        const val FILM_MS = 300_000L
+
+        /**
+         * RX3-V4: [c] is a stream playlist, read by the early look, under a minute long, while [all] holds another readable stream of five minutes or more (a stream that can be saved, not decoration): it is not counted
+         * and goes under "Other files". Never what really played, never what the owner showed interest in. Nothing is known about a playlist the look has not read.
+         */
+        fun clipNextToFilm(c: MediaCandidate, all: Collection<MediaCandidate>): Boolean =
+            c.kind != MediaKind.FILE && c.looked && c.durationMs in 1 until CLIP_MS && !c.played && !c.interest &&
+                all.any { it !== c && it.kind != MediaKind.FILE && it.looked && it.durationMs >= FILM_MS && !it.decoy && !it.unfit }
     }
 }
 
