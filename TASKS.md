@@ -1294,3 +1294,9 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [x] VPS2c DONE 2026-11-26 (research/VPS_PLAN.md): ranked tiers, what does not help, security, order of work; supersedes VPS_IDEAS.md: DESIGN the plan: what runs on the VPS (always-on jobs, build box, test farm, diagnostics, list compile, Claude Code host, LinkMeter side), what it saves (Claude usage, minutes, wall-clock), cost, risk, security, and the order to build it in, with honest 'does not help' list; supersedes research/VPS_IDEAS.md
   - [ ] VPS2d ANSWER in plain words with a ranked plan and the questions only the owner can answer; build nothing on the VPS before the owner picks (VPS1b)
 
+
+## Owner message 2026-11-27: newest diagnostics -> improve everything {claude/eager-hawking-6z6tcf 2026-11-27}
+- [ ] ND1 (owner, verbatim, 2026-11-27) "Use the newest diagnostics and improve the browser as much as possible"
+  - [ ] ND1a READ the alpha109 uploads (2026-11-26 x4, 2026-11-27 x3) and the 7-day digest with fresh eyes; write only what is NEW and data-backed into research/DIAG_2026-11-27.md the moment it is found (what each number is, which code makes it, what to change)
+  - [ ] ND1b BUILD the data-backed changes, biggest and safest first, each with a test (core JVM test or source-reading OwnerRulesTest); never weaken privacy or security; no new background network
+  - [ ] ND1c ship alpha110 per REL-STANDING (bump versionCode 210 -> 211 first), record it, answer in plain words, say what was NOT run on the tablet, re-list the open items
