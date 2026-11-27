@@ -621,7 +621,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onResume()
         onScreenNow = true
         fsTurner.resumed()
-        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
+        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName); app.kestrel.browser.diag.ProcMem.start(applicationContext)
         flushStateWanted = false
         warmFrontOrigin()
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
@@ -725,7 +725,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStop() {
         super.onStop()
-        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
+        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop(); app.kestrel.browser.diag.ProcMem.stop()
         if (drawTrialSteady != null) drawTrialSteadyNow("left after its first picture")      // PERF25
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         silenceStraysSoon() // SND1
@@ -2765,6 +2765,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(EngineTrimGate.line(prefs))
         out.add("Decorative page clips (PERF21): " + (if (prefs.limitClips) "limited to 1 playing, on screen only, none while scrolling" else "off: the page plays them as it wants") + "; no bar on a tapped clip ${Health.counter("videoclips.deco.bar")}, parked for being too many ${Health.counter("videoclips.deco.cap")}, parked out of sight ${Health.counter("videoclips.deco.off")}, played again ${Health.counter("videoclips.deco.back")}")
         out.add(KeepReadyService.line(applicationContext, prefs.keepReady))
+        out.add(app.kestrel.browser.diag.ProcMem.line())
         out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1

@@ -179,6 +179,7 @@ object LastRun {
             }
             if (total > 0) out["rssSumMb"] = total / 1024
         } catch (e: Exception) { /* best effort */ }
+        for ((k, v) in ProcMem.numbers()) out.putIfAbsent(k, v)         // ND1e: the page process too (it is hidden from /proc on Android 10, so the lines above only ever saw the main process)
         return out
     }
 
