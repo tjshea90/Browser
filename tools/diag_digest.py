@@ -744,6 +744,8 @@ def first_starts_analysis(batches):
                 rel = (datetime.datetime.strptime(m.group(4), fmt) - datetime.datetime.strptime(im.group(1), fmt)).total_seconds() if im else None
             except Exception:
                 rel = None
+            if not re.fullmatch(r'\d+ s', m.group(5).strip()):
+                continue                                  # a start that lived minutes and ended later (a crash, an update) is another story: only the ones that died within the first minute or two
             seen[key] = (m.group(1).replace('0.3.0-', ''), m.group(5), rel, sess.group(0) if sess else '')
     print('\n== FIRST START AFTER AN INSTALL (runs that ended on screen with no crash note: ND4, research/DG1_FIRST_RUN_AFTER_INSTALL.md) ==')
     if not seen:
@@ -751,7 +753,7 @@ def first_starts_analysis(batches):
         return
     rels = sorted(r[2] for r in seen.values() if r[2] is not None)
     print('  %d first start(s) that ended by themselves; seconds from the INSTALL to the end: median %.0f, shortest %.0f, longest %.0f (builds %s to %s)' % (
-        len(seen), rels[len(rels) // 2] if rels else 0, rels[0] if rels else 0, rels[-1] if rels else 0, min(r[0] for r in seen.values()), max(r[0] for r in seen.values())))
+        len(seen), rels[len(rels) // 2] if rels else 0, rels[0] if rels else 0, rels[-1] if rels else 0, min((r[0] for r in seen.values()), key=lambda x: int(re.sub(r'\D', '', x) or 0)), max((r[0] for r in seen.values()), key=lambda x: int(re.sub(r'\D', '', x) or 0))))
     for (b, st), (bn, ran, rel, sess) in sorted(seen.items(), key=lambda kv: kv[0][1])[-6:]:
         print('   %-9s started %s, ran %-8s ended %s s after the install %s' % (bn, st, ran, ('%.0f' % rel) if rel is not None else '?', sess))
     if not any(r[3] for r in seen.values()):
