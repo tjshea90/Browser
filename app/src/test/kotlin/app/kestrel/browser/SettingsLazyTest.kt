@@ -138,4 +138,26 @@ class SettingsLazyTest {
             assertTrue("$title has rows: ${texts(v).size} texts", texts(v).size > 2)
         }
     }
+
+    @Test fun theKeepReadyChoiceShowsOnlyInTheBuildThatHasItAndDefaultsToOneHour() {
+        val old = app.kestrel.browser.Flavor.hasKeepReady
+        val p = Prefs.get(ctx)
+        val kept = p.keepReady
+        try {
+            app.kestrel.browser.Flavor.hasKeepReady = false
+            val without = view(); without.openSection("Appearance")
+            assertFalse("the web build has no such service: no row", texts(without).contains("Keep the page ready when I leave"))
+            app.kestrel.browser.Flavor.hasKeepReady = true
+            val with = view(); with.openSection("Appearance")
+            val t = texts(with)
+            assertTrue("Kestrel G shows the row", t.contains("Keep the page ready when I leave"))
+            p.keepReady = app.kestrel.core.mem.KeepReady.DEFAULT
+            val shown = view().also { it.openSection("Appearance") }
+            assertTrue("and says 1 hour by default", texts(shown).any { it.startsWith("1 hour (default)") })
+            p.keepReady = 99
+            assertEquals("a value outside the choices is kept inside them", 3, p.keepReady)
+            p.keepReady = -5
+            assertEquals(0, p.keepReady)
+        } finally { app.kestrel.browser.Flavor.hasKeepReady = old; p.keepReady = kept }
+    }
 }
