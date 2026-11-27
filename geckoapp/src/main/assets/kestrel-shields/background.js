@@ -218,11 +218,12 @@ function logBlocked(d) {
   L.nb++; if (L.blocked.length < LOG_MAX) L.blocked.push(d.type + ' ' + shortUrl(d.url));
   reportLater(d.tabId);
 }
-// ND2 (owner 2026-11-27 recording of a claude.ai load, research/PROFILE_CLAUDE_AI.md): the parent process's main thread was 99 % busy for 15 s of that load, and 38 % of it was Firefox's own webRequest PLUMBING around
-// the extension's listeners (WebRequest.sys.mjs runChannelListener / getRequestData / serializeRequestData / applyChanges: about 5 ms of this tablet per request), not our JavaScript (about 1 %). The two
-// listeners below are bookkeeping for the Diagnostics (pending requests when a page is left, cache / 304 counts, the page report's HTTP errors) and used to be dispatched for EVERY request, 1,250 on claude.ai,
-// 75 % of them pictures and fonts. They now ask only for the types whose failure or end is worth knowing; the blocking listener (onBeforeRequest) still sees everything.
-var DONE_TYPES = ['main_frame', 'sub_frame', 'stylesheet', 'script', 'xmlhttprequest', 'object', 'media', 'other'];
+// ND2 (owner 2026-11-27 recording of a claude.ai load, research/PROFILE_CLAUDE_AI.md): the PARENT process's main thread was 99 % busy for 15 s of that load, and 34-38 % of that was Firefox's own webRequest PLUMBING
+// around the extension's listeners (WebRequest.sys.mjs runChannelListener / getRequestData / serializeRequestData / applyChanges: about 5 ms of this tablet per request), not our JavaScript (about 1 %). claude.ai
+// asks for about 1,200 JavaScript modules (all from the cache, 12.6 MB): each of them paid that twice, once for onBeforeRequest (the blocker, which must see everything) and once for onCompleted. The two listeners
+// below are bookkeeping for the Diagnostics (pending requests when a page is left, cache / 304 counts, the page report's HTTP errors): they now ask only for frames and fetch / XHR calls (where a failure or a
+// still-open request is what the person feels), no longer for the scripts, styles, pictures and fonts of a page.
+var DONE_TYPES = ['main_frame', 'sub_frame', 'xmlhttprequest'];
 var DONE_SET = {}; DONE_TYPES.forEach(function (t) { DONE_SET[t] = 1; });
 // RX3-BK1: requests the page started minus the ones that ended = what is still pending when the page is left (a page with pending requests cannot enter the engine's back/forward cache).
 function noteDone(d) { var L = pageLog.get(d.tabId); if (L && !stale(d)) L.done++; }

@@ -1127,10 +1127,10 @@ test('RX3-BK1: a main page that forbids caching (Cache-Control: no-store) is rep
 test('RX3-BK1: a page left with requests still pending is reported once with how many; a page that finished is not', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '5' });
-  for (let i = 0; i < 5; i++) h.req('script', PLAIN + '?' + i, PAGE);
-  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?0', statusCode: 200 });
-  h.listeners.completed({ tabId: 1, requestId: '7', type: 'script', url: PLAIN + '?1', statusCode: 200 });
-  h.listeners.error({ tabId: 1, requestId: '8', type: 'script', url: PLAIN + '?2', error: 'NS_BINDING_ABORTED' });   // an aborted request is no longer pending either
+  for (let i = 0; i < 5; i++) h.req('xmlhttprequest', PLAIN + '?' + i, PAGE);
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'xmlhttprequest', url: PLAIN + '?0', statusCode: 200 });
+  h.listeners.completed({ tabId: 1, requestId: '7', type: 'xmlhttprequest', url: PLAIN + '?1', statusCode: 200 });
+  h.listeners.error({ tabId: 1, requestId: '8', type: 'xmlhttprequest', url: PLAIN + '?2', error: 'NS_BINDING_ABORTED' });   // an aborted request is no longer pending either
   h.mainFrame('https://example.com/next', { requestId: '20' });
   await tick(20);
   const p = h.of('pend');
@@ -1138,8 +1138,8 @@ test('RX3-BK1: a page left with requests still pending is reported once with how
   assert.equal(p[0].n, 2);
   assert.equal(p[0].p, PAGE);
   // the next page finishes everything it started: leaving it says nothing
-  h.req('script', PLAIN + '?z', 'https://example.com/next');
-  h.listeners.completed({ tabId: 1, requestId: '21', type: 'script', url: PLAIN + '?z', statusCode: 200 });
+  h.req('xmlhttprequest', PLAIN + '?z', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '21', type: 'xmlhttprequest', url: PLAIN + '?z', statusCode: 200 });
   h.mainFrame('https://example.com/third', { requestId: '30' });
   await tick(20);
   assert.equal(h.of('pend').length, 1);
@@ -1148,36 +1148,36 @@ test('RX3-BK1: a page left with requests still pending is reported once with how
 test('RX3-BK1: an answer to a request of the page the tab already left does not count as one of the new page', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '5' });
-  h.req('script', PLAIN + '?a', PAGE);
+  h.req('xmlhttprequest', PLAIN + '?a', PAGE);
   h.mainFrame('https://example.com/next', { requestId: '20' });
-  h.req('script', PLAIN + '?b', 'https://example.com/next');
-  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?a', statusCode: 200 }); // belongs to the old document (id 6 < 20)
+  h.req('xmlhttprequest', PLAIN + '?b', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'xmlhttprequest', url: PLAIN + '?a', statusCode: 200 }); // belongs to the old document (id 6 < 20)
   h.mainFrame('https://example.com/third', { requestId: '30' });
   await tick(20);
   const p = h.of('pend');
   assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
 });
 
-test('ND2: the end-of-request listeners ask only for scripts, styles, frames and xhr: pictures and fonts (most of a heavy page) cost no webRequest dispatch', () => {
+test('ND2: the end-of-request listeners ask only for frames and xhr: the ~1,200 script modules of a heavy page (and its styles, pictures and fonts) cost no webRequest dispatch', () => {
   const h = harness(standardApp());
   for (const k of ['completed', 'error']) {
     const f = h.regs[k];
     assert.ok(f && Array.isArray(f.types), k + ' is registered with a types filter');
-    for (const ty of ['main_frame', 'sub_frame', 'script', 'stylesheet', 'xmlhttprequest']) assert.ok(f.types.indexOf(ty) >= 0, k + ' keeps ' + ty);
-    for (const ty of ['image', 'imageset', 'font', 'ping', 'websocket', 'csp_report']) assert.ok(f.types.indexOf(ty) < 0, k + ' does not ask for ' + ty);
+    assert.equal(JSON.stringify(f.types), JSON.stringify(['main_frame', 'sub_frame', 'xmlhttprequest']));
     assert.equal(JSON.stringify(f.urls), JSON.stringify(['http://*/*', 'https://*/*']));      // (an array made inside the vm is not the same realm: compare as text)
   }
 });
 
-test('ND2: a picture the page started is not "pending" when the page is left (its end is never reported, so it must not be counted)', async () => {
+test('ND2: a script or a picture the page started is not "pending" when the page is left (its end is never reported, so it must not be counted)', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '5' });
   for (let i = 0; i < 4; i++) h.req('image', 'https://nothing.test/p' + i + '.png', PAGE);
-  h.req('script', PLAIN + '?a', PAGE);
-  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?a', statusCode: 200 });
+  for (let i = 0; i < 3; i++) h.req('script', PLAIN + '?m' + i, PAGE);
+  h.req('xmlhttprequest', 'https://nothing.test/api?a', PAGE);
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'xmlhttprequest', url: 'https://nothing.test/api?a', statusCode: 200 });
   h.mainFrame('https://example.com/next', { requestId: '20' });
   await tick(20);
-  assert.equal(h.of('pend').length, 0, 'four pictures without an end are not four pending requests');
+  assert.equal(h.of('pend').length, 0, 'seven requests without a reported end are not pending: only frames and xhr are counted');
 });
 
 // ---------------------------------------------------------------- RX3-G3: the assist of a player inside a frame is relayed to the ONE frame the owner pressed
