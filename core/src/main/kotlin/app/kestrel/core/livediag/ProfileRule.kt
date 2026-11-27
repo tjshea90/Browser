@@ -44,6 +44,33 @@ object ProfileRule {
     internal fun isLocal(host: String): Boolean =
         host.isEmpty() || host == "localhost" || host.startsWith("[") || Regex("""\d{1,3}(\.\d{1,3}){3}""").matches(host) || host.endsWith(".local") || host.endsWith(".lan") || host.endsWith(".internal") || !host.contains('.')
 
+    /** The engine writes a child process's failure into the recording's own gathering log ("Could not generate profile from pid ...: OOM ..."): did the page process fail to hand over its part? Looks for that sentence in the
+     * (gzip) JSON, streamed in 64 KB blocks, never held whole; a file that cannot be read says false (unknown). */
+    fun pageProcessMissing(gzipBytes: ByteArray): Boolean = try {
+        val needle = "Could not generate profile from pid".toByteArray(Charsets.US_ASCII)
+        java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(gzipBytes)).use { gz ->
+            val buf = ByteArray(64 * 1024 + needle.size)
+            var keep = 0
+            var total = 0L
+            var found = false
+            while (!found && total < 96L * 1024 * 1024) {
+                val n = gz.read(buf, keep, 64 * 1024)
+                if (n <= 0) break
+                total += n
+                val end = keep + n
+                var i = 0
+                while (i + needle.size <= end && !found) {
+                    var k = 0
+                    while (k < needle.size && buf[i + k] == needle[k]) k++
+                    if (k == needle.size) found = true else i++
+                }
+                keep = minOf(needle.size - 1, end)
+                System.arraycopy(buf, end - keep, buf, 0, keep)
+            }
+            found
+        }
+    } catch (e: Exception) { false }
+
     /** The name a recording gets in the private repository: profiles/<date>/<time>-<install>.json.gz (a new name each time; the companion file next to it ends in .meta.json). */
     fun path(atUtc: String, installId: String, attempt: Int = 0): String {
         val date = atUtc.substringBefore('T').filter { it.isDigit() || it == '-' }.ifEmpty { "undated" }

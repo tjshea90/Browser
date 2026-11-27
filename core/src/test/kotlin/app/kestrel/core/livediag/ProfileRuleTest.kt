@@ -43,4 +43,16 @@ class ProfileRuleTest {
         assertEquals(listOf("js", "cpu"), ProfileRule.FEATURES.toList())
         assertTrue("no wildcard thread filter: only the named threads are sampled", ProfileRule.THREADS.none { it.contains("*") } && "GeckoMain" in ProfileRule.THREADS)
     }
+
+    private fun gz(text: String): ByteArray = java.io.ByteArrayOutputStream().also { o -> java.util.zip.GZIPOutputStream(o).use { it.write(text.toByteArray(Charsets.US_ASCII)) } }.toByteArray()
+
+    @Test fun aRecordingThatSaysTheChildProcessFailedIsRecognisedWhereverTheSentenceSits() {
+        val sentence = "Could not generate profile from pid 13909, failure: OOM in ChunkedJSONWriteFunc::AllocChunk allocating new chunk"
+        assertTrue("at the start", ProfileRule.pageProcessMissing(gz(sentence + " " + "x".repeat(1000))))
+        assertTrue("at the very end", ProfileRule.pageProcessMissing(gz("y".repeat(5000) + sentence)))
+        for (pad in listOf(65_500, 65_520, 65_536, 65_545, 131_040, 200_003)) assertTrue("across a 64 KB block boundary (pad $pad)", ProfileRule.pageProcessMissing(gz("z".repeat(pad) + sentence + "tail")))
+        assertFalse("a clean recording", ProfileRule.pageProcessMissing(gz("{\"meta\":{},\"profileGatheringLog\":{\"events\":[\"Got profile from pid 1, with size: 231935\"]}}" + "q".repeat(300_000))))
+        assertFalse("not gzip: unknown, not missing", ProfileRule.pageProcessMissing("plain text, not a gzip file".toByteArray()))
+        assertFalse("empty", ProfileRule.pageProcessMissing(ByteArray(0)))
+    }
 }

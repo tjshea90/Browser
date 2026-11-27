@@ -107,7 +107,7 @@ object PageProfiler {
         Health.count("profile.done"); Health.log("life", "profile", "done why=$why kb=$kb mode=" + (if (r.load) "load" else "now"))
         try { File(ctx.cacheDir, "profile-last.json.gz").writeBytes(bytes) } catch (e: Exception) { /* the copy is a courtesy */ }
         if (bytes.size > ProfileRule.MAX_BYTES) { say(ctx, "The recording is $kb KB: too big to send. It stays on this tablet."); return }
-        val missing = pageProcessMissing(bytes)
+        val missing = ProfileRule.pageProcessMissing(bytes)
         if (missing) { Health.count("profile.nopage"); say(ctx, "The page itself is missing from this recording (its process ran out of memory while it wrote its part). It is sent anyway: the rest still helps. Closing other tabs first may help.") }
         LiveDiag.sendProfile(System.currentTimeMillis(), bytes, meta(ctx, r, why, kb, missing)) { msg -> say(ctx, msg) }
     }
@@ -121,25 +121,6 @@ object PageProfiler {
         put("settings", JSONObject(LiveDiag.settingsMap()))
         put("features", ProfileRule.FEATURES.joinToString(",")); put("threads", ProfileRule.THREADS.joinToString(","))
     }.toString()
-
-    /** The engine writes a child process's failure into the recording's own gathering log ("Could not generate profile from pid ..."): look for that sentence in the (gzip) JSON, streamed, never held whole. */
-    internal fun pageProcessMissing(bytes: ByteArray): Boolean = try {
-        val needle = "Could not generate profile from pid".toByteArray(Charsets.US_ASCII)
-        java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(bytes)).use { gz ->
-            val buf = ByteArray(64 * 1024 + needle.size)
-            var keep = 0; var total = 0L; var found = false
-            while (!found && total < 96L * 1024 * 1024) {
-                val n = gz.read(buf, keep, 64 * 1024)
-                if (n <= 0) break
-                total += n
-                val end = keep + n
-                var i = 0
-                while (i + needle.size <= end && !found) { var k = 0; while (k < needle.size && buf[i + k] == needle[k]) k++; if (k == needle.size) found = true else i++ }
-                keep = minOf(needle.size - 1, end); System.arraycopy(buf, end - keep, buf, 0, keep)
-            }
-            found
-        }
-    } catch (e: Exception) { false }
 
     private fun say(ctx: Context, msg: String) = Io.ui { Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show() }
 }
