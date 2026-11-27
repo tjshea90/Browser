@@ -32,4 +32,14 @@ class KeepReadyTest {
         assertEquals("off", KeepReady.whyNot(0, true, false, false)); assertEquals("closing", KeepReady.whyNot(2, true, false, true))
         assertEquals("no page", KeepReady.whyNot(2, false, false, false)); assertEquals("memory short", KeepReady.whyNot(2, true, true, false))
     }
+
+    @Test fun aStopIsSentOnlyToAServiceThatExistsBecauseAndroid8To11CrashesTheAppOtherwise() {
+        // leave and return within a moment: startForegroundService() was called, the system has not created the service yet
+        assertEquals(KeepReady.StopStep.LET_IT_END_ITSELF, KeepReady.stopStep(requested = true, created = false))
+        // the service exists (onCreate went foreground): stopping it is allowed
+        assertEquals(KeepReady.StopStep.STOP_SERVICE, KeepReady.stopStep(requested = true, created = true))
+        assertEquals(KeepReady.StopStep.STOP_SERVICE, KeepReady.stopStep(requested = false, created = true))
+        // nothing was started: nothing to do (every onStart of the activity asks)
+        assertEquals(KeepReady.StopStep.NOTHING, KeepReady.stopStep(requested = false, created = false))
+    }
 }

@@ -1008,6 +1008,17 @@ class OwnerRulesTest {
         assertTrue("one hour is the default and the choice is in a backup", source("core/src/main/kotlin/app/kestrel/core/mem/KeepReady.kt").contains("const val DEFAULT = HOUR") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"keep_ready\", T.INT, 0, 3)"))
     }
 
+    @Test fun nd3KeepReadyNeverStopsAServiceThatStillOwesItsStartForeground() {
+        // the alpha111 run of 2026-11-27 07:09 crashed with RemoteServiceException "Context.startForegroundService() did not then call Service.startForeground()": stopService() came before the system had created the service
+        val svc = source("geckoapp/src/main/kotlin/app/kestrel/browser/KeepReadyService.kt")
+        val stop = svc.substring(svc.indexOf("fun stop(ctx: Context"), svc.indexOf("fun line(ctx: Context"))
+        assertTrue("stop() asks the rule what to do and calls stopService only for a service that exists", stop.contains("KeepReady.stopStep(requested, ProcessLife.keepReady)") && Regex("STOP_SERVICE -> \\{[^\\n]*stopService\\(").containsMatchIn(stop))
+        assertEquals("stopService( is called once in the whole service file", 1, Regex("stopService\\(").findAll(svc).count())
+        val cmd = svc.substring(svc.indexOf("override fun onStartCommand"), svc.indexOf("/** Go foreground;"))
+        assertTrue("a start whose stop came first goes foreground (promoteSafely) and only then ends itself", cmd.indexOf("promoteSafely(minutes)") in 0 until cmd.indexOf("if (!requested)") && cmd.contains("stopSelf()"))
+        assertTrue("when the real notification cannot be built a plain one keeps the startForeground contract before stopping", svc.contains("plainest notification") && svc.indexOf("plainest notification") < svc.indexOf("try { stopSelf() } catch (x: Throwable)"))
+    }
+
     @Test fun nd1SettingsBuildsOnlyTheSectionsThatAreOpenAndTheDateNeedsNoLocale() {
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("a section's rows run only while it is open", set.contains("private fun section(text: String, rows: () -> Unit)") && set.contains("if (isOpen) fill()") && set.contains("val nowOpen = text !in OPEN"))

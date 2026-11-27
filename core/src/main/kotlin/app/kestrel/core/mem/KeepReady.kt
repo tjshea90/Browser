@@ -41,6 +41,17 @@ object KeepReady {
         else -> ""
     }
 
+    /** What the app's `stop` must do when the person is back. Android 8 to 11 CRASH THE APP (`RemoteServiceException: Context.startForegroundService() did not then call Service.startForeground()`) when a service that was
+     * started with startForegroundService() is stopped before it has called startForeground(): leaving and returning within a moment did exactly that (the 2026-11-27 07:09 run of alpha111 ended in it, found in the next
+     * upload). So a stop is sent only to a service that EXISTS; a start still on its way is told, by the `requested` flag, to end itself right after it has gone foreground. */
+    enum class StopStep { NOTHING, STOP_SERVICE, LET_IT_END_ITSELF }
+
+    fun stopStep(requested: Boolean, created: Boolean): StopStep = when {
+        created -> StopStep.STOP_SERVICE            // onCreate has run: it goes foreground first thing, so stopping it now is allowed
+        requested -> StopStep.LET_IT_END_ITSELF     // startForegroundService() was called and the system has not created the service yet: stopping it now is the crash
+        else -> StopStep.NOTHING
+    }
+
     /** The hold ends by itself after [choice]'s time: has it run out? [heldMs] is how long the service has run. */
     fun expired(choice: Int, heldMs: Long): Boolean = valid(choice) != OFF && heldMs >= millis(choice)
 }

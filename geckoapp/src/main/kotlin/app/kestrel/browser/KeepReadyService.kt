@@ -44,12 +44,15 @@ class KeepReadyService : Service() {
             catch (e: Exception) { requested = false; Health.count("keepready.refused"); Health.log("life", "keep-ready-refused", e.javaClass.simpleName) }   // Android 12 and newer can refuse a start from the background: the app is then simply cached like before
         }
 
-        /** The app is back in front (or the person turned the choice off): the hold is no longer needed. */
+        /** The app is back in front (or the person turned the choice off): the hold is no longer needed. A service that was started with startForegroundService() and is stopped BEFORE it has called startForeground()
+         * crashes the app on Android 8 to 11 (`RemoteServiceException ... did not then call Service.startForeground()`, seen in the alpha111 run of 2026-11-27 07:09 after a quick leave and return): so stopService
+         * goes only to a service that exists (core KeepReady.stopStep); one that is still on its way ends itself in onStartCommand, after it has gone foreground. */
         fun stop(ctx: Context, why: String = "returned") {
-            if (!requested && !ProcessLife.keepReady) return
-            requested = false
-            endWhy = why
-            try { ctx.stopService(Intent(ctx, KeepReadyService::class.java)) } catch (e: Exception) { /* already gone */ }
+            when (KeepReady.stopStep(requested, ProcessLife.keepReady)) {
+                KeepReady.StopStep.NOTHING -> return
+                KeepReady.StopStep.STOP_SERVICE -> { requested = false; endWhy = why; try { ctx.stopService(Intent(ctx, KeepReadyService::class.java)) } catch (e: Exception) { /* already gone */ } }
+                KeepReady.StopStep.LET_IT_END_ITSELF -> { requested = false; endWhy = why }
+            }
         }
 
         fun line(ctx: Context, choice: Int): String =
@@ -74,6 +77,7 @@ class KeepReadyService : Service() {
         if (intent?.action == ACTION_LET_GO) { endWhy = "letgo"; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
         val minutes = (intent?.getIntExtra(EXTRA_MINUTES, 60) ?: 60).coerceIn(1, 24 * 60)
         if (!promoteSafely(minutes)) return START_NOT_STICKY   // every startForegroundService() call must be answered with startForeground(), also when the service already runs
+        if (!requested) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }   // the person came back before the system created this service (see stop): it went foreground as Android demands, and ends now
         handler.removeCallbacks(timeout); handler.postDelayed(timeout, minutes * 60_000L)
         Health.log("life", "keep-ready", "minutes=$minutes")
         return START_NOT_STICKY                             // never brought back by Android after a kill: a hold only makes sense while the page is still in this process
@@ -82,6 +86,8 @@ class KeepReadyService : Service() {
     /** Go foreground; if Android or the notification system refuses, say so and stop: a hold that cannot start must never take the browser down with it. */
     private fun promoteSafely(minutes: Int): Boolean = try { promote(minutes); true } catch (e: Throwable) {
         endWhy = "refused"; Health.count("keepready.refused"); Health.log("life", "keep-ready-refused", "promote " + e.javaClass.simpleName)
+        // Android 8 to 11 crash an app whose service was started with startForegroundService() and stops without ever calling startForeground(): try the plainest notification once, then stop
+        try { val n = Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_tabs).build(); if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n) } catch (x: Throwable) { /* nothing more to try */ }
         try { stopSelf() } catch (x: Throwable) { /* gone */ }
         false
     }
