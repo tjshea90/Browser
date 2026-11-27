@@ -73,7 +73,12 @@ class Thread:
         self.main = bool(th.get('isMainThread')) or self.name == 'GeckoMain'
         self.strings = strings_of(th, prof)
         self.cats = categories_of(prof)
-        self.samples = rows(th.get('samples'), ['stack', 'time', 'threadCPUDelta', 'eventDelay', 'weight'])
+        self.samples = rows(th.get('samples'), ['stack', 'time', 'timeDeltas', 'threadCPUDelta', 'eventDelay', 'weight'])
+        if self.samples and all(x.get('time') is None for x in self.samples) and any(x.get('timeDeltas') is not None for x in self.samples):
+            acc = 0.0                                          # the processed layout stores the gaps between samples, not the times
+            for x in self.samples:
+                acc += x.get('timeDeltas') or 0
+                x['time'] = acc
         self.stacks = rows(th.get('stackTable'), ['prefix', 'frame', 'category'])
         self.frames = rows(th.get('frameTable'), ['location', 'func', 'category', 'subcategory', 'line', 'column', 'relevantForJS', 'implementation'])
         self.funcs = rows(th.get('funcTable'), ['name', 'fileName', 'lineNumber', 'isJS', 'relevantForJS'])
@@ -166,7 +171,15 @@ def thread_report(t, out):
     for s in t.samples:
         by_cat[t.stack_category(s['stack']) if s.get('stack') is not None else 'Idle'] += 1
     top = ', '.join('%s %.0f%%' % (c, pct(v, n)) for c, v in by_cat.most_common(5))
-    out.append('  %-26s %-14s %6d samples over %5.1f s%s  | %s' % (t.name[:26], str(t.proc)[:14], n, wall, ('' if not cpu else ', cpu %.1f s (units as recorded)' % (cpu / 1e6)), top))
+    unit = str(((t.prof.get('meta') or {}).get('sampleUnits') or {}).get('threadCPUDelta', '')).lower()
+    per_s = {'\u00b5s': 1e6, 'us': 1e6, 'ns': 1e9, 'ms': 1e3}.get(unit)
+    if cpu and per_s:
+        cpu_note = ', cpu %.1f s = %.0f%% of one core' % (cpu / per_s, 100.0 * (cpu / per_s) / wall if wall else 0)
+    elif cpu:
+        cpu_note = ', cpu %s (unit %s: as recorded)' % (cpu, unit or 'not stated')
+    else:
+        cpu_note = ''
+    out.append('  %-26s %-14s %6d samples over %5.1f s%s  | %s' % (t.name[:26], str(t.proc)[:14], n, wall, cpu_note, top))
 
 
 def busiest_main(threads):

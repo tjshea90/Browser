@@ -69,5 +69,13 @@ nested = {'meta': {'product': 'GeckoView', 'categories': make('schema')['meta'][
 check('child-process profiles nested under processes are read', 'Content Process' in pd.report(nested))
 check('plain (not gzipped) JSON is read', pd.read_profile(json.dumps(make('cols')).encode())['meta']['version'] == 30)
 check('a script frame is told apart from a label frame', pd.script_of('foo (https://h.example/a/b.js:1:2)') == ('h.example/b.js', 'foo') and pd.script_of('PresShell::DoReflow') is None)
+# the processed layout stores gaps between samples (timeDeltas) and states the unit of the CPU column
+proc = make('cols')
+th0 = proc['threads'][0]
+th0['samples']['timeDeltas'] = [1.0] * th0['samples']['length']
+del th0['samples']['time']
+proc['meta']['sampleUnits'] = {'threadCPUDelta': 'us'}
+rep = pd.report(proc)
+check('timeDeltas become times (4 s of samples) and a stated unit gives the share of a core', 'over   4.0 s, cpu 3.0 s = 75% of one core' in rep)
 print('profile_digest self-test: %s' % ('OK' if not fails else '%d FAILED' % len(fails)))
 sys.exit(1 if fails else 0)
