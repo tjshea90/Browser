@@ -52,4 +52,6 @@ object Flavor {
     @JvmField var hasNetworkLab = false
     /** OPT1: the Auto-tune screen exists (Kestrel G only: it drives the Firefox engine). */
     @JvmField var hasAutoTune = false
+    /** KR1: Kestrel G can keep the page ready (a foreground service) while the app is away: Settings shows the "Keep the page ready when I leave" choice. */
+    @JvmField var hasKeepReady = false
 }
