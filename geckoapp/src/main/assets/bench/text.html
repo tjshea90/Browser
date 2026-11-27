@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench text</title><script src="common.js"></script>
+<style>body{margin:8px;font:15px/1.35 sans-serif;color:#111;background:#fff}h1{font-size:26px;margin:4px 0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px;font-size:13px;vertical-align:top}th{background:#e8eef6}.big{font:38px/1.1 serif}.mono{font:13px monospace}.p{margin:6px 0}</style></head>
+<body>
+<h1>Drawing check: is any text cut off?</h1>
+<div class="big">Hamburgefonstiv 0123456789</div>
+<div class="p">Every line of this page should be whole: no thin bands missing through the words, no blocks covering letters, nothing half drawn. A table with headers that wrap onto three lines:</div>
+<table><tr><th>Sportsbook payout (about 10% hold) for the first leg</th><th>Sportsbook payout (about 20% hold) for the second leg</th><th>Notes</th></tr>
+<tr><td>Quarterback passing yards over 250.5</td><td>Running back rushing yards over 80.5</td><td class="mono">+110 / -130</td></tr>
+<tr><td>Team total points over 24.5</td><td>First touchdown scorer longshot</td><td class="mono">+450 / -600</td></tr>
+<tr><td>Both teams to score in the first half</td><td>Total corners over 9.5</td><td class="mono">-105 / -115</td></tr></table>
+<div class="p" id="lines"></div>
+<script>
+// The page shown to the owner after a drawing experiment. It measures nothing: the question "is any text cut off, missing or covered?" is answered by the person. (v2: compare this page's DOM text with the
+// same text drawn on a canvas, by pixels, to see missing bands without being asked.)
+var s = '', i;
+for (i = 0; i < 18; i++) s += '<div style="font-size:' + (11 + i % 8) + 'px">Line ' + i + ': The quick brown fox jumps over the lazy dog 0123456789 ' + 'abcdefghijklmnopqrstuvwxyz'.slice(i % 10) + '</div>';
+document.getElementById('lines').innerHTML = s;
+K.ready('text');
+</script></body></html>

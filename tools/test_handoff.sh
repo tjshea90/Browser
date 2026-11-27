@@ -336,10 +336,26 @@ ev = ['+50.0s video gate reels.example.com held=0 kept=6 refused=14 opened=0 fra
       '+78.0s win typing-address keys=20 avg=180ms worst=900ms over100=12',
       '+79.0s win typing-page keys=30 avg=20ms worst=60ms over150=0 frame=top resp=250ms respworst=900ms resp150=12',
       '+80.0s filepick picked type=image/png kb=811 size=600x973 decodes=1 ext=1 freeMb=300',
-      '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40']
+      '+81.0s filepick picked type=image/png kb=0 size=0x0 decodes=0 ext=1 freeMb=40',
+      '+82.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=flat reencode=ok(40kb) 55ms',
+      '+83.0s filepick page-got host=claude.ai n=1 type=image/png kb=119 bytes=png decode=ok 600x1024 canvas=ok reencode=ok(40kb) 60ms',
+      '+84.0s back press kind=cache dir=back loc=200 show=3400 paint=1600 y=991/5858 MISSED to=shop.example left=refused-loading',
+      '+85.0s back press kind=other dir=back loc=30 show=-1 paint=-1 y=- to=app.example left=?',
+      '+86.0s sec cert-error host=bad.example code=-2147483648',
+      '+87.0s sec https-upgraded host=shop.example',
+      '+88.0s sec popup-blocked kind=window host=shop.example',
+      '+89.0s sec perm-asked kind=location host=map.example',
+      '+90.0s tabs switch-done tab=3 kind=live first-frame=300ms',
+      '+90.5s mem trim level=80 avail=442MB thr=144MB low=false trim=80@0s',
+      '+90.6s mem trim level=15 avail=250MB thr=144MB low=false trim=15@0s',
+      '+90.7s mem trim-held level=80 avail=442MB why=442 MB available: a false alarm',
+      '+90.8s mem trim-sent level=15 avail=250MB why=only 250 MB available',
+      '+91.0s page timing host=shop.example nt=0 dns=1 con=1 tls=1 fb=300 ttfb=200 fcp=1800 lcp=1900 dcl=2500 load=4000 rn=20 rc=5 kb=100 r1=0 r3=0 rsum=900 h2=10 h1=0 h3=0 js=5 css=2 img=3 xhr=2 oth=1 lag=100/200/3 nodes=300 scr=5 fr=0 rd=0 hid=0 pt=0 at=7000 fm=150/6/1/120 | shields=up',
+      '+92.0s page timing host=shop.example nt=0 dns=1 con=1 tls=1 fb=300 ttfb=200 fcp=1800 lcp=1900 dcl=2500 load=4000 rn=20 rc=5 kb=100 r1=0 r3=0 rsum=900 h2=10 h1=0 h3=0 js=5 css=2 img=3 xhr=2 oth=1 lag=100/200/3 nodes=300 scr=5 fr=0 rd=0 hid=0 pt=0 at=7000 fm=100/20/4/400 | shields=up',
+      '+93.0s page timing host=gate.example nt=0 dns=1 con=1 tls=1 fb=300 ttfb=200 fcp=-1 lcp=-1 dcl=2500 load=4000 rn=10 rc=1 kb=100 r1=0 r3=0 rsum=900 h2=5 h1=0 h3=0 js=3 css=1 img=1 xhr=1 oth=0 lag=500/900/9 nodes=30 scr=3 fr=0 rd=0 hid=0 pt=1 at=15000 ch=1 chs=14000 | shields=up']
 now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha87', 'code': 188, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
-     'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics'], 'events': ev}
+     'device': {'manualSend': 0}, 'snapshot': ['Kestrel diagnostics', 'Counters: videoclips.deco.bar=3 videoclips.deco.cap=5 videoclips.deco.off=9 videoclips.deco.back=4'], 'events': ev}
 json.dump(b, open(d + '/120000-abc123.json', 'w'))
 PY
 check "digest VIDEO PROBLEMS names the site the press-to-play rule held back and points at the per-site switch" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/vd1/diag" > "$T/vd1/out.txt"; grep -E "reels.example.com .*held 2, kept 6, refused 17" "$T/vd1/out.txt" && grep -q "cause 1: the press-to-play rule held/refused videos here" "$T/vd1/out.txt"'
@@ -347,6 +363,12 @@ check "digest VIDEO PROBLEMS ties a refused frame rate plus a failed element to 
 check "digest VIDEO PROBLEMS says what an element stuck loading with no error means" 'grep -q "stuck.example.net" "$T/vd1/out.txt" && grep -q "never got data, with no error" "$T/vd1/out.txt"'
 check "digest TYPING LATENCY calls the slow address bar slow and the quick page fine and says how to read it" 'grep -q "address bar / Home field (the app) .*20 keys, mean 180 ms, worst 900 ms -> SLOW" "$T/vd1/out.txt" && grep -q "page fields (the page and the engine) .*30 keys, mean 20 ms, worst 60 ms -> fine" "$T/vd1/out.txt" && grep -q "Reading it: slow in the ADDRESS BAR" "$T/vd1/out.txt" && grep -q "page RESPONSE (key to the next frame) .*30 keys, mean 250 ms, worst 900 ms, 12 waited 150 ms or more -> SLOW" "$T/vd1/out.txt"'
 check "digest FILE PICKS counts the empty file and the unreadable picture and blames the file, not the page" 'grep -q "FILE PICKS.*2 file" "$T/vd1/out.txt" && grep -q "empty files 1, pictures Android cannot read 1" "$T/vd1/out.txt" && grep -q "the FILE or the tablet is a cause" "$T/vd1/out.txt"'
+check "digest FILE PICKS names what the PAGE received and which side is at fault (a flat canvas = the engine; a good picture = claude.ai)" 'grep -q "what the PAGE received.*2 attach" "$T/vd1/out.txt" && grep -q "canvas refused or returned a blank / flat picture" "$T/vd1/out.txt" && grep -q "the file and the engine are fine: claude.ai" "$T/vd1/out.txt"'
+check "digest FOCUS REPORT prints the page frame cadence and the bot-check time (PERF17c, PERF17d)" 'grep -q "PAGE ANIMATION: late frames" "$T/vd1/out.txt" && grep -q "frame callbacks a second after the load" "$T/vd1/out.txt" && grep -q "bot checks: 1 full-page (left after a median 15.0 s" "$T/vd1/out.txt" && grep -q "full-page bot check: time on the page" "$T/vd1/out.txt"'
+check "digest FOCUS REPORT counts Android's critical memory signals and what the gate held (PERF20)" 'grep -q "memory signals: Android sent 2 critical ones" "$T/vd1/out.txt" && grep -q "the gate (alpha101+): 1 held as false alarms, 1 passed on" "$T/vd1/out.txt"'
+check "digest FOCUS REPORT counts what the decorative clip limiter did (PERF21)" 'grep -q "decorative page clips (alpha102+): no bar on 3 taps, 5 parked for being too many, 9 parked out of sight, 4 played again" "$T/vd1/out.txt"'
+check "digest BACK counts the presses by kind, the missed place and what the engine said when the page was left (PERF13)" 'grep -q "== BACK .*2 press" "$T/vd1/out.txt" && grep -q "kinds: cache x1, other x1" "$T/vd1/out.txt" && grep -q "place missed 1 of 1 measured" "$T/vd1/out.txt" && grep -q "refused-loading x1" "$T/vd1/out.txt" && grep -q "left before they finished loading" "$T/vd1/out.txt"'
+check "digest FOCUS REPORT has the five areas and counts the security lines (PERF16)" 'grep -q "FOCUS REPORT" "$T/vd1/out.txt" && grep -q "1. SPEED OF THE APP" "$T/vd1/out.txt" && grep -q "2. PAGE LOADING SPEED" "$T/vd1/out.txt" && grep -q "3. VIDEO PLAYBACK" "$T/vd1/out.txt" && grep -q "4. PAGE COMPATIBILITY" "$T/vd1/out.txt" && grep -q "5. PRIVACY AND SECURITY" "$T/vd1/out.txt" && grep -q "addresses upgraded to https: 1" "$T/vd1/out.txt" && grep -q "certificate errors: 1" "$T/vd1/out.txt" && grep -q "permission questions from pages: location x1" "$T/vd1/out.txt" && grep -q "pop-ups and forced redirects blocked: 1" "$T/vd1/out.txt"'
 check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
 

@@ -46,19 +46,62 @@ object GeckoPrefs {
         if (p.labBuffer) append("  network.buffer.cache.size: 32768\n")
         if (p.labFontDelay) append("  gfx.downloadable_fonts.fallback_delay: 500\n")
         if (p.labDnsPrefetch && p.dataSaver == app.kestrel.core.shield.DataSaver.OFF) append("  dom.prefetch_dns_for_anchor_https_document: true\n")
+        if (p.labFps30) append("  layout.frame_rate: 30\n")      // PERF14: 30 redraws a second at most (the engine's own value is -1: every screen refresh); A/B in the digest: pages' own load timing split by this setting
         if (p.labSpec > 0) { append("  dom.speculation_rules.enabled: true\n"); append("  dom.speculation_rules.prefetch.dry_run: ").append(p.labSpec == 1).append('\n') }
+    }
+
+    /**
+     * PERF22 (research/LOW_END_PLAYBOOK.md): the engine experiments of the Network lab, in the `name=value` grammar of [yaml]'s overrides (a value that is also in gecko-prefs.txt REPLACES it: a duplicate YAML key would
+     * be an error). Off = nothing here: the engine's own value or the one in gecko-prefs.txt. Every name exists in the pinned GeckoView (tools/check-gecko-prefs.sh reads these strings too).
+     */
+    internal fun labOverrides(p: app.kestrel.browser.data.Prefs): List<String> = buildList {
+        if (p.labDither) add("gfx.webrender.dithering=false")                              // no dithering of gradients: less per-pixel work in CPU drawing, a little banding in smooth gradients
+        if (p.labBytecode) add("dom.script_loader.bytecode_cache.strategy=-1")              // the compiled form of a script is saved the first time it is seen, not after the second load
+        if (p.labGcPar) add("javascript.options.mem.gc_parallel_marking=true")              // the script engine's clean-up marks on more than one thread
+        for ((name, value) in app.kestrel.browser.optimizer.OptimizerApply.parseEngine(p.optPrefs)) add("$name=$value")   // OPT1: what an Auto-tune run asked for (only names of its catalog)
+        for ((name, value) in app.kestrel.core.gfx.DrawTrial.overrides(p.drawTrial)) add("$name=$value")   // PERF25: names gecko-prefs.txt already sets (the shader precompile at start)
     }
 
     /**
      * PERF7c (owner 2026-11-22, two screenshots: horizontal bands of text missing on claude.ai, the pornhub loading circle cut at the bottom; research/PAINT_GLITCH.md): the shortcuts of the engine's graphics
      * renderer (WebRender) that redraw or upload only PART of a frame or a texture. A driver that gets one of them wrong leaves exactly such bands undrawn. "Safe drawing" turns them off: whole clears, one
-     * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in GeckoView 160 (tools/check-gecko-prefs.sh).
+     * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in the pinned GeckoView (tools/check-gecko-prefs.sh).
      */
-    internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = if (!p.labDraw) "" else buildString {
-        append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
-        append("  gfx.webrender.batched-texture-uploads: false\n")
-        append("  gfx.webrender.max-partial-present-rects: 0\n")
-        append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+    internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = buildString {
+        if (p.labDraw) {
+            append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
+            append("  gfx.webrender.batched-texture-uploads: false\n")
+            append("  gfx.webrender.max-partial-present-rects: 0\n")
+            append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+            // PERF10b: the alpha94 uploads proved the four above reached the engine (engine draw-prefs line) and the bands stayed. Texture uploads through mapped upload buffers (PBO) are the next shortcut that can
+            // leave some rows of a glyph or tile not yet written when the page is busy: plain uploads instead (research/PAINT_GLITCH.md, 2026-11-22).
+            append("  gfx.webrender.pbo-uploads: false\n")
+        }
+        // PERF25: the hardware drawing TRIAL (core DrawTrial): the graphics chip draws with the Mali paths Mozilla's own bugs name switched off. A trial and CPU drawing exclude each other: while a trial runs, Software drawing is not written.
+        for ((name, value) in app.kestrel.core.gfx.DrawTrial.lines(p.drawTrial)) append("  ").append(name).append(": ").append(value).append('\n')
+        // PERF10b: CPU drawing (software WebRender). Mozilla's own text-band bug threads name it as the one switch that always removes this fault family; slower, so OFF unless the person turns it on.
+        if (app.kestrel.core.gfx.DrawTrial.softwareDrawing(p.labSoft, p.drawTrial)) append("  gfx.webrender.software: true\n")
+    }
+
+    @Volatile private var trialGuarded = false
+
+    /**
+     * PERF25: once per process, BEFORE the config file is written. A trial start leaves a mark ([app.kestrel.browser.data.Prefs.drawTrialStart]) that the engine's first steady picture takes away; a mark that is still
+     * there means the last start with the trial never steadied (the graphics driver killed the app or hung it): the trial switches itself off now, so the person never meets a browser that will not open.
+     */
+    private fun guardTrial(p: app.kestrel.browser.data.Prefs) {
+        if (trialGuarded) return
+        trialGuarded = true
+        val trial = p.drawTrial
+        if (trial == 0) { if (p.drawTrialStart != 0L) p.drawTrialStart = 0L; return }
+        if (app.kestrel.core.gfx.DrawTrial.startFailed(trial, p.drawTrialStart)) {
+            p.drawTrialWhy = "the last start with '" + app.kestrel.core.gfx.DrawTrial.label(trial) + "' never steadied, so it was switched off"
+            p.drawTrial = 0; p.drawTrialStart = 0L
+            app.kestrel.browser.diag.Health.log("engine", "draw-trial", "reverted: " + p.drawTrialWhy)
+        } else {
+            p.drawTrialStart = System.currentTimeMillis()
+            app.kestrel.browser.diag.Health.log("engine", "draw-trial", "start: " + app.kestrel.core.gfx.DrawTrial.label(trial))
+        }
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
@@ -68,7 +111,9 @@ object GeckoPrefs {
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
-        var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
+        app.kestrel.browser.optimizer.OptimizerGuard.beforeEngine(ctx)      // OPT1: a run that is active decides the start configuration (and puts the person's own back after a failed start or a closed app)
+        guardTrial(app.kestrel.browser.data.Prefs.get(ctx))     // PERF25: before anything reads the trial number
+        var yaml = yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx))) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
         app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.moz_log")?.takeIf { LOG_SPEC.matches(it) }?.let {

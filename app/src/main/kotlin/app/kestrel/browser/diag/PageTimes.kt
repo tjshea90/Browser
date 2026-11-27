@@ -20,6 +20,7 @@ object PageTimes {
     private val open = HashMap<Any, Load>()
     private val late = HashMap<Any, Load>()   // loads that ended before their first paint was reported (a fast page paints after its load ended): the paint is still wanted
     private val seen = HashMap<String, Int>()
+    private val loop = app.kestrel.core.livediag.LoopWatch()    // PERF12: the same site loaded again and again in one tab (a redirect chain, a page that reloads itself)
 
     private fun hostOf(url: String): String {
         val s = url.indexOf("://")
@@ -38,6 +39,8 @@ object PageTimes {
         seen[host] = n
         if (seen.size > 200) seen.clear()
         val l = Load(host, SystemClock.elapsedRealtime(), n)
+        val looping = loop.hit(key, host, l.startedAt)
+        if (looping > 0) { Health.count("page.loop"); Health.log("page", "loop", "host=$host n=$looping secs=${loop.spanSeconds(key)} (the same site was loaded again and again in one tab: a redirect chain or a page that reloads itself)") }
         open[key] = l
         loads.add(l)
         while (loads.size > KEEP) loads.removeAt(0)
@@ -51,13 +54,15 @@ object PageTimes {
         }
     }
 
-    @Synchronized fun stop(key: Any, blocked: Int, ok: Boolean = true) {
-        val l = open.remove(key) ?: return
+    /** Returns how long the load took in ms (-1 for a load that was not timed: a private tab, a page without a host). */
+    @Synchronized fun stop(key: Any, blocked: Int, ok: Boolean = true, cut: Boolean = false): Long {
+        val l = open.remove(key) ?: return -1L
         if (l.doneMs < 0) l.doneMs = SystemClock.elapsedRealtime() - l.startedAt
         l.blocked = blocked
         if (l.paintMs < 0) { if (late.size >= 8) late.clear(); late[key] = l }
         // SOAK1: one line per finished load (the host only), so the emulator lab and a Diagnostics paste can tell slow pages from fast ones
-        Health.log("page", "loaded", "host=${l.host} paint=${l.paintMs}ms done=${l.doneMs}ms blocked=$blocked visit=${l.nth} ok=$ok")
+        Health.log("page", "loaded", "host=${l.host} paint=${l.paintMs}ms done=${l.doneMs}ms blocked=$blocked visit=${l.nth} ok=$ok" + (if (!ok && cut) " cut=1" else ""))
+        return l.doneMs
     }
 
     @Synchronized fun lines(): List<String> {

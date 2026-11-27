@@ -136,6 +136,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 if (request.isRedirect && up != null && prep.upgradedFrom != null && UrlParts.hostOf(up) == host) { a.httpsUnavailable(tab, up); return GeckoResult.fromValue(deny) }
                 tab.upgradedFrom = prep.upgradedFrom
                 tab.upgradedTo = if (prep.upgradedFrom != null) prep.url else null
+                if (prep.upgradedFrom != null) a.sec(tab, "https-upgraded", "host=${UrlParts.hostOf(prep.url) ?: "?"}")
                 a.loadInTab(tab, prep.url)
                 return GeckoResult.fromValue(deny)
             }
@@ -156,10 +157,12 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onLoadError(session: GeckoSession, uri: String?, error: WebRequestError): GeckoResult<String>? {
         val failing = uri ?: tab.url
         val host = UrlParts.hostOf(failing) ?: ""
+        tab.gecko.loadErrorAt = android.os.SystemClock.uptimeMillis()
         tab.loading = false
         tab.progress = 0
         when (error.code) {
             WebRequestError.ERROR_SECURITY_SSL, WebRequestError.ERROR_SECURITY_BAD_CERT, WebRequestError.ERROR_BAD_HSTS_CERT -> {
+                a.sec(tab, "cert-error", "host=$host code=${error.code}")
                 // Certificate problems: the engine's own page knows the details and implements "accept the risk" correctly; show it.
                 val up = tab.upgradedTo
                 if (up != null && UrlParts.hostOf(up) == host && a.httpsUnavailable(tab, up)) return GeckoResult.fromValue(BLANK)
@@ -208,7 +211,11 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPageStop(session: GeckoSession, success: Boolean) {
-        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success)
+        // PERF12 (owner 2026-11-23: "see if anything can be improved"; the digest said 19 of 44 amazon and 15 of 37 google loads "failed"): a load that ends WITHOUT success and WITHOUT an engine load error was cut short
+        // (a redirect hop, a tap on a result, Stop): it is said as `ok=false cut=1` and is not counted as a failed load by the live diagnostics (which then no longer advise "turn Shields off" for a tracking redirect).
+        val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt
+        val tookMs = app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
+        if (success && tookMs > 0L) tab.reloadMs = tookMs      // PERF24: what it costs to bring this tab back after it slept
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
@@ -232,7 +239,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(tab, fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
     override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.crash"); a.sessionGone(tab, true); scrubCrashReports() }
-    override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab) } } // a repeat without a navigation = the compositor restarted
+    override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab); a.switchComposite(tab); a.drawTrialComposited() } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { tab.gecko.painted = true; app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
     override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false); scrubCrashReports() }
@@ -335,6 +342,9 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Video first (research/VIDEO_AUDIT.md): the engine asks the app whenever a page starts a video by itself. Refusing the MUTED ones (until alpha26) left every player that starts muted
         // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
+        // PERF16: a page's question for a permission is a security fact; the autoplay questions of video pages are the video gate's business (they come by the dozen) and are not repeated here
+        if (perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE && perm.permission != PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE)
+            a.sec(tab, "perm-asked", "kind=${when (perm.permission) { PermissionDelegate.PERMISSION_GEOLOCATION -> "location"; PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> "drm"; else -> "other" }} host=${UrlParts.hostOf(perm.uri) ?: "?"}")
         when (perm.permission) {
             // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
             PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> {

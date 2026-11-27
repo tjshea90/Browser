@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench compat</title><script src="common.js"></script></head>
+<body><canvas id="cv" width="64" height="32"></canvas><video id="v" muted></video>
+<script>
+// Compatibility guard: 26 things pages rely on. A setting that breaks one of them can never be kept, however fast it is. compat_pass counts the ones that work; the names of the ones that do not go in the error text.
+K.run('compat', function () {
+  var tests = [], failed = [];
+  function t(name, fn) { tests.push([name, fn]); }
+  t('fetch', function () { return typeof fetch === 'function' && typeof Response === 'function'; });
+  t('promise+async', function () { return typeof Promise === 'function' && (function () { try { return eval('(async()=>1)()') instanceof Promise; } catch (e) { return false; } })(); });
+  t('intersection-observer', function () { return typeof IntersectionObserver === 'function'; });
+  t('resize-observer', function () { return typeof ResizeObserver === 'function'; });
+  t('mutation-observer', function () { return typeof MutationObserver === 'function'; });
+  t('css-grid', function () { return CSS.supports('display', 'grid'); });
+  t('css-has', function () { return CSS.supports('selector(:has(a))'); });
+  t('css-container', function () { return CSS.supports('container-type', 'inline-size'); });
+  t('css-backdrop', function () { return CSS.supports('backdrop-filter', 'blur(2px)') || CSS.supports('-webkit-backdrop-filter', 'blur(2px)'); });
+  t('css-vars', function () { return CSS.supports('--a', '1'); });
+  t('canvas-2d-text', function () { var c = document.getElementById('cv').getContext('2d'); c.font = '20px sans-serif'; c.fillText('Ag', 2, 24); var d = c.getImageData(0, 0, 64, 32).data, n = 0; for (var i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n > 20; });
+  t('webaudio', function () { return typeof (window.AudioContext || window.webkitAudioContext) === 'function'; });
+  t('media-source', function () { return typeof MediaSource === 'function'; });
+  t('h264', function () { var v = document.getElementById('v'); return !!v.canPlayType('video/mp4; codecs="avc1.42E01E"'); });
+  t('indexeddb', function () { return new Promise(function (res) { try { var r = indexedDB.open('kb', 1); r.onupgradeneeded = function () { r.result.createObjectStore('s'); }; r.onsuccess = function () { r.result.close(); indexedDB.deleteDatabase('kb'); res(true); }; r.onerror = function () { res(false); }; } catch (e) { res(false); } }); });
+  t('local-storage', function () { try { localStorage.setItem('kb', '1'); var ok = localStorage.getItem('kb') === '1'; localStorage.removeItem('kb'); return ok; } catch (e) { return false; } });
+  t('intl', function () { return typeof Intl === 'object' && new Intl.NumberFormat('en-US').format(12345.6) === '12,345.6'; });
+  t('structured-clone', function () { return typeof structuredClone === 'function' && structuredClone({ a: [1, 2] }).a[1] === 2; });
+  t('idle-callback', function () { return typeof requestIdleCallback === 'function'; });
+  t('match-media', function () { return typeof matchMedia === 'function' && matchMedia('(min-width:1px)').matches; });
+  t('wasm', function () { return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])); });
+  t('web-crypto', function () { return !!(window.crypto && crypto.subtle && typeof crypto.getRandomValues === 'function'); });
+  t('service-worker', function () { return 'serviceWorker' in navigator; });
+  t('websocket', function () { return typeof WebSocket === 'function'; });
+  t('pointer-events', function () { return typeof PointerEvent === 'function'; });
+  t('custom-elements', function () { return typeof customElements === 'object' && typeof customElements.define === 'function'; });
+  // one at a time, each with its name in the title (the app logs where a page that never answers stopped) and 4 s to answer: one probe that hangs is a failed probe, not a lost page
+  var pass = 0, i = 0;
+  function step() {
+    if (i >= tests.length) return Promise.resolve();
+    var x = tests[i++];
+    document.title = 'bench-at ' + x[0];
+    return K.sleep(25).then(function () {
+      return Promise.race([Promise.resolve().then(x[1]), K.sleep(4000).then(function () { throw new Error('timeout'); })]);
+    }).then(function (ok) { if (ok) pass++; else failed.push(x[0]); }, function (e) { failed.push(x[0] + (String(e && e.message) === 'timeout' ? '(timeout)' : '')); }).then(step);
+  }
+  return step().then(function () { K.note = failed.length ? 'failed: ' + failed.sort().join(',') : ''; return { compat_pass: pass, compat_total: tests.length }; });
+});
+</script></body></html>

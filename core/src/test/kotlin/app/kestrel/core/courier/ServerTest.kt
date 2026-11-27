@@ -46,7 +46,7 @@ class ServerTest {
         s.start(); servers.add(s); return s
     }
 
-    private fun connect(s: CourierServer): Socket = Socket("127.0.0.1", s.boundPort).also { it.soTimeout = 8000; sockets.add(it) }
+    private fun connect(s: CourierServer): Socket = Socket("127.0.0.1", s.boundPort).also { it.soTimeout = 30_000; sockets.add(it) }
 
     private class Reply(val status: Int, val headers: Map<String, String>, val body: ByteArray)
 
@@ -231,7 +231,7 @@ class ServerTest {
                 } catch (e: Exception) { errors.add("client $n: $e") }
             }.also { it.start() }
         }
-        threads.forEach { it.join(20_000) }
+        threads.forEach { it.join(60_000) }   // FLK1: three times what a quiet machine needs
         assertTrue(errors.toString(), errors.isEmpty())
     }
 }

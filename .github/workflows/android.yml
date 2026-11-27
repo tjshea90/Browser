@@ -43,7 +43,7 @@ on:
       lab_suite:
         description: 'Only for app = lab. sweep = the engine preference sweep (tools/emu/sweep-variants.txt, lab_minutes = how many rounds; LAB5b); aot = the ahead-of-time compile A/B: one build compiled as verify / speed-profile / speed, cold starts of each (lab_minutes = rounds; the worth of a baseline profile; LAB5b); pack = the packaging A/B (four builds of the same code: omni.ja stored or deflated, native libraries in the APK or extracted; cold starts, install size, per-process memory; LAB5b); new = dm + ql + vs in one boot (the checks of the 2026-11-18 session); dm = DM1 / DM2: the download window and list stay away at an app start (a new download brings the banner, the app is killed and started cold, the notification launch intent is replayed); vs = VS1: a vidsrc-style embed on the real engine (movie page, player frame, Referer-gated CDN, playlists as txt, parts as jpg; four ways the player fetches), is the stream found and does one pick save a file; ql = QL1: the Quality button of the full-screen controls from the own quality list of the page player (a YouTube-style player element on the real engine; also part of vp); lr = how the last run ended (CR1c: the app is killed from outside in front and in the background, the next Diagnostics must say so); yt = YouTube only (CR1, owner message 2026-11-18: the app crashed on YouTube): home / results / four watch pages, each watched, scrolled, left with Home and returned to, every second round with RAM taken by a hog file; use lab_profile tablet; daily = one day of a person using the browser on its real defaults (typed search, article reading, tabs, a film, a download, memory warning, 20 security and feature probes) and the BUILD-REPORT for the build (owner message 62, see research/LAB3_DAILY.md); smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video (owner message 44) with a walk down the Yahoo Finance page; snd = sound while the app is left (owner message 45); kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box (web component) turned sideways and back, on a system that hides its bars and on one that keeps them (owner message 46), then the sound check; compat = every well-known site twice (Shields on, then off) with speed, errors, scrolling, memory, broken-page checks (the minutes are the whole budget); soak = the long run of pages, videos and downloads; all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, ip, gp, pv, gv, vp, compat, daily, yt, lr, ql, vs, dm, ro, dr, em, back, new, tb, new2, pack, sweep, aot, soak, all]
+        options: [smoke, opt, probe, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, ip, gp, pv, gv, vp, compat, daily, yt, lr, ql, vs, dm, ro, dr, em, back, new, tb, new2, pack, sweep, aot, soak, all]
         default: smoke
       lab_minutes:
         description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'
@@ -154,6 +154,49 @@ jobs:
             # a NEW release, enforces the stricter "higher".
           done
 
+  # ------------------------------------------------------------------ one minute: what may the workflow token do with releases and tags? (app = lab, lab_suite = probe; nothing is built, nothing is kept)
+  # Added 2026-11-24 after the alpha106 release step failed with "HTTP 403: Resource not accessible by integration" although the job token had contents: write.
+  probe:
+    needs: check
+    if: inputs.app == 'lab' && inputs.lab_suite == 'probe'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.sha }}
+      BRANCH: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Probe the token (release creation straight through the API, then through gh with a file, each removed again)
+        run: |
+          set +e
+          echo "gh: $(gh --version | head -1)"
+          t() { echo; echo "== $*"; "$@" 2>&1 | head -12; echo "exit=${PIPESTATUS[0]}"; }
+          P="zz-probe-$GITHUB_RUN_ID"
+          DEF="$(gh api "repos/$REPO" --jq .default_branch)"
+          rel() { t gh api "repos/$REPO/releases" -f tag_name="$1" -f target_commitish="$2" -f name=probe -f body=probe -F draft="$3" -F prerelease=true --jq '{id,draft,tag_name,target_commitish}'; }
+          rel "$P-a" "$SHA" true
+          rel "$P-b" "$BRANCH" true
+          rel "$P-c" "$SHA" false
+          rel "$P-g" "$DEF" true
+          echo x > probe.txt
+          t gh release create "$P-h" probe.txt --prerelease --target "$SHA" --title probe --notes probe
+          t gh release create "$P-i" --draft --target "$SHA" --title probe --notes probe
+          # the real tags look like kestrel-g-v0.3.0-alpha106 and match the workflow's own tag trigger: try that shape (and the real notes file shape), then remove
+          Q="kestrel-g-v0.0.0-probe$GITHUB_RUN_ID"
+          printf '%s\n\n**probe** (versionCode 1). text with `backticks` and a link https://example.com\n' "alpha probe note" > notes.md
+          t gh release create "$Q" probe.txt --prerelease --target "$SHA" --title "Kestrel G probe" --notes-file notes.md
+          t gh release create "$Q-b" --draft --target "$SHA" --title "Kestrel G probe b" --notes probe
+          echo; echo "== clean up"
+          for id in $(gh api "repos/$REPO/releases" --paginate --jq ".[] | select((.tag_name | startswith(\"$P\")) or (.tag_name | startswith(\"$Q\"))) | .id"); do gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id"; done
+          for pre in "$P" "$Q"; do for ref in $(gh api "repos/$REPO/git/matching-refs/tags/$pre" --jq '.[].ref'); do gh api -X DELETE "repos/$REPO/git/$ref" && echo "deleted $ref"; done; done
+          echo "tags left:"; gh api "repos/$REPO/git/matching-refs/tags/$P" --jq '.[].ref'; gh api "repos/$REPO/git/matching-refs/tags/$Q" --jq '.[].ref'
+
   # ------------------------------------------------------------------ minutes: the JVM suites + lint (once, shared by both apps)
   test-jvm:
     needs: check
@@ -195,7 +238,7 @@ jobs:
   # ------------------------------------------------------------------ the real-engine lab: no release, no secrets (RX4-E1 / SOAK1; the steps are in emu-lab.yml)
   lab:
     needs: check
-    if: inputs.app == 'lab'
+    if: inputs.app == 'lab' && inputs.lab_suite != 'probe'
     permissions:
       contents: read
     uses: ./.github/workflows/emu-lab.yml
@@ -284,7 +327,7 @@ jobs:
             { echo "storeFile=$RUNNER_TEMP/release.jks"; echo "storePassword=$STORE_PW"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PW"; } > keystore.properties
           fi
 
-      - name: Build the release APK (GeckoView 160 armeabi-v7a, R8, signed)
+      - name: Build the release APK (GeckoView 161 armeabi-v7a, R8, signed)
         run: ./gradlew :geckoapp:assembleRelease --console=plain
 
       - name: Gate - the baseline profile makes Android compile the whole app at install (LAB7)

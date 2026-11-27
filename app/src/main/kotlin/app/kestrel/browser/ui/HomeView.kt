@@ -33,6 +33,10 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     private val go = ImageButton(ctx)
     private val stats = label(ctx, "", 12f, pal.muted)
     private val hint = label(ctx, "", 13f, pal.muted)
+    /** PERF17b: "Continue: <page>" under the search field after a long break (the page that was in front waits for this tap, like Firefox for Android's opening screen). Hidden when there is nothing to continue. */
+    private val cont = label(ctx, "", 15f, pal.accentHi, bold = true)
+    private var continueText: String? = null
+    var onContinue: (() -> Unit)? = null
     val suggest = SuggestionList(ctx, pal, reverse = false) { value -> l.onSubmit(value) }
     private var lastFieldFocus = false
     /** Behind everything: the mood of the owner's reaper photo (blue flames from the bottom corners, the scythe's arc). Static. */
@@ -59,7 +63,7 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
                     l.onSubmit(text.toString()); true
                 } else false
             }
-            setOnFocusChangeListener { _, focused -> lastFieldFocus = focused; paintBox(); l.onUrlFocus(focused) }
+            setOnFocusChangeListener { _, focused -> lastFieldFocus = focused; paintBox(); showContinue(); l.onUrlFocus(focused) }
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -96,6 +100,16 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         column.gravity = Gravity.CENTER_HORIZONTAL
         column.addView(brandRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, ctx.dp(BRAND_DP)))
         column.addView(box, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(FIELD_DP)).apply { topMargin = ctx.dp(GAP_DP) })
+        cont.apply {
+            gravity = Gravity.CENTER
+            setSingleLine(); ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(ctx.dp(18), ctx.dp(12), ctx.dp(18), ctx.dp(12))
+            minimumHeight = ctx.dp(48)                                   // a finger-sized target
+            visibility = GONE
+            isClickable = true
+            setOnClickListener { onContinue?.invoke() }
+        }
+        column.addView(cont, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(10) })
         column.addView(hint, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(14) })
         suggest.visibility = GONE
         column.addView(suggest, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(10) })
@@ -108,6 +122,10 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     }
 
     fun applyPal(p: Pal) { pal = p; tint() }
+
+    /** PERF17b: the Continue line's text, or null to hide it. Hidden too while the search field has the keyboard (the suggestions need the room). */
+    fun bindContinue(text: String?) { if (continueText != text) { continueText = text; cont.text = text ?: "" }; showContinue() }
+    private fun showContinue() { val v = if (continueText != null && !lastFieldFocus) VISIBLE else GONE; if (cont.visibility != v) cont.visibility = v }
 
     private fun tint() {
         setBackgroundColor(pal.windowBg)
@@ -128,6 +146,8 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         go.background = ripple(pal.fg, null, 0f)
         stats.setTextColor(pal.muted)
         hint.setTextColor(pal.muted)
+        cont.setTextColor(pal.accentHi)
+        cont.background = ripple(pal.fg, null, context.dpf(12f))
         hint.text = if (pal.isPrivate) "Private tabs leave no history, cookies or cache on this device" else ""
         hint.visibility = if (pal.isPrivate) VISIBLE else GONE
         suggest.setPal(pal)

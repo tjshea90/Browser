@@ -24,11 +24,11 @@ class DiagJournal(private val max: Int = 800, private val perKind: Int = 40) {
 
     /** Adds a line of kind "layer event". Returns true when it was kept. */
     @Synchronized fun add(kind: String, line: String): Boolean {
-        if (!important(kind)) {
+        if (!important(kind) && !troubleLine(kind, line)) {
             val key = if (shown.size >= MAX_KINDS && !shown.containsKey(kind)) "other" else kind
             val n = (shown[key] ?: 0) + 1
             shown[key] = n
-            if (n > perKind) { thinned++; return false }
+            if (n > (if (bookkeeping(kind)) minOf(perKind, BOOKKEEPING_KEEP) else perKind)) { thinned++; return false }
         }
         lines.addLast(line)
         while (lines.size > max) { lines.removeFirst(); base++; lost++ }
@@ -68,11 +68,25 @@ class DiagJournal(private val max: Int = 800, private val perKind: Int = 40) {
 
     companion object {
         private const val MAX_KINDS = 300
-        private val IMPORTANT = Regex("crash|kill|fail|error|exception|fatal|anr|stall|oom|dead|died|freez|hang|hung|slow|late|timeout|refus|denied|abnormal|warn|critical|page loaded|page timing|trim|decoder|corrupt|lost|dropped|^video (gate|codec)|^run ")
+        private val IMPORTANT = Regex("crash|kill|fail|error|exception|fatal|anr|stall|oom|dead|died|freez|hang|hung|slow|late|timeout|refus|denied|abnormal|warn|critical|page loaded|page timing|trim|decoder|corrupt|lost|dropped|loop|^sec |^video (gate|codec)|^run ")
         private val HEAD = Regex("""^\+\d+(?:\.\d+)?s (\S+) (\S+)""")
 
         /** Is this kind one whose lines must always be kept? */
-        fun important(kind: String): Boolean = IMPORTANT.containsMatchIn(kind.lowercase())
+        fun important(kind: String): Boolean { val k = kind.lowercase(); return k !in ROUTINE && IMPORTANT.containsMatchIn(k) }
+
+        /** PERF12: kinds whose NAME looks like trouble ("trim", "dropped") but whose lines are routine (a memory trim of level 20 is only "the app went to the background"; a dropped tab thumbnail is a normal clean-up): the alpha95 night upload lost 602 lines
+         *  and 170 of the 600 it kept were these two. They are thinned like any noisy kind, except the lines that DO mean trouble ([troubleLine]). */
+        private val ROUTINE = setOf("mem trim", "tabs thumb-dropped")
+        private val TRIM_TROUBLE = Regex("""low=true|level=(?!20\b)\d+""")
+        /**
+         * PERF16 (owner 2026-11-24: "Focus future diagnostics on speed of app, page loading speed, video playback, page compatibility, and privacy and security"): lines that only say that the screen redrew, the window gained focus, a
+         * picture of a tab was saved or a warm-up connection was made are counted in the histogram but kept to a few examples, so the 600 lines of an upload are spent on the five areas (their lines stay at the usual number).
+         */
+        private val BOOKKEEPING = Regex("""^(gecko (first-composite|size|layout|view-attached|paint-reset|view)|win focus|life |tabs (look-|cover-|curtain-|thumb-|leave-shot|early-cover|private-anchor|back-|state-)|engine (warm|network-profile|burst|runtime|config-warm|scroll-feel|phone-proxy)|cosmetic |shields ext-state|storage |start (frame|look|open|art|oat|heap|activity|stop|runtime)|media (maybe|verif)|video info)""")
+        const val BOOKKEEPING_KEEP = 8
+        fun bookkeeping(kind: String): Boolean = BOOKKEEPING.containsMatchIn(kind.lowercase())
+
+        fun troubleLine(kind: String, line: String): Boolean = kind.lowercase() == "mem trim" && TRIM_TROUBLE.containsMatchIn(line)
 
         /** "layer event" of a stored "+12.3s layer event ..." line, or null. */
         fun kindOf(line: String): String? = HEAD.find(line)?.let { it.groupValues[1] + " " + it.groupValues[2] }

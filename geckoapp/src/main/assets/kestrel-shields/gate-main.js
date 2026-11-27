@@ -30,6 +30,8 @@
   var proto = HTMLMediaElement.prototype, eproto = Element.prototype;
   var dnow = Date.now, later = window.setTimeout;
   var on = true;                                         // closed until the person's setting says the rule is off
+  var LOCAL = false; try { LOCAL = location.hostname === '127.0.0.1'; } catch (e0) { /* no location */ }   // OPT1: a page on this machine (Auto-tune's benchmark pages: their clips must play) costs no mobile data: the rule is about data
+  if (LOCAL) on = false;
   var INHERIT_MS = (typeof window.__kstGateInheritMs === 'number' && window.__kstGateInheritMs > 0 && window.__kstGateInheritMs < 90000) ? window.__kstGateInheritMs : 90000;   // (the tests shorten it; a page can only make it shorter)
   var inheritUntil = 0;                                 // VP2: this frame was started by the person's tap on the PAGE around it (a server or play button): its first big player may start (see the cfg handler)
   var recs = new WeakMap();                              // element -> what is held for it
@@ -529,6 +531,7 @@
     document.addEventListener(CFG_EVENT, function (e) {
       try {
         var d = e && e.detail;
+        if (LOCAL) d = '0';
         if (d === '0') { hand = false; if (on) { on = false; openAll('off'); } told = true; settle(); }
         else if (d === '1' || d === '1+' || d === '1p' || d === '1+p') {
           hand = (d.charAt(1) === '+'); on = true;

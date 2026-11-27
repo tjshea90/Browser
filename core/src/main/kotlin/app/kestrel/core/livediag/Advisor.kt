@@ -105,6 +105,12 @@ object Advisor {
         if (!b("instant_back", true) && n("tabs back-picture") >= 6) out.add(Advice("back-off", 2, "Privacy & security", "Instant Back", "off", "on", "instant_back", true,
             "Back showed a waiting picture ${n("tabs back-picture")} times; Instant Back keeps those pages so Back is immediate"))
 
+        // PERF16 (owner: "Focus future diagnostics on ... privacy and security"): the browser refuses a bad certificate and never proceeds by itself; three or more refusals in a week are almost always the
+        // tablet's clock (Android 10 Go tablets with no network time lose it) or the hotspot's own sign-in page in the way, not an attack, and the person can fix both.
+        val certs = n("sec cert-error")
+        if (certs >= 3) out.add(Advice("cert-errors", 2, "Android Settings > Date & time", "Date and time", "", "check that the date and time are right, and that the hotspot has no sign-in page waiting",
+            null, null, "the browser refused $certs insecure connections (certificate errors) in the last week and, as always, did not go on: a wrong date or a hotspot sign-in page breaks secure connections for every site"))
+
         // housekeeping
         if (v("storageFreeMb") in 1..599) out.add(Advice("storage-low", 2, "Privacy & security", "Tidy storage now", "", "tap it", null, null,
             "only ${mb(v("storageFreeMb"))} of storage is free; Android refuses to install an update below about 1 GB"))

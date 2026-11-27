@@ -39,6 +39,26 @@ test('VC1: a video with no controls: a tap brings up Kestrel\'s bar over the bot
   await page.context().close();
 });
 
+test('PERF21 (owner: "They also each have a play button, which is incorrect for in site animations"): a silent, looping clip with no controls is the page\'s animation: a tap brings no bar, even in Always mode; a clip that does not loop still gets it', async () => {
+  const page = await open(VIDEO('loop'));
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  assert.equal(await barInfo(page), null, 'no bar over an animation');
+  assert.deepEqual((await msgs(page, 'vbk')).map((m) => m.e + ':' + m.a), ['deco:bar'], 'the app counts it, once');
+  await page.context().close();
+  const always = await open(VIDEO('loop'), { cfg: { vba: true } });
+  await tapAt(always, ...CENTRE); await wait(always, 350);
+  assert.equal(await barInfo(always), null, 'not even where the Settings row says Always');
+  await always.context().close();
+  const film = await open(VIDEO());
+  await tapAt(film, ...CENTRE); await wait(film, 350);
+  assert.ok(await barInfo(film), 'a film that does not loop still gets the bar');
+  await film.context().close();
+  const sound = await open(VIDEO('loop').replace(' muted', ''));
+  await tapAt(sound, ...CENTRE); await wait(sound, 350);
+  assert.ok(await barInfo(sound), 'a looping clip WITH sound is a film: the bar');
+  await sound.context().close();
+});
+
 test('VC1: the video\'s own controls attribute, or a visible bar of the page, means no bar of ours (and the app counts "the page had its own")', async () => {
   let page = await open(VIDEO('controls'));
   await tapAt(page, ...CENTRE); await wait(page, 350);

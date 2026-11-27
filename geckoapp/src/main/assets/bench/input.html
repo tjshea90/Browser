@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench input</title><script src="common.js"></script>
+<style>body{margin:8px;font:16px sans-serif}input{width:90%;font:18px sans-serif;padding:6px}.spin{width:60px;height:60px;background:#c33;animation:r 2s linear infinite}@keyframes r{to{transform:rotate(360deg)}}</style></head>
+<body><input id="f" type="text" autocomplete="off"><div class="spin"></div><div id="log"></div>
+<script>
+// Typing and tap wait on a busy page: an animation runs and a script burns about 6 ms of every frame (a page that is working); then input events go to the field and the time from each event to the
+// page's next frame is measured. This is the wait the person feels between a key and the page answering, without the keyboard's own part.
+K.run('input', function () {
+  var f = document.getElementById('f'), n = K.fast ? 25 : 80, waits = [], busy = true;
+  function burn() { if (!busy) return; var t = K.now(); while (K.now() - t < 6) {} requestAnimationFrame(burn); }
+  requestAnimationFrame(burn);
+  f.focus();
+  return new Promise(function (resolve) {
+    var i = 0;
+    (function one() {
+      if (i >= n) { busy = false; var w = waits.slice(); return resolve({ input_p50: K.round(K.median(w)), input_p95: K.round(K.pct(w, 0.95)), input_max: K.round(Math.max.apply(null, w)), input_n: w.length }); }
+      var t0 = K.now(); f.value += String.fromCharCode(97 + i % 26);
+      try { f.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'a', inputType: 'insertText' })); } catch (e) { f.dispatchEvent(new Event('input', { bubbles: true })); }
+      requestAnimationFrame(function () { requestAnimationFrame(function () { waits.push(K.now() - t0); i++; setTimeout(one, K.fast ? 20 : 90); }); });
+    })();
+  });
+});
+</script></body></html>
