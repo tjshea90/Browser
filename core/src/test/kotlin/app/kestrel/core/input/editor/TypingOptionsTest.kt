@@ -26,6 +26,13 @@ class TypingOptionsTest {
         val url = rig(kind = FieldKind.URL, caps = 0); url.typeAll("a,b"); assertEquals("no spaces inside an address field", "a,b", url.text)
     }
 
+    /** The Kestrel address-and-search box: an address typed by taps stays an address, nothing is capitalised or spaced for the person, words are still tapped as composing text. */
+    @Test fun theOmniboxKeepsAnAddressAnAddress() {
+        val r = rig(kind = FieldKind.OMNIBOX, caps = 0); r.typeAll("google.com/maps?q=a"); assertEquals("google.com/maps?q=a", r.text)
+        val q = rig(kind = FieldKind.OMNIBOX, caps = 0); q.typeAll("best pizza. near me"); assertEquals("no capital after a full stop", "best pizza. near me", q.text)
+        val w = rig(kind = FieldKind.OMNIBOX, caps = 0); w.typeAll("hel"); assertEquals("a tapped word is composing text (guesses can be shown)", "hel", w.c.composing)
+    }
+
     @Test fun capitalsFollowASentenceEndTypedByHand() {
         val r = rig(); r.typeAll("hi."); r.act { space() }; assertEquals(ShiftState.ONCE, r.c.shift)
         r.typeAll("there"); assertEquals("Hi. There", r.text)

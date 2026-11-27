@@ -62,6 +62,7 @@ class ImeLayoutTest {
         fun bottom(kind: FieldKind) = ImeLayout.rows(Page.LETTERS, false, kind, "Go").last().map { it.label }
         assertEquals(listOf("?123", ",", "space", ".", "Go"), bottom(FieldKind.TEXT))
         assertEquals(listOf("?123", "/", "space", ".", ".com", "Go"), bottom(FieldKind.URL))
+        assertEquals("the Kestrel address-and-search box has the URL keys", listOf("?123", "/", "space", ".", ".com", "Go"), bottom(FieldKind.OMNIBOX))
         assertEquals(listOf("?123", "@", "space", ".", ".com", "Go"), bottom(FieldKind.EMAIL))
         for (kind in listOf(FieldKind.TEXT, FieldKind.URL, FieldKind.EMAIL)) {
             val row = ImeLayout.rows(Page.LETTERS, false, kind).last()
