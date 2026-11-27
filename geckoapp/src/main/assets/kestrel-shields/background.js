@@ -167,7 +167,7 @@ function lstText() {
 var rv = { pages: 0, all: 0, cache: 0, h304: 0, c304: 0, ms304: 0, wn: 0, ws: 0, wx: 0, wc: 0 }, rvStart = new Map();
 function rvText() {
   if (rv.all === 0 && rv.wn === 0) return '';
-  return 'pages ' + rv.pages + ', requests ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
+  return 'pages ' + rv.pages + ', requests of scripts, styles, frames and xhr (not pictures or fonts: ND2) ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
 }
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
@@ -196,7 +196,7 @@ function shortUrl(u) {
 }
 function newLog(tabId, url) {
   pageLog.delete(tabId); // a new page: the old lines are history
-  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], hid: [], sent: 0, key: '' });
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, reqsT: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], hid: [], sent: 0, key: '' });
   if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
   var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
 }
@@ -218,6 +218,12 @@ function logBlocked(d) {
   L.nb++; if (L.blocked.length < LOG_MAX) L.blocked.push(d.type + ' ' + shortUrl(d.url));
   reportLater(d.tabId);
 }
+// ND2 (owner 2026-11-27 recording of a claude.ai load, research/PROFILE_CLAUDE_AI.md): the parent process's main thread was 99 % busy for 15 s of that load, and 38 % of it was Firefox's own webRequest PLUMBING around
+// the extension's listeners (WebRequest.sys.mjs runChannelListener / getRequestData / serializeRequestData / applyChanges: about 5 ms of this tablet per request), not our JavaScript (about 1 %). The two
+// listeners below are bookkeeping for the Diagnostics (pending requests when a page is left, cache / 304 counts, the page report's HTTP errors) and used to be dispatched for EVERY request, 1,250 on claude.ai,
+// 75 % of them pictures and fonts. They now ask only for the types whose failure or end is worth knowing; the blocking listener (onBeforeRequest) still sees everything.
+var DONE_TYPES = ['main_frame', 'sub_frame', 'stylesheet', 'script', 'xmlhttprequest', 'object', 'media', 'other'];
+var DONE_SET = {}; DONE_TYPES.forEach(function (t) { DONE_SET[t] = 1; });
 // RX3-BK1: requests the page started minus the ones that ended = what is still pending when the page is left (a page with pending requests cannot enter the engine's back/forward cache).
 function noteDone(d) { var L = pageLog.get(d.tabId); if (L && !stale(d)) L.done++; }
 function logFailed(d, what) {
@@ -231,7 +237,7 @@ browser.webRequest.onErrorOccurred.addListener(lstTimed(LST.err, function (d) {
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
-}), { urls: ['http://*/*', 'https://*/*'] });
+}), { urls: ['http://*/*', 'https://*/*'], types: DONE_TYPES });
 browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   noteDone(d);
   var rvT = rvStart.get(d.requestId);                                                // RX4-M0b: cache hits and revalidations (304) of this tablet
@@ -240,7 +246,7 @@ browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   if (d.fromCache) rv.cache++;
   if (d.statusCode === 304) { rv.c304++; if (rvT !== undefined) rv.ms304 += Math.max(0, Math.round(d.timeStamp - rvT)); }
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
-}), { urls: ['http://*/*', 'https://*/*'] });
+}), { urls: ['http://*/*', 'https://*/*'], types: DONE_TYPES });
 // LAB5 (research/LAB5_EXTENSION.md row 1): ONE runtime.onMessage listener for the whole file. Firefox deserialises every message and clones `sender` once per REGISTERED listener, and a page with many frames
 // sends several messages each; the 24 handlers below used to be 24 listeners. They register through onMsg() now; the single listener calls every handler (each begins with its own `m.k` test, so nothing
 // changed for them) and answers with the first value that is not undefined (a Promise, true or an object), exactly what separate listeners gave when only one of them answers a message.
@@ -705,7 +711,7 @@ function onRequest(d) {
   if (d.type === 'main_frame') {
     rv.pages++;
     var left = pageLog.get(d.tabId);
-    if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
+    if (left && left.page && left.reqsT - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqsT - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); trimMap(navId, 80); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
     sniffed.delete(d.tabId); sniffed.delete(-1); jsonSeen.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
@@ -719,7 +725,7 @@ function onRequest(d) {
   if (!page) return {};
   var L0 = pageLog.get(d.tabId);
   if (!L0 && d.tabId >= 0) { newLog(d.tabId, page); reportLater(d.tabId); L0 = pageLog.get(d.tabId); } // a page that began before this script was ready (a cold start with a link) is reported too
-  if (L0) L0.reqs++;
+  if (L0) { L0.reqs++; if (DONE_SET[d.type]) L0.reqsT++; }       // ND2: `reqsT` = the started requests whose end is reported (DONE_TYPES): pending = reqsT - done
   var host = pageHost(page);
   if (!host) return {};
   var mode = cfgMode.get(host);
