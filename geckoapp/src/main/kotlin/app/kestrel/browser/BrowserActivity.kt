@@ -1286,7 +1286,8 @@ open class BrowserActivity : Activity(), DockListener {
                 sel.showHome = true; sel.lazyStart = true
                 Health.count("lazy.start"); Health.log("tabs", "lazy-start", "tab=${sel.id} away=${LazyStart.describe(away)}")
             }
-            if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
+            // ND1: ThumbStore.load only returns a picture taken for this very page, so the tab owns it WITH its page: without it the live diagnostics counted the tab as a "WRONG preview" (must be 0) and the next address update threw the picture away
+            if (launch == null) { if (sel.thumb == null && selThumb != null) { sel.thumb = selThumb; sel.thumbPage = ThumbRule.pageOf(sel.url) }; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
         if (restoringTab == null) { restoreOverlay.hide(); clearLook() } // the early cover is only for a restore that really covers its page: nothing took over, so it must not stay
