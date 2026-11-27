@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import random
+import re
 import sys
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -77,5 +78,36 @@ del th0['samples']['time']
 proc['meta']['sampleUnits'] = {'threadCPUDelta': 'us'}
 rep = pd.report(proc)
 check('timeDeltas become times (4 s of samples) and a stated unit gives the share of a core', 'over   4.0 s, cpu 3.0 s = 75% of one core' in rep)
+# interval markers are stored three ways: one row with both times (phase 1) or a START row (phase 2, endTime 0) and an END row (phase 3, startTime 0) that must be joined; network markers are phase-1 rows with a payload
+for layout in ('schema', 'cols'):
+    mp = make(layout)
+    mth = mp['threads'][0]
+    strs = mth['stringTable' if layout == 'schema' else 'stringArray']
+    def sid(x):
+        strs.append(x)
+        return len(strs) - 1
+    awake, dom, l1, l2, l3 = sid('Awake'), sid('DOMEvent'), sid('Load 1: https://assets-proxy.example.com/a/one.js'), sid('Load 2: https://assets-proxy.example.com/a/two.js'), sid('Load 3: https://other.example.org/x.png')
+    net = lambda i, cache, n, u, st='STATUS_STOP': {'type': 'Network', 'id': i, 'status': st, 'cache': cache, 'count': n, 'URI': u}
+    mrows = [
+        (awake, 0, 5.0, 3, 0, None),                                        # an END whose start was before the buffer began: no length, left out
+        (awake, 10.0, 0, 2, 0, None), (awake, 0, 14.0, 3, 0, None),         # 4 ms
+        (awake, 20.0, 0, 2, 0, None), (awake, 0, 30.0, 3, 0, None),         # 10 ms
+        (dom, 40.0, 0, 2, 0, {'type': 'DOMEvent', 'id': 7}), (dom, 41.0, 0, 2, 0, {'type': 'DOMEvent', 'id': 8}),
+        (dom, 0, 45.0, 3, 0, {'type': 'DOMEvent', 'id': 8}), (dom, 0, 60.0, 3, 0, {'type': 'DOMEvent', 'id': 7}),     # two overlapping ones told apart by id: 4 ms and 20 ms
+        (awake, 3990.0, 0, 2, 0, None),                                     # a START still open at the end: left out
+        (l1, 100.0, 900.0, 1, 6, net(1, 'Hit', 1000, 'https://assets-proxy.example.com/a/one.js')),
+        (l2, 200.0, 1200.0, 1, 6, net(2, 'Missed', 3000, 'https://assets-proxy.example.com/a/two.js')),
+        (l3, 2100.0, 2150.0, 1, 6, net(3, 'Hit', 7, 'https://other.example.org/x.png', 'STATUS_CANCEL')),
+    ]
+    sc = ['name', 'startTime', 'endTime', 'phase', 'category', 'data']
+    mth['markers'] = ({'schema': {n: i for i, n in enumerate(sc)}, 'data': [list(x) for x in mrows]} if layout == 'schema'
+                      else dict({n: [x[i] for x in mrows] for i, n in enumerate(sc)}, length=len(mrows)))
+    ivs = pd.marker_intervals(pd.Thread(mth, mp, 'Content Process'))
+    check(layout + ': start and end rows are joined (5 intervals: 2 awake, 2 overlapping DOM events, ...)', sorted(round(b - a) for n, a, b, d in ivs if n in ('Awake', 'DOMEvent')) == [4, 4, 10, 20])
+    mrep = pd.report(mp)
+    check(layout + ': time inside an interval kind is totalled with its count and longest', re.search(r'\b14 ms\s+2 x\s+longest\s+10 ms\s+Awake', mrep) is not None)
+    check(layout + ': network markers are summed (3 requests, bytes, cache, ends)', 'network: 3 requests, 4007 bytes, cache Hit 2 Missed 1, ends STOP 2 CANCEL 1' in mrep)
+    check(layout + ': hosts are counted', 'assets-proxy.example.com 2' in mrep and 'other.example.org 1' in mrep)
+    check(layout + ': opened and ended per 2 s are listed', '0:2/2 2:1/1' in mrep and 'opened / ended per 2 s' in mrep)
 print('profile_digest self-test: %s' % ('OK' if not fails else '%d FAILED' % len(fails)))
 sys.exit(1 if fails else 0)

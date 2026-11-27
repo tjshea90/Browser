@@ -271,6 +271,10 @@ def busiest_window(t, width_ms=15000):
     return best * 1000.0, width_ms
 
 
+def _num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _marker_key(d):
     """What ties the START row of an interval marker to its END row besides the name: the payload's id / flow / name, when it has one."""
     if isinstance(d, dict):
@@ -289,12 +293,11 @@ def marker_intervals(t):
         nm, ph = t.s(r.get('name')), r.get('phase')
         a, b = r.get('startTime'), r.get('endTime')
         d = r.get('data') if isinstance(r.get('data'), dict) else None
-        num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
-        if ph == 1 and num(a) and num(b) and b >= a:
+        if ph == 1 and _num(a) and _num(b) and b >= a:
             out.append((nm, a, b, d))
-        elif ph == 2 and num(a):
+        elif ph == 2 and _num(a):
             opened[(nm, _marker_key(d))].append((a, d))
-        elif ph == 3 and num(b):
+        elif ph == 3 and _num(b):
             stack = opened.get((nm, _marker_key(d)))
             if stack:
                 a0, d0 = stack.pop()
