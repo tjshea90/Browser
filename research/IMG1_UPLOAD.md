@@ -1,0 +1,15 @@
+# IMG1: "I'm trying to upload screenshots to claude and it says can't process images" (owner, 2026-11-21)
+Owner, verbatim: "not sure if it is a browser or claude problem, but I'm trying to upload screenshots to claude and it says can't process images".
+Where: not stated (claude.ai in Kestrel G on the tablet? the Claude app on the phone, which is where screenshots to Claude Code sessions go?). Nothing here was run on a tablet; the sandbox has no claude.ai session.
+
+## What the tablet's own uploads say (diag 2026-11-21, 5 files, read with tools/diag_digest.py / git)
+`filepick asked multiple=true accept=0 filter=0` x6, `opened GET_CONTENT` x6, `result code=-1 files=1 dropped=0 answered=true` x5 and `files=2` x1. So on the tablet: Kestrel's picker opens, the person chooses, the pick reaches GeckoView (`answered=true`, no `content:` URI dropped). The step the lines cannot see is what happens after `prompt.confirm(...)`: GeckoView copies the picked file into its cache and hands the page a File; the page (claude.ai) then decodes it. "Can't process images" is claude.ai's own message from that step or from its server.
+
+## Candidates, most likely first (all UNPROVEN)
+1. Not Kestrel at all: the owner may be using the Claude app (phone) or another surface; Kestrel is only involved if the upload is made in Kestrel G on claude.ai. Test in one minute: attach the same screenshot in claude.ai in a different browser (or in Kestrel WebView `:app` build, which uses the system WebView and has no fingerprint canvas noise); if only Kestrel G fails, it is Kestrel.
+2. Fingerprinting protection (FPP, `GeckoEngine.kt` `setFingerprintingProtection(true)`, everywhere since SECURITY.md item 74): Gecko perturbs canvas read-back ("CanvasRandomization"). A site that resizes or re-encodes a picture through a canvas before upload gets noisy pixels; one that checks the result can refuse it. There is no per-site switch for this (the Shields row FINGERPRINT covers Kestrel's own scripts, not the engine's FPP). Not provable without the tablet; the cheap A/B is a private tab? NO (FPP is on there too). So the A/B is Kestrel WebView vs Kestrel G.
+3. The copy GeckoView makes of the picked file failed or is truncated (the tablet's storage is nearly full: INSTALL_FAILED_INSUFFICIENT_STORAGE seen 2026-11-11): the page then gets an empty or cut file. alpha87 records, per picked file, the type, size, whether Android can decode its header, and the free space in the app's cache (no file name, nothing from a private tab): `filepick picked ...`.
+4. A very large PNG (full-resolution screenshots) exceeding what a 2 GB tablet's content process can decode in the page.
+
+## What alpha87 adds
+`filepick picked type=<mime> kb=<n> size=<w>x<h> decodes=1|0 ext=1|0 freeMb=<n>` (one line per picked file, only for a normal tab, never a name) and the Diagnostics line "File chooser" says what the last pick looked like. If `decodes=0` or `kb=0` the file itself is the problem (Android's picker, not the page); if `decodes=1` and the page still refuses, candidate 2 or the site is the cause.

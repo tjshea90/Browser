@@ -181,7 +181,7 @@ class FindBar(ctx: Context, private val pal: Pal, private val l: Listener) : Lin
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             background = null
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING   // PV1: what is looked for in a page is never learned by the keyboard
             isSaveEnabled = false
             setOnEditorActionListener { _, _, _ -> l.next(true); true }
             addTextChangedListener(object : TextWatcher {

@@ -432,9 +432,10 @@ class VideoFlow(private val a: BrowserActivity) {
             else -> null
         }
         if (adWhy != null) { lastRefused = null; return decline(tab, adWhy) }
+        if (d == null && !tab.isPrivateTab) Health.log("video", "hand-declined", "${why.name.lowercase()} blob=${el.blob} src=${if (el.src.isEmpty()) "none" else "set"} box=${el.w}x${el.h} known=${known.size} masters=${known.count { it.master }} waits=${WebHandOver.keepForLate(el, why, mode)}")   // PERF6b: what the question looked like when no stream was handed over
         if (d == null) {
             // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
-            if (why != WebHandOver.Why.LATE) lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
+            if (why != WebHandOver.Why.LATE) lastRefused = if (WebHandOver.keepForLate(el, why, mode) && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.ad) "an advertisement plays in the page's player" else if (WebHandOver.looksLikeAdAddress(el.src)) "the address names an advertisement" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
@@ -475,7 +476,7 @@ class VideoFlow(private val a: BrowserActivity) {
     /** A film-length playlist the sniffer saw within 10 s after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
     private fun lateHandOver(tab: Tab, c: MediaCandidate) {
         val r = lastRefused ?: return
-        if (r.tabId != tab.id || r.page != tab.url.substringBefore('#') || SystemClock.uptimeMillis() - r.at > 10_000L || c.frame != r.frame) return
+        if (r.tabId != tab.id || r.page != tab.url.substringBefore('#') || SystemClock.uptimeMillis() - r.at > WebHandOver.LATE_WINDOW_MS || c.frame != r.frame) return
         lastRefused = null
         if (start(tab, WebHandOver.Why.LATE, r.el, c.frame)) try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* none */ }
     }

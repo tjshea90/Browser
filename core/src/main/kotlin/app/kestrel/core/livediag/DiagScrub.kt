@@ -13,7 +13,10 @@ package app.kestrel.core.livediag
  * Nothing here can add information: it only removes or shortens.
  */
 object DiagScrub {
-    const val MAX_LINE = 400
+    /** An event line is cut here. (400 cut the 'page timing' lines of LD4 and made every long Diagnostics line end in '...'.) */
+    const val MAX_LINE = 480
+    /** The Diagnostics snapshot has a few long lines that carry the best numbers (CPU by process, Blocker, Revalidations, Real video): the real uploads of 2026-11-21 lost their tails at 400. */
+    const val MAX_SNAPSHOT_LINE = 1600
 
     private val URL = Regex("""(?i)\b(?:https?|wss?|ftp)://[^\s"'<>)\]},;|]+""")
     private val LOCAL = Regex("""(?i)\b(?:file|content|blob|data|javascript|intent|view-source|moz-extension|resource):[^\s"'<>)\]},;|]*""")
@@ -66,9 +69,9 @@ object DiagScrub {
     }
 
     /** The line as it may leave the device, or null when it must not (it still looks like a secret). */
-    fun line(raw: String): String? {
+    fun line(raw: String, max: Int = MAX_LINE): String? {
         if (raw.isBlank()) return null
-        var s = raw.filter { it == '\t' || it >= ' ' }.take(MAX_LINE * 3)
+        var s = raw.filter { it == '\t' || it >= ' ' }.take(max * 3)
         s = URL.replace(s) { m -> site(m.value) }                                   // first: a link is judged whole (a token in its query makes the site sensitive) before anything is cut out of it
         s = LOCAL.replace(s, LOCAL_TAG)
         s = EMAIL.replace(s, "<email>")
@@ -85,7 +88,7 @@ object DiagScrub {
             else if (SensitiveSites.isSensitive(h.lowercase())) SENSITIVE else h      // a bare "host/some/path" (no https:// in front, as some app lines write it) keeps the host only
         }
         s = OPAQUE.replace(s, "<secret>")
-        if (s.length > MAX_LINE) s = s.take(MAX_LINE) + "..."
+        if (s.length > max) s = s.take(max) + "..."
         return if (stillRisky(s)) null else s
     }
 

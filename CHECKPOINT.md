@@ -1,29 +1,29 @@
-# CHECKPOINT 2807 — read me first, then TASKS.md
+# CHECKPOINT 2915 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T08:08:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `47024cb0` (this checkpoint is the commit after it)
+**Written:** 2026-11-22T05:23:25Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `192410fc` (this checkpoint is the commit after it)
 
 ## Just done
-alpha83 SHIPPED and RECORDED: run 44882471063 (run_number 264, head 805cabb9) success; tag kestrel-g-v0.3.0-alpha83; Release has kestrel-g-0.3.0-alpha83.apk (96.6 MB) + .sha256 + .dm; certificate verified; BUILDLOG written. https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha83 . alpha80 and alpha81 also shipped+recorded. alpha82 never existed (folded in). LD1 and LD2 DONE.
+alpha91 RELEASED and recorded (run 44987313373 green, Release has the APK). PERF6b marked shipped-not-confirmed
 
 ## Do this next
-Nothing is running. Waiting for the owner's tablet test of alpha83: (1) create the fine-grained token (only kestrel-private, Contents read+write), paste in Settings > Live diagnostics (for Claude) > GitHub token, tap Send now: the first real upload; (2) Claude sessions need ../kestrel-private cloned (add_repo kestrel-private push was DENIED this session: owner may have to allow it) then python3 -B -I tools/diag_digest.py; (3) still open: YTC1/YTC2 (owner's Settings bisect), ATT1 (File chooser Diagnostics line), FLK1 PhoneBackendTest flake, PB8, a lab scene for file input, tune Advisor thresholds with real data
+Next: (1) alpha92 = PERF5b wire SiblingQualities into Kestrel's player (PlayerQuality.alts rows + switch source; VideoFlow builds the alts; PlayerFactory.makeSource); (2) read the owner's next upload from alpha91: video hand-declined lines, win typing-page resp=, cosmetic hid on the watch page, rejected: lines in the page report for claude.ai (photo upload), then fix what they name
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
-  6b5bf826 ckpt 2806: alpha83 DISPATCHED once at 07:55Z on 2026-11-21 (android.yml, app=gecko, ful
-  805cabb9 ckpt 2805: gated kestrel-g-v0.3.0-alpha83 (gecko code 184) and pushed it: handoff self-
-  6eac0f1a ckpt 2804: LD2e: full gate green (:core:test :app:testDebugUnitTest :geckoapp:compileDe
-  d2831830 ckpt 2803: LD2a-d built and tested: app LiveDiag (tables fed after switch+whitelist, fa
-  9ebf9afd ckpt 2802: LD2 core written + tested (33 tests in core livediag): DiagStats (event hist
-  6719ce3e ckpt 2801: gated kestrel-g-v0.3.0-alpha82 (gecko code 183) and pushed it: handoff self-
-  f95e13ba ckpt 2800: LD2 written into TASKS.md in the owner's words (LD2a-e): smarter + more comp
-  946369a8 ckpt 2799: alpha82 prepared: versionCode 183 / 0.3.0-alpha82, extension version synced,
-  2d4c1e81 ckpt 2798: alpha81 SHIPPED and RECORDED: run 44878029773 green (check, test-js, test-jv
-  dba49a28 ckpt 2797: LD1 privacy fix 2 (for alpha82): DiagScrub removes dotted-quad network addre
+  a42e5268 ckpt 2913: alpha91 (code 192) gated (ship.sh green on attempt 3) and ONE dispatch made 
+  df3d34d1 ckpt 2912: gated kestrel-g-v0.3.0-alpha91 (gecko code 192) and pushed it: handoff self-
+  345be8b0 ckpt 2911: alpha91 ship attempt 3 running: attempt 1 red on OwnerRulesTest pin (10 s wi
+  7693a032 ckpt 2908: pre-ship: alpha91: pornhub in Kestrel's own player, and the clipped circle. 
+  32a10e12 ckpt 2906: pre-ship: alpha91: pornhub in Kestrel's own player, and the clipped circle. 
+  0b23637d ckpt 2903: PERF6a evidence written: hand-over works when the film list is known (inline
+  1935dd23 ckpt 2902: Owner sent diagnostics (rule ON): now even 240p won't load (PERF6 in TASKS.m
+  5a294d7e ckpt 2901: alpha91 gate: web 676/676 green; Gradle g10 failed ONLY in core EngineTest.a
+  fdc46394 ckpt 2898: Owner after turning the press-to-play rule ON: pornhub still only starts at 
+  c85eda2c ckpt 2897: alpha91 built, gates running (g10.log, w4.log): CosmeticFixes now drops porn
 ```
