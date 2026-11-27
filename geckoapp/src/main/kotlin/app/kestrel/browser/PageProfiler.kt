@@ -18,7 +18,7 @@ import java.io.File
 
 /**
  * ND1d (owner 2026-11-27, "Use the newest diagnostics and improve the browser as much as possible"; research/DIAG_2026-11-27.md section 4): records what the engine spends its time on while a page loads (or for
- * 25 seconds of typing and scrolling), with GeckoView's own profiler, and sends the recording to the PRIVATE repository, so a page like claude.ai (12 to 25 seconds to a first paint, no setting helps) can be
+ * [ProfileRule.NOW_MS] of typing and scrolling), with GeckoView's own profiler, and sends the recording to the PRIVATE repository, so a page like claude.ai (12 to 25 seconds to a first paint, no setting helps) can be
  * looked at instead of guessed at. The page process is invisible to the app's own CPU meter on this tablet (Android 10 hides other users' processes), so only the engine can sample it.
  *
  * Started ONLY by the two Settings buttons (Live diagnostics section), never by itself, never in or next to a private tab, never for a sensitive or local page, only with the owner's switch and token
