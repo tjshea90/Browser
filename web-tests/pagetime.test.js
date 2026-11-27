@@ -65,6 +65,20 @@ test('LD4: one report per load: phases, paints, request counts by kind and the s
   await context.close();
 });
 
+test('ND2d: a <link rel=modulepreload> of a script is counted as a script, not as a stylesheet (claude.ai: 982 of its script modules were reported as css)', async () => {
+  const { page, got, context } = await open(async (u, r) => {
+    if (u.pathname.endsWith('.js')) { await r.fulfill({ contentType: 'application/javascript', body: 'export default 1' }); return true; }
+    if (u.pathname.endsWith('.css') || u.pathname === '/css2') { await r.fulfill({ contentType: 'text/css', body: 'h1{color:red}' }); return true; }
+    return false;
+  }, null, { body: '<link rel="modulepreload" href="/m1.js"><link rel="modulepreload" href="/m2.js?v=3"><link rel="stylesheet" href="/s.css"><link rel="stylesheet" href="/css2?family=Roboto">' });
+  await page.goto('https://site.example/');
+  await until(() => reports(got).length >= 1, 'the report');
+  const m = reports(got)[0];
+  assert.ok(m.js >= 2, 'the two preloaded modules are scripts: ' + JSON.stringify(m));
+  assert.equal(m.css, 2, 'only the two real stylesheets (one without an extension) are css: ' + JSON.stringify(m));
+  await context.close();
+});
+
 test('LD4: the requests are counted past the 250-entry buffer of the browser (claude.ai makes over a thousand)', async () => {
   const { page, got, context } = await open(async (u, r) => { if (u.pathname.startsWith('/q/')) { await r.fulfill({ contentType: 'text/plain', body: 'x' }); return true; } return false; },
     { grace: 4000 }, { body: '<script>for (var i = 0; i < 600; i++) fetch("/q/" + i);</script>' });   // (the report waits this long after the load event: the 600 fetches are still in flight then, and on a busy machine 600 ms was not enough: 450 counted, seen 2026-11-22)

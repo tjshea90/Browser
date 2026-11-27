@@ -139,9 +139,17 @@
 
     // ---- the requests, as they finish
     var R = { n: 0, cache: 0, kb: 0, r1: 0, r3: 0, sum: 0, h2: 0, h1: 0, h3: 0, js: 0, css: 0, img: 0, xhr: 0, oth: 0 }, slow = [];
-    function kind(t) {
+    function kind(t, name) {
       if (t === 'script') return 'js';
-      if (t === 'css' || t === 'link') return 'css';
+      if (t === 'link') {                                              // ND2d: a <link> is a stylesheet, a modulepreload (claude.ai: about 1,000 script modules were counted as css), an icon or a font: the file name says which
+        var x = /\.([a-z0-9]{1,5})$/i.exec(String(name || '').split('#')[0].split('?')[0]);
+        x = x ? x[1].toLowerCase() : '';
+        if (x === 'js' || x === 'mjs') return 'js';
+        if (x === 'png' || x === 'jpg' || x === 'jpeg' || x === 'gif' || x === 'webp' || x === 'svg' || x === 'ico' || x === 'avif') return 'img';
+        if (x === 'woff' || x === 'woff2' || x === 'ttf' || x === 'otf') return 'oth';
+        return 'css';                                                  // .css, or a stylesheet address without an extension (fonts.googleapis.com/css2?family=...): as before
+      }
+      if (t === 'css') return 'css';
       if (t === 'img' || t === 'image' || t === 'input') return 'img';
       if (t === 'xmlhttprequest' || t === 'fetch' || t === 'beacon') return 'xhr';
       return 'oth';
@@ -155,7 +163,7 @@
       if (d > slow[lo][2]) slow[lo] = [h, g, d];
     }
     function add(e) {
-      var d = +e.duration || 0, ts = +e.transferSize || 0, g = kind(e.initiatorType), p = e.nextHopProtocol;
+      var d = +e.duration || 0, ts = +e.transferSize || 0, g = kind(e.initiatorType, e.name), p = e.nextHopProtocol;
       R.n++; R[g]++;
       if (d > 0) R.sum += d;
       if (d >= 1000) R.r1++;
