@@ -198,6 +198,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.gecko.pageStartedAt = android.os.SystemClock.uptimeMillis(); tab.gecko.pageStartUrl = url // RX4-X2
         if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(true) // downloads step aside while this page loads
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
+        app.kestrel.browser.PageProfiler.pageStarted(tab)                       // ND1d
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
@@ -215,6 +216,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // (a redirect hop, a tap on a result, Stop): it is said as `ok=false cut=1` and is not counted as a failed load by the live diagnostics (which then no longer advise "turn Shields off" for a tracking redirect).
         val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt
         val tookMs = app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
+        app.kestrel.browser.PageProfiler.pageStopped(a.applicationContext, tab)   // ND1d
         if (success && tookMs > 0L) tab.reloadMs = tookMs      // PERF24: what it costs to bring this tab back after it slept
         tab.loading = false
         tab.progress = 100

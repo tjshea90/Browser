@@ -224,6 +224,37 @@ object LiveDiag {
         }
     }
 
+    /**
+     * ND1d: ONE recording (the engine's gzip profile) and its small companion file to the private repository, a new name each time ([app.kestrel.core.livediag.ProfileRule.path]). The same gates as [sendFile]:
+     * the owner's switch on, the token set, the repository private, nothing while a private tab exists (asked again right before the bytes go). [done] gets a sentence for the person.
+     */
+    fun sendProfile(now: Long, bytes: ByteArray, meta: String, done: (String) -> Unit) {
+        Io.exec {
+            val p = sp
+            val token = p?.getString("token", "") ?: ""
+            if (p == null || !enabled || token.isEmpty()) { done("Not sent: diagnostics sending is off or has no token (Settings > Live diagnostics)."); return@exec }
+            if (PrivateGuard.active()) { done("A private tab is open: nothing was sent."); return@exec }
+            try {
+                when (repoState(token)) {
+                    RepoState.PRIVATE -> {}
+                    RepoState.PUBLIC -> { done("The repository is public: nothing was sent."); return@exec }
+                    RepoState.NO_ACCESS -> { done("GitHub says the token cannot see the repository."); return@exec }
+                    RepoState.ERROR -> { done("Could not reach GitHub: the recording stays on this tablet."); return@exec }
+                }
+                if (!enabled || PrivateGuard.active()) { done("Nothing was sent."); return@exec }                  // the last look before the bytes go
+                var attempt = 0; var code: Int; var path: String
+                while (true) {
+                    path = app.kestrel.core.livediag.ProfileRule.path(utc(now), installId(p), attempt)
+                    code = put(path, bytes, token)
+                    if (code == 422 && attempt < 2) { attempt++; continue }
+                    break
+                }
+                if (code in 200..299) { put(app.kestrel.core.livediag.ProfileRule.metaPath(path), meta, token); done("Sent the recording (" + bytes.size / 1024 + " KB) to the private repository. Claude can read it now.") }
+                else done("GitHub answered $code: not sent.")
+            } catch (e: Exception) { done("Could not send (no connection?). The recording stays on this tablet.") }
+        }
+    }
+
     private class Extras(val settings: Map<String, String>, val device: Map<String, Long>, val kinds: Map<String, Long>, val sites: List<app.kestrel.core.livediag.SiteStat>)
 
     private fun upload(snapshotText: String, x: Extras, advice: List<String>, now: Long, manual: Boolean, done: ((String) -> Unit)?) {
@@ -299,12 +330,18 @@ object LiveDiag {
         c.setRequestProperty("User-Agent", "Kestrel-LiveDiag")
     }
 
-    private fun put(path: String, json: String, token: String): Int {
+    private fun put(path: String, json: String, token: String): Int = put(path, json.toByteArray(Charsets.UTF_8), token)
+
+    /** ND1d: bytes in, base64 out as BYTES and streamed with a known length: a recording of a few MB must not become three copies as Strings on a 128 MB heap (and the connection must not buffer it a fourth time). */
+    private fun put(path: String, bytes: ByteArray, token: String): Int {
         val c = URL("https://api.github.com/repos/$REPO/contents/$path").openConnection() as HttpURLConnection
-        c.requestMethod = "PUT"; c.connectTimeout = 15_000; c.readTimeout = 30_000; c.doOutput = true
+        c.requestMethod = "PUT"; c.connectTimeout = 15_000; c.readTimeout = 60_000; c.doOutput = true
         headers(c, token); c.setRequestProperty("Content-Type", "application/json")
-        val content = Base64.encodeToString(json.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        c.outputStream.use { it.write("{\"message\":\"diag\",\"content\":\"$content\"}".toByteArray(Charsets.UTF_8)) }
+        val head = "{\"message\":\"diag\",\"content\":\"".toByteArray(Charsets.UTF_8)
+        val body = Base64.encode(bytes, Base64.NO_WRAP)
+        val tail = "\"}".toByteArray(Charsets.UTF_8)
+        c.setFixedLengthStreamingMode(head.size + body.size + tail.size)
+        c.outputStream.use { it.write(head); it.write(body); it.write(tail) }
         val code = c.responseCode
         try { (if (code in 200..299) c.inputStream else c.errorStream)?.close() } catch (e: Exception) { /* nothing to read */ }
         return code
