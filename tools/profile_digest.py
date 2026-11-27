@@ -143,17 +143,24 @@ def walk_profiles(prof, parent_name=''):
 SCRIPT = re.compile(r'(https?://[^\s)\]:]+(?::\d+)?[^\s)\]]*?)(?::(\d+)(?::(\d+))?)?\)?$')
 
 
+EXT_NAMES = {}      # moz-extension uuid -> the extension's name (from meta.extensions of the profile being read)
+
+
 def script_of(text):
-    """(host + last path part, function name) of a JS frame's text, or None for a native or label frame."""
-    m = re.search(r'(https?://[^\s)]+)', text)
+    """(host + last path part, function name) of a JS frame's text, or None for a native or label frame. Web pages: host/file.js; an extension: 'extension <name>/file.js'; the engine's own scripts: 'engine resource:/..'."""
+    m = re.search(r'((?:https?|moz-extension|resource|chrome|moz-src)://[^\s)]+)', text)
     if not m:
         return None
-    url = m.group(1)
-    url = re.sub(r'[:]\d+(?::\d+)?$', '', url)
-    host = re.match(r'https?://([^/]+)', url)
+    url = re.sub(r'[:]\d+(?::\d+)?$', '', m.group(1))
     base = url.rstrip('/').rsplit('/', 1)[-1].split('?')[0].split('#')[0]
     fn = text[:m.start()].strip(' (@')
-    return ((host.group(1) if host else '?') + '/' + base[:60], fn[:60] or '(anonymous)')
+    ext = re.match(r'moz-extension://([^/]+)', url)
+    if ext:
+        who = 'extension ' + EXT_NAMES.get(ext.group(1), ext.group(1)[:8])
+    else:
+        host = re.match(r'(https?|resource|chrome|moz-src)://([^/]*)', url)
+        who = (host.group(2) if host and host.group(1).startswith('http') else 'engine ' + url.split('://', 1)[0] + ':/' + (host.group(2) if host else '')) or '?'
+    return (who + '/' + base[:60], fn[:60] or '(anonymous)')
 
 
 def pct(a, b):
@@ -198,6 +205,86 @@ def busiest_main(threads, prefer=None):
         if n > bn:
             best, bn = t, n
     return best
+
+
+CLASSES = [
+    ('idle (waiting for work)', re.compile(r'ProcessNextNativeEvent:Wait')),
+    ('webRequest / extension machinery (Firefox\'s own dispatch around the extensions\' listeners, extension messages, extension scripts)', re.compile(r'WebRequest\.sys\.mjs|moz-extension://|ExtensionParent|ConduitsParent|ExtensionCommon|Schemas\.sys\.mjs|ChannelWrapper')),
+    ('the profiler itself (writing markers)', re.compile(r'AddMarkerToBuffer|profiler_')),
+    ('HTTP channels in this process (open, headers, data, end)', re.compile(r'HttpChannelParent|nsHttpChannel|nsInputStreamPump|nsHttpHandler|HttpBackgroundChannel|SpeculativeConnect|nsHttpTransaction|HttpChannelChild')),
+    ('telemetry (Glean / Telemetry)', re.compile(r'Glean|Telemetry|Counter::add|TimingDistribution|CustomDistribution')),
+    ('tracking protection / classifier', re.compile(r'AntiTracking|ContentBlocking|UrlClassifier|nsChannelClassifier')),
+    ('messages to and from other processes', re.compile(r'JSWindowActor|sendQuery|MessageManager|PContent|IPC::')),
+    ('native code with no name (the engine\'s event loop; the profile has no symbols)', re.compile(r'XREMain::XRE_main|XRE_|nsThread::ProcessNextEvent')),
+]
+
+
+def where_time_went(t, out, lo_ms=None, hi_ms=None, label='whole recording'):
+    times = [x['time'] for x in t.samples if isinstance(x.get('time'), (int, float))]
+    if not times:
+        return
+    t0 = min(times)
+    cnt, n = Counter(), 0
+    for x in t.samples:
+        tm = x.get('time')
+        if not isinstance(tm, (int, float)):
+            continue
+        if lo_ms is not None and not (lo_ms <= tm - t0 < hi_ms):
+            continue
+        n += 1
+        if x.get('stack') is None:
+            cnt['idle (waiting for work)'] += 1
+            continue
+        j = ' | '.join(t.frame_text(fi) for fi in t.leaf_chain(x['stack']))
+        for name, rx in CLASSES:
+            if rx.search(j):
+                cnt[name] += 1
+                break
+        else:
+            cnt['other'] += 1
+    if not n:
+        return
+    out.append('  where the time of %s went (%d samples):' % (label, n))
+    for k, v in cnt.most_common():
+        out.append('     %5.1f%%  %s' % (pct(v, n), k))
+
+
+def busiest_window(t, width_ms=15000):
+    """The start (ms from the first sample) of the window of [width_ms] with the most non-idle samples."""
+    times = [x['time'] for x in t.samples if isinstance(x.get('time'), (int, float))]
+    if not times:
+        return None
+    t0 = min(times)
+    busy = defaultdict(int)
+    for x in t.samples:
+        tm = x.get('time')
+        if isinstance(tm, (int, float)) and x.get('stack') is not None and t.stack_category(x['stack']) != 'Idle' and 'ProcessNextNativeEvent:Wait' not in ' | '.join(t.frame_text(fi) for fi in t.leaf_chain(x['stack'], 3)):
+            busy[int((tm - t0) / 1000.0)] += 1
+    if not busy:
+        return None
+    last = max(busy)
+    best, bs = 0, -1
+    for a in range(0, max(1, last - width_ms // 1000 + 2)):
+        v = sum(busy.get(a + k, 0) for k in range(width_ms // 1000))
+        if v > bs:
+            best, bs = a, v
+    return best * 1000.0, width_ms
+
+
+def marker_report(t, out, top=10):
+    rowsm = rows(t.th.get('markers'), ['name', 'startTime', 'endTime', 'phase', 'category'])
+    if not rowsm:
+        return
+    dur, cnt = Counter(), Counter()
+    for r in rowsm:
+        nm = t.s(r.get('name'))
+        cnt[nm] += 1
+        if isinstance(r.get('startTime'), (int, float)) and isinstance(r.get('endTime'), (int, float)) and r['endTime'] > r['startTime']:
+            dur[nm] += r['endTime'] - r['startTime']
+    out.append('  markers: %d in all; the most time in an interval marker (ms, count):' % len(rowsm))
+    for nm, ms in dur.most_common(top):
+        out.append('     %9.0f ms  %6d x  %s' % (ms, cnt[nm], nm[:70]))
+    out.append('  the most frequent markers: ' + ', '.join('%s %d' % (nm[:30], c) for nm, c in cnt.most_common(8)))
 
 
 def detail_report(t, out):
@@ -280,6 +367,11 @@ def report(prof, only_shape=False):
     shape(prof, out)
     if only_shape:
         return '\n'.join(out)
+    EXT_NAMES.clear()
+    for e in rows(meta.get('extensions'), ['id', 'name', 'baseURL']):
+        m = re.match(r'moz-extension://([^/]+)', str(e.get('baseURL') or ''))
+        if m:
+            EXT_NAMES[m.group(1)] = str(e.get('name') or e.get('id'))
     threads = list(walk_profiles(prof, meta.get('product', '')))
     out.append('\n== THREADS (share of samples per category) ==')
     for t in sorted(threads, key=lambda x: -len(x.samples)):
@@ -290,7 +382,12 @@ def report(prof, only_shape=False):
     main = page or busiest_main(threads) or (max(threads, key=lambda x: len(x.samples)) if threads else None)
     if main is not None:
         out.append('\n== THE BUSIEST MAIN THREAD%s: %s of %s ==' % ('' if page else ' (NOT the page process)', main.name, main.proc))
+        where_time_went(main, out)
+        w = busiest_window(main)
+        if w:
+            where_time_went(main, out, w[0], w[0] + w[1], 'its busiest %d s (from second %d)' % (w[1] // 1000, int(w[0] // 1000)))
         detail_report(main, out)
+        marker_report(main, out)
     return '\n'.join(out)
 
 
