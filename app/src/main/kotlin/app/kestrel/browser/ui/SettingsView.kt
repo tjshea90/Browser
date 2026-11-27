@@ -17,6 +17,8 @@ import app.kestrel.core.url.HttpsPolicy
 interface SettingsListener {
     /** OPT1: Settings > Auto-tune (Kestrel G): open the automatic optimizer screen. */
     fun openAutoTune() {}
+    /** KR1: the person turned "Keep the page ready when I leave" off: a hold that is running ends now. */
+    fun keepReadyOff() {}
     fun closeSettings()
     fun prefsChanged()
     fun clearBrowsingData()
@@ -163,6 +165,12 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             if (app.kestrel.browser.Flavor.hasTabBudget) {
                 choice("Tabs kept ready", listOf("Automatic (default): as many as the free memory allows (2 to 8), so switching tabs and Back stay instant", "Few (2): least memory; the others load again when you open them", "Many (6): more tabs stay ready; Android may then close the browser sooner when memory runs out"), prefs.tabsKept) {
                     prefs.tabsKept = it; l.prefsChanged()
+                }
+            }
+            if (app.kestrel.browser.Flavor.hasKeepReady) {
+                choice("Keep the page ready when I leave", listOf("Off: Android may take the page's memory a few minutes after you leave, and it loads again when you come back", "15 minutes", "1 hour (default): while you are in another app or the screen is off, Kestrel holds one quiet notification so Android takes other things first and the page, with what you typed, is still there when you come back (heavy pages like claude.ai need 25 to 30 seconds to load again). It uses the page's memory meanwhile", "3 hours"), prefs.keepReady) {
+                    prefs.keepReady = it; l.prefsChanged()
+                    if (it == 0) l.keepReadyOff()
                 }
             }
             if (app.kestrel.browser.Flavor.hasScrollFeel) {

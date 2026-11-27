@@ -242,7 +242,14 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab); a.switchComposite(tab); a.drawTrialComposited() } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { tab.gecko.painted = true; app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
-    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false); scrubCrashReports() }
+    override fun onKill(session: GeckoSession) {
+        Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill")
+        // KR1: was the app away (the memory killer takes cached processes) and was the keep-ready service holding the process? The digest's KILLS section and the advisor read these.
+        val away = !app.kestrel.browser.ProcessLife.uiVisible; val held = app.kestrel.browser.ProcessLife.keepReady
+        Health.count(if (away) "gecko.kill.away" else "gecko.kill.front"); if (away && held) Health.count("gecko.kill.away.held")
+        Health.log("gecko", "kill-state", "away=$away held=$held")
+        a.sessionGone(tab, false); scrubCrashReports()
+    }
 
     /** PV1: the engine writes its crash report a moment after the crash: a few seconds later its memory dump is deleted and its details are cut to the ones Diagnostics reads. */
     private fun scrubCrashReports() { val c = a.applicationContext; app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.diag.CrashNote.scrubEngineReports(c) } }, 15_000L) }

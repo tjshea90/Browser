@@ -608,6 +608,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStart() {
         super.onStart()
+        KeepReadyService.stop(this)                    // KR1: the app is back in front: the hold that kept the page ready is over
         Io.main.removeCallbacks(strayCheck)
         ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
         downloadPopup.attach(); downloadPopup.resumed()
@@ -731,6 +732,22 @@ open class BrowserActivity : Activity(), DockListener {
         Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
         ProcessLife.uiVisible = false; DownloadController.uiVisibilityChanged()
+        keepReadyOnLeave()
+    }
+
+    /**
+     * KR1 (research/DIAG_2026-11-27.md 2.3): the engine's content process was killed 7 times in 17 hours, always while the app was away (Android's memory killer takes cached processes first), each return a
+     * 25 to 30 second reload. A quiet foreground service keeps the process out of the cached class for the time chosen in Settings > Appearance; [onStart] ends it. Not when the screen is closing for good,
+     * on the Home screen with nothing to keep, or while the system itself says memory is short.
+     */
+    private fun keepReadyOnLeave() {
+        val choice = prefs.keepReady
+        if (choice == app.kestrel.core.mem.KeepReady.OFF) return
+        val finishing = isFinishing || isChangingConfigurations
+        val hasPage = tabs.any { it.session != null && !it.isNewTab && !it.showHome }
+        val low = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(it) }.lowMemory
+        if (app.kestrel.core.mem.KeepReady.applies(choice, hasPage, low, finishing)) KeepReadyService.start(this, app.kestrel.core.mem.KeepReady.minutes(choice))
+        else Health.log("life", "keep-ready-skip", app.kestrel.core.mem.KeepReady.whyNot(choice, hasPage, low, finishing))
     }
 
     private var lastTouchAt = 0L
@@ -2747,6 +2764,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(EngineTrimGate.line(prefs))
         out.add("Decorative page clips (PERF21): " + (if (prefs.limitClips) "limited to 1 playing, on screen only, none while scrolling" else "off: the page plays them as it wants") + "; no bar on a tapped clip ${Health.counter("videoclips.deco.bar")}, parked for being too many ${Health.counter("videoclips.deco.cap")}, parked out of sight ${Health.counter("videoclips.deco.off")}, played again ${Health.counter("videoclips.deco.back")}")
+        out.add(KeepReadyService.line(applicationContext, prefs.keepReady))
         out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
