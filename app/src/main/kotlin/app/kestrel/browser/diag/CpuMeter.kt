@@ -120,11 +120,17 @@ object CpuMeter {
                         moments.add(Moment(now, short(p.name), pct, said))
                         while (moments.size > 6) moments.removeAt(0)
                     }
-                    if (now - p.loggedAt > 30_000) { p.loggedAt = now; Health.log("cpu", "busy", "${short(p.name)} ${pct.toInt()} % [$said]") }
+                    if (now - p.loggedAt > 30_000) { p.loggedAt = now; Health.log("cpu", "busy", "${short(p.name)} ${pct.toInt()} % [$said]" + sysLoad()) }
                 } catch (e: Exception) { /* gone */ } finally { p.snapping = false }
             }
         }, SNAP_MS)
     }
+
+    /** ND1e: the system's run queue right now (`/proc/loadavg`: the one-minute load and the number of tasks running this instant), appended to a busy moment: is the whole tablet saturated while one process is busy? Empty where the file cannot be read. */
+    private fun sysLoad(): String = try {
+        val f = File("/proc/loadavg").readText().trim().split(' ')
+        if (f.size >= 4 && f[0].length < 8) " | sys load ${f[0]} run ${f[3].substringBefore('/').filter { it.isDigit() }}" else ""
+    } catch (e: Exception) { "" }
 
     /** thread id -> (thread name, ticks) of one process. */
     private fun threadTicks(pid: Int): Map<Int, Pair<String, Long>> {

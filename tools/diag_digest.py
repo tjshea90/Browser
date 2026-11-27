@@ -499,6 +499,15 @@ def focus_report(batches):
     else:
         print('  info  the gate (alpha101+): no held / passed-on lines yet')
     print(verdict(dev_med('memAvailMb'), 450, 300, ' MB', lower_is_better=False, what='free memory (median of the uploads)'))
+    # ND1e: the memory of EACH process (alpha111+: ActivityManager.getProcessMemoryInfo; before it only the main process could be read on this tablet) and the system run queue at the busy moments
+    pss = sorted({k for d in devs for k in d if re.match(r'^pss[A-Z]\w*Mb$', k) and not k.endswith('PeakMb') and k != 'pssSumMb'})
+    if pss:
+        print('  info  memory by process, median of the uploads (PSS, peak of the run): ' + ', '.join('%s %s MB (peak %s)' % (k[3:-2], dev_med(k), dev_med(k[:-2] + 'PeakMb')) for k in pss) + '; together %s MB (peak %s)' % (dev_med('pssSumMb'), dev_med('pssSumPeakMb')))
+    else:
+        print('  info  memory by process: no readings yet (alpha111 and later send pssTabMb and friends; before that the page process was invisible)')
+    runq = [int(m.group(1)) for e in ev for m in [re.search(r' cpu busy .* \| sys load \S+ run (\d+)$', e)] if m]
+    if runq:
+        print('  info  tasks running on the whole tablet at the busy moments (/proc/loadavg, 4 cores): median %s, most %s, %d of %d with 5 or more (the processor is full)' % (med(runq), max(runq), sum(1 for x in runq if x >= 5), len(runq)))
     print(verdict(dev_med('cpuParentAvg'), 40, 70, ' %', what='parent process CPU, average (one core = 100)'))
     print(verdict(dev_med('jankFrames'), 60, 200, '', what='slow screen frames per upload (median)'))
 
