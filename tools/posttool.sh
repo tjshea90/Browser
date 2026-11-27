@@ -9,6 +9,7 @@
 # ALWAYS exits 0, never blocks, prints nothing (whatever a hook prints is read as hook JSON).
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
+bash "$D/tools/private.sh" setup >&2 || true   # PRIV1: INBOX/OUTBOX/.handoff are links into the private repo
 [ -e .git ] || exit 0
 IN=""; [ ! -t 0 ] && IN="$(timeout 2 cat 2>/dev/null || true)"
 

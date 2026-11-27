@@ -51,5 +51,24 @@ else
 fi
 URL="$(gh release view "$TAG" --json url -q .url)"
 echo "Published $TAG -> $URL"
+
+# PRIV1: the source repo may be PRIVATE (a private repo's Release files need a GitHub login, and the in-app update check has none), so the same Release is ALSO
+# published to a small PUBLIC releases-only repo. Only when the secret RELEASES_TOKEN exists (a token with write access to that repo); without it nothing changes.
+# A failure here fails the run on purpose: a silent miss would stop the in-app updates without anyone seeing it.
+MR="${RELEASES_REPO:-tjshea90/Kestrel-Releases}"
+if [ -n "${RELEASES_TOKEN:-}" ]; then
+  export GH_TOKEN="$RELEASES_TOKEN"
+  if gh release view "$TAG" -R "$MR" >/dev/null 2>&1; then
+    gh release upload "$TAG" "$ASSET" "$ASSET.sha256" --clobber -R "$MR"
+    gh release edit "$TAG" -R "$MR" --notes-file release-notes.md
+  else
+    gh release create "$TAG" "$ASSET" "$ASSET.sha256" -R "$MR" --target "${RELEASES_BRANCH:-main}" --title "$TITLE $VN" --notes-file release-notes.md "${FLAGS[@]}"
+  fi
+  MURL="$(gh release view "$TAG" -R "$MR" --json url -q .url)"
+  echo "Also published to $MR -> $MURL"
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "Also published to the public releases repo: $MURL" >> "$GITHUB_STEP_SUMMARY"
+else
+  echo "RELEASES_TOKEN is not set: not published to a releases-only repo (fine while the source repo is public)."
+fi
 [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "Published **$TAG** -> $URL" >> "$GITHUB_STEP_SUMMARY"
 exit 0

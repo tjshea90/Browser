@@ -1,0 +1,6 @@
+touch_dev(): None
+has_motionevent: False
+--- input usage ---
+
+--- getevent -p ---
+

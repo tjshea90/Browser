@@ -20,16 +20,26 @@ object NativePlayerStats {
     @Volatile var qualityPicks = 0
     @Volatile var lastQuality = ""
     @Volatile var rotates = 0
+    /** ANS60d (owner message 60: playback as smooth and fast as this tablet can do): what the playback measured (PlaybackMeter): playable after, waits for the network, the player's own link estimate, the picture's bitrate, size changes. */
+    @Volatile var readyMs = -1L
+    @Volatile var stalls = 0
+    @Volatile var stalledMs = 0L
+    @Volatile var linkBps = 0L
+    @Volatile var videoBps = 0
+    @Volatile var switches = 0
     /** ANS54e: Kestrel's own player screen is up now / was started at this uptime (ms) for this address: a page that asks again meanwhile gets a yes and no second player. */
     @Volatile var active = false
     @Volatile var launchedAt = 0L
     @Volatile var launchedUrl = ""
+
+    private fun mbit(bps: Long): String = if (bps <= 0L) "-" else { val t = (bps + 50_000L) / 100_000L; "${t / 10}.${t % 10} Mbit/s" }
 
     fun line(): String {
         if (plays == 0 && errors == 0) return "Kestrel's own player: $last"
         val pct = if (framesShown <= 0L) "-" else { val t = (framesDropped * 1000 + framesShown / 2) / framesShown; "${t / 10}.${t % 10} %" }
         val dec = if (decoder.isEmpty()) "no decoder yet" else decoder + when (decoderHardware) { true -> " (hardware)"; false -> " (software)"; else -> "" }
         return "Kestrel's own player: $plays plays, $errors errors; decoder $dec; last picture ${width}x$height, first picture ${if (firstPictureMs >= 0) "$firstPictureMs ms" else "-"} after the start; " +
-            "${playedMs / 1000} s played, $framesShown frames shown, $framesDropped dropped ($pct); quality picked $qualityPicks time(s)${if (lastQuality.isNotEmpty()) " (last: $lastQuality)" else ""}, rotate button $rotates time(s); last: $last"
+            "${playedMs / 1000} s played, $framesShown frames shown, $framesDropped dropped ($pct); quality picked $qualityPicks time(s)${if (lastQuality.isNotEmpty()) " (last: $lastQuality)" else ""}, rotate button $rotates time(s); " +
+            "playable ${if (readyMs >= 0) "$readyMs ms" else "-"} after the start (last film), waited for the network $stalls time(s) (${stalledMs / 1000} s in all), link estimate ${mbit(linkBps)}, picture ${mbit(videoBps.toLong())}, $switches size change(s); last: $last"
     }
 }

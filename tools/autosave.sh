@@ -25,6 +25,10 @@ set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
 [ -e .git ] || exit 0
 
+# PRIV1: INBOX/OUTBOX/.handoff live in the private repo (links + git exclude); set up BEFORE anything is captured or committed, pushed by the trap below
+bash "$D/tools/private.sh" setup >&2 || true
+trap 'bash "$D/tools/private.sh" push >/dev/null 2>&1 || true' EXIT
+
 # RUNG 0b (2026-11-06, the owner: "why are my prompts and Claude findings not being saved?"): on the Stop hook the JSON on stdin names the
 # transcript; record Claude's last reply of the turn in OUTBOX.md BEFORE the commit below, so one step saves and pushes it.
 # The stdin read is bounded: a caller with nothing on stdin must never hang this script.
