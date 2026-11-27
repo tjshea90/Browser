@@ -101,7 +101,8 @@ for layout in ('schema', 'cols'):
         (l3, 2100.0, 2150.0, 1, 6, net(3, 'Hit', 7, 'https://other.example.org/x.png', 'STATUS_CANCEL')),
     ]
     susp, extp = sid('Extension Suspend'), sid('ExtensionParent')
-    mrows += [(susp, 300.0, 0, 2, 0, {'type': 'Text', 'name': sid('onBeforeRequest https://x.example/a.js by shields@kestrel.local (chanId: 5)')}), (susp, 0, 4300.0, 3, 0, {'type': 'Text', 'name': sid('onBeforeRequest https://x.example/a.js by shields@kestrel.local (chanId: 5)')}),
+    held_txt = sid('onBeforeRequest https://x.example/a.js by shields@kestrel.local (chanId: 5)')          # the START and END rows of one wait share one text (one string-table entry), which is what ties them together
+    mrows += [(susp, 300.0, 0, 2, 0, {'type': 'Text', 'name': held_txt}), (susp, 0, 4300.0, 3, 0, {'type': 'Text', 'name': held_txt}),
               (extp, 310.0, 3110.0, 1, 0, {'type': 'Text', 'name': sid('shields@kestrel.local, api_event: webRequest.onCompleted')})]
     sc = ['name', 'startTime', 'endTime', 'phase', 'category', 'data']
     mth['markers'] = ({'schema': {n: i for i, n in enumerate(sc)}, 'data': [list(x) for x in mrows]} if layout == 'schema'
