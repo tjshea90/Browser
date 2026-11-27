@@ -8,6 +8,8 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
 import android.os.storage.StorageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
