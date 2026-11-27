@@ -182,11 +182,21 @@ def thread_report(t, out):
     out.append('  %-26s %-14s %6d samples over %5.1f s%s  | %s' % (t.name[:26], str(t.proc)[:14], n, wall, cpu_note, top))
 
 
-def busiest_main(threads):
-    best, bn = None, 0
+def busy_samples(t):
+    return sum(1 for s in t.samples if s.get('stack') is not None and t.stack_category(s['stack']) != 'Idle')
+
+
+def busiest_main(threads, prefer=None):
+    """The main thread with the most non-idle samples (a page process's GeckoMain when the profile has one, else the parent's); `prefer` = a process name part to look at instead."""
+    best, bn = None, -1
     for t in threads:
-        if t.main and len(t.samples) > bn and 'content' in (str(t.proc).lower() + str(t.th.get('processType', '')).lower() + 'content'):
-            best, bn = t, len(t.samples)
+        if not t.main:
+            continue
+        if prefer and prefer.lower() not in (str(t.proc).lower() + ' ' + str(t.th.get('processType', '')).lower()):
+            continue
+        n = busy_samples(t)
+        if n > bn:
+            best, bn = t, n
     return best
 
 
@@ -262,6 +272,11 @@ def report(prof, only_shape=False):
     out = []
     meta = prof.get('meta') or {}
     out.append('GECKO PROFILE: product=%s version=%s interval=%s ms' % (meta.get('product'), meta.get('version'), meta.get('interval')))
+    cfg = meta.get('configuration') or {}
+    out.append('recorded with features %s, threads %s, buffer %s; device %s, %s, %s' % (cfg.get('features'), ','.join(cfg.get('threads') or [])[:120], cfg.get('capacity'), meta.get('device'), meta.get('CPUName'), meta.get('platform')))
+    for pid, g in (prof.get('profileGatheringLog') or {}).items():
+        for ev in g.get('events', []):
+            out.append('  gathering: ' + ' '.join(str(x) for x in ev[1:]))
     shape(prof, out)
     if only_shape:
         return '\n'.join(out)
@@ -269,9 +284,12 @@ def report(prof, only_shape=False):
     out.append('\n== THREADS (share of samples per category) ==')
     for t in sorted(threads, key=lambda x: -len(x.samples)):
         thread_report(t, out)
-    main = busiest_main(threads) or (max(threads, key=lambda x: len(x.samples)) if threads else None)
+    page = busiest_main(threads, 'tab') or busiest_main(threads, 'content')
+    if page is None:
+        out.append('\n!! THE PAGE PROCESS IS NOT IN THIS RECORDING (no thread of a content / tab process). Read the gathering log above: when a child process fails to hand over its profile (an out-of-memory in the page process while it wrote its part) only the parent and graphics processes are here.')
+    main = page or busiest_main(threads) or (max(threads, key=lambda x: len(x.samples)) if threads else None)
     if main is not None:
-        out.append('\n== THE BUSIEST MAIN THREAD: %s of %s ==' % (main.name, main.proc))
+        out.append('\n== THE BUSIEST MAIN THREAD%s: %s of %s ==' % ('' if page else ' (NOT the page process)', main.name, main.proc))
         detail_report(main, out)
     return '\n'.join(out)
 
