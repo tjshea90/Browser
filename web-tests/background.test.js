@@ -1158,14 +1158,27 @@ test('RX3-BK1: an answer to a request of the page the tab already left does not 
   assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
 });
 
-test('ND2: the end-of-request listeners ask only for frames and xhr: the ~1,200 script modules of a heavy page (and its styles, pictures and fonts) cost no webRequest dispatch', () => {
+test('ND2: the finished-request listener asks only for frames, styles and xhr (the ~1,200 script modules of a heavy page cost no second webRequest dispatch); the failure listener keeps every type (it fires only for a failed request)', () => {
   const h = harness(standardApp());
-  for (const k of ['completed', 'error']) {
-    const f = h.regs[k];
-    assert.ok(f && Array.isArray(f.types), k + ' is registered with a types filter');
-    assert.equal(JSON.stringify(f.types), JSON.stringify(['main_frame', 'sub_frame', 'xmlhttprequest']));
-    assert.equal(JSON.stringify(f.urls), JSON.stringify(['http://*/*', 'https://*/*']));      // (an array made inside the vm is not the same realm: compare as text)
-  }
+  const c = h.regs.completed, e = h.regs.error;
+  assert.ok(c && Array.isArray(c.types), 'onCompleted is registered with a types filter');
+  assert.equal(JSON.stringify(c.types), JSON.stringify(['main_frame', 'sub_frame', 'stylesheet', 'xmlhttprequest']));
+  assert.equal(JSON.stringify(c.urls), JSON.stringify(['http://*/*', 'https://*/*']));      // (an array made inside the vm is not the same realm: compare as text)
+  assert.ok(e && !e.types, 'onErrorOccurred has no types filter: a failed script or picture is still reported');
+  assert.equal(JSON.stringify(e.urls), JSON.stringify(['http://*/*', 'https://*/*']));
+});
+
+test('ND2: a script that failed to load is still reported, and a failure of a request that was never counted as started does not unbalance the pending count', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  h.req('script', PLAIN + '?m1', PAGE);
+  h.listeners.error({ tabId: 1, requestId: '9', type: 'script', url: 'https://nothing.test/boom.js', error: 'NS_ERROR_NET_RESET' });
+  h.req('xmlhttprequest', 'https://nothing.test/api?a', PAGE);
+  h.mainFrame('https://example.com/next', { requestId: '20' });                      // leaves the page: the xhr never ended, the script's failure must not count as an end
+  await tick(20);
+  const pend = h.of('pend');
+  assert.equal(pend.length, 1, 'the page was left with one counted request still open');
+  assert.equal(pend[0].n, 1, 'one xhr pending (the failed script was never counted as started, so its failure is not an end): ' + JSON.stringify(pend));
 });
 
 test('ND2: a script or a picture the page started is not "pending" when the page is left (its end is never reported, so it must not be counted)', async () => {

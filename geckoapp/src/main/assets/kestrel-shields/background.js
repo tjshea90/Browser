@@ -167,7 +167,7 @@ function lstText() {
 var rv = { pages: 0, all: 0, cache: 0, h304: 0, c304: 0, ms304: 0, wn: 0, ws: 0, wx: 0, wc: 0 }, rvStart = new Map();
 function rvText() {
   if (rv.all === 0 && rv.wn === 0) return '';
-  return 'pages ' + rv.pages + ', requests of frames and xhr (not scripts, styles, pictures or fonts: ND2) ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
+  return 'pages ' + rv.pages + ', requests of frames, styles and xhr (not scripts, pictures or fonts: ND2) ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
 }
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
@@ -220,10 +220,12 @@ function logBlocked(d) {
 }
 // ND2 (owner 2026-11-27 recording of a claude.ai load, research/PROFILE_CLAUDE_AI.md): the PARENT process's main thread was 99 % busy for 15 s of that load, and 34-38 % of that was Firefox's own webRequest PLUMBING
 // around the extension's listeners (WebRequest.sys.mjs runChannelListener / getRequestData / serializeRequestData / applyChanges: about 5 ms of this tablet per request), not our JavaScript (about 1 %). claude.ai
-// asks for about 1,200 JavaScript modules (all from the cache, 12.6 MB): each of them paid that twice, once for onBeforeRequest (the blocker, which must see everything) and once for onCompleted. The two listeners
-// below are bookkeeping for the Diagnostics (pending requests when a page is left, cache / 304 counts, the page report's HTTP errors): they now ask only for frames and fetch / XHR calls (where a failure or a
-// still-open request is what the person feels), no longer for the scripts, styles, pictures and fonts of a page.
-var DONE_TYPES = ['main_frame', 'sub_frame', 'xmlhttprequest'];
+// asks for about 1,250 JavaScript modules (all from the cache, 14 MB): each of them paid that twice, once for onBeforeRequest (the blocker, which must see everything) and once for onCompleted (1,326 events).
+// onCompleted is bookkeeping for the Diagnostics (pending requests when a page is left, cache / 304 counts, HTTP errors in the page report), so it now asks only for pages, frames, style sheets and fetch / XHR
+// calls (where a failure or a request still open is what the person feels), no longer for the scripts, pictures and fonts of a page. onErrorOccurred keeps EVERY type: it fires only for a request that failed
+// (3 in that load), so it costs nothing per request, and a script or picture that failed to load stays in the page report. Only requests of DONE_TYPES are counted as started (`reqsT`) and as ended, so a
+// request whose end is not reported can never look "pending".
+var DONE_TYPES = ['main_frame', 'sub_frame', 'stylesheet', 'xmlhttprequest'];
 var DONE_SET = {}; DONE_TYPES.forEach(function (t) { DONE_SET[t] = 1; });
 // RX3-BK1: requests the page started minus the ones that ended = what is still pending when the page is left (a page with pending requests cannot enter the engine's back/forward cache).
 function noteDone(d) { var L = pageLog.get(d.tabId); if (L && !stale(d)) L.done++; }
@@ -233,12 +235,12 @@ function logFailed(d, what) {
   reportLater(d.tabId);
 }
 browser.webRequest.onErrorOccurred.addListener(lstTimed(LST.err, function (d) {
-  noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
+  if (DONE_SET[d.type]) noteDone(d); // RX3-BK1: every counted request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
   rvStart.delete(d.requestId);
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
-}), { urls: ['http://*/*', 'https://*/*'], types: DONE_TYPES });
+}), { urls: ['http://*/*', 'https://*/*'] });
 browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   noteDone(d);
   var rvT = rvStart.get(d.requestId);                                                // RX4-M0b: cache hits and revalidations (304) of this tablet
