@@ -1333,13 +1333,13 @@ test('RX4-M0e: a scroll burst is forwarded as clamped whole numbers with the tab
 
 test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive and when the request completes), a 304 is timed from its start, pages are counted; the text rides on the stats message', async () => {
   const h = harness(standardApp());
-  const sub = (id, ts) => h.listeners.before({ type: 'script', url: 'https://cdn.example/' + id + '.js', tabId: 1, frameId: 0, requestId: id, timeStamp: ts, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+  const sub = (id, ts) => h.listeners.before({ type: 'xmlhttprequest', url: 'https://cdn.example/' + id + '.js', tabId: 1, frameId: 0, requestId: id, timeStamp: ts, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
   h.mainFrame(PAGE, { requestId: '5', timeStamp: 1000 });
   sub('6', 1010); sub('7', 1010); sub('8', 1010);
-  h.listeners.headers({ statusCode: 304, requestId: '6', url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', responseHeaders: [], timeStamp: 1140 });
-  h.listeners.completed({ requestId: '6', statusCode: 304, fromCache: false, url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1150 });
-  h.listeners.completed({ requestId: '7', statusCode: 200, fromCache: true, url: 'https://cdn.example/7.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1012 });
-  h.listeners.error({ requestId: '8', error: 'NS_ERROR_ABORT', url: 'https://cdn.example/8.js', tabId: 1, frameId: 0, type: 'script' });
+  h.listeners.headers({ statusCode: 304, requestId: '6', url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'xmlhttprequest', responseHeaders: [], timeStamp: 1140 });
+  h.listeners.completed({ requestId: '6', statusCode: 304, fromCache: false, url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'xmlhttprequest', timeStamp: 1150 });
+  h.listeners.completed({ requestId: '7', statusCode: 200, fromCache: true, url: 'https://cdn.example/7.js', tabId: 1, frameId: 0, type: 'xmlhttprequest', timeStamp: 1012 });
+  h.listeners.error({ requestId: '8', error: 'NS_ERROR_ABORT', url: 'https://cdn.example/8.js', tabId: 1, frameId: 0, type: 'xmlhttprequest' });
   // the stats timer is only set once something calls markStats(), which in this test happens when the image transfer ends: wait for it instead of flushing the timers once (a 4-in-6 flake before, found 2026-11-16)
   for (let i = 0; i < 100 && h.of('st').length === 0; i++) { await tick(10); await h.flushTimers(); }
   const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');

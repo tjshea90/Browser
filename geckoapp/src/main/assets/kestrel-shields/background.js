@@ -167,7 +167,7 @@ function lstText() {
 var rv = { pages: 0, all: 0, cache: 0, h304: 0, c304: 0, ms304: 0, wn: 0, ws: 0, wx: 0, wc: 0 }, rvStart = new Map();
 function rvText() {
   if (rv.all === 0 && rv.wn === 0) return '';
-  return 'pages ' + rv.pages + ', requests of scripts, styles, frames and xhr (not pictures or fonts: ND2) ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
+  return 'pages ' + rv.pages + ', requests of frames and xhr (not scripts, styles, pictures or fonts: ND2) ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
 }
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
@@ -706,8 +706,10 @@ function decide(d, page, host, mode) {
 }
 
 function onRequest(d) {
-  if (rvStart.size > 600) rvStart.clear();                                           // RX4-M0b: when this request started (a 304 is timed from here to its end)
-  rvStart.set(d.requestId, d.timeStamp);
+  if (DONE_SET[d.type]) {                                                            // RX4-M0b: when this request started (a 304 is timed from here to its end); ND2: only the requests whose end is reported are timed
+    if (rvStart.size > 600) rvStart.clear();
+    rvStart.set(d.requestId, d.timeStamp);
+  }
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
     rv.pages++;
