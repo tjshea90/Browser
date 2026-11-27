@@ -131,7 +131,7 @@ def split(ev):
     return (m.group(1), m.group(2), m.group(3)) if m else ('?', '?', ev)
 
 
-def analyse(batches):
+def analyse(batches, advice_app=None):
     r = {'crash': Counter(), 'slow': Counter(), 'play': Counter(), 'compat': Counter(), 'hosts': Counter(), 'slowhost': defaultdict(list),
          'installs': set(), 'versions': Counter(), 'dropped': 0, 'events': 0,
          'advice': Counter(), 'advice_days': defaultdict(set), 'kinds': Counter(), 'sitetab': {}, 'device': {}, 'settings': {}}
@@ -141,7 +141,7 @@ def analyse(batches):
         r['dropped'] += int(b.get('dropped', 0) or 0)
         day = str(b.get('at', ''))[:10]
         for a in b.get('advice', []) if isinstance(b.get('advice', []), list) else []:
-            if isinstance(a, str):
+            if isinstance(a, str) and (advice_app is None or str(b.get('app', '?')) == advice_app):     # ND1: only the newest build's advice (retired rules of older builds said things like 'turn Shields off for a redirect hop')
                 key = re.sub(r'\d+(?:\.\d+)?', 'N', a)[:200]
                 r['advice'][key] += 1; r['advice_days'][key].add(day)
                 r.setdefault('advice_sample', {})[key] = a
@@ -690,6 +690,73 @@ def drawing_analysis(batches):
         print('  "Parts of the page are missing" taps: none yet (the menu tile exists from alpha109)')
 
 
+def self_checks(batches):
+    """ND1: the app checks itself and says so in its Diagnostics text: a line that ends a number with '(must be 0)' and has a non-zero number is a bug the app found in itself (the WRONG tab preview was one for days)."""
+    rows = []
+    for b in batches[-8:]:
+        for x in b.get('snapshot', []):
+            if not isinstance(x, str):
+                continue
+            for m in re.finditer(r'(\d+)([^,;]{0,60}?)\(must be 0\)', x):
+                if m.group(1) != '0':
+                    rows.append((b['_file'], b.get('app', '?'), x.strip()[:200]))
+                    break
+    print('\n== SELF-CHECKS (lines where the app says "must be 0"; newest 8 uploads) ==')
+    if not rows:
+        print('  OK: none of them is above 0')
+        return
+    for f, app, line in rows:
+        print('  FAILED  %-26s %-16s %s' % (f, app, line))
+
+
+def kills_analysis(batches):
+    """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
+    Newer builds say it themselves (`gecko kill-state away=.. held=..`); for older ones the app is taken as away after `life pause` until `life resume` within the same run."""
+    total, away, front, held, said = 0, 0, 0, 0, 0
+    gaps = []
+    for b in batches:
+        run_away, stop_at = False, None
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            t, layer, ev, detail = split(e)
+            txt = (layer + ' ' + ev + ' ' + detail) if layer != '?' else detail
+            if txt.startswith('run start') or txt.startswith('run recording-on'):
+                run_away, stop_at = False, None
+            elif txt == 'life pause' or txt == 'life stop':
+                if not run_away:
+                    run_away = True; stop_at = float(t.strip('+s')) if t.startswith('+') else None
+            elif txt == 'life resume':
+                run_away, stop_at = False, None
+            elif txt.startswith('gecko onKill'):
+                total += 1
+                if run_away:
+                    away += 1
+                    try:
+                        if stop_at is not None:
+                            gaps.append((float(t.strip('+s')) - stop_at) / 60.0)
+                    except ValueError:
+                        pass
+                else:
+                    front += 1
+            elif txt.startswith('gecko kill-state'):
+                said += 1
+                if 'held=true' in txt:
+                    held += 1
+    print('\n== KILLS (the page engine ended by Android: a memory kill when the app was away is the cached-process rule; KR1 keep-ready holds the process) ==')
+    if not total:
+        print('  none in these files')
+        return
+    gaps.sort()
+    print('  %d content-process kill(s): %d while the app was away, %d with the app in front; the newest builds said it themselves %d time(s), %d of them while keep-ready was holding' % (total, away, front, said, held))
+    if gaps:
+        print('  minutes between leaving the app and the kill: median %.0f, shortest %.0f, longest %.0f' % (gaps[len(gaps) // 2], gaps[0], gaps[-1]))
+    if said and held == 0:
+        print('  -> keep-ready was NOT holding for any kill the app described: check Settings > Appearance > Keep the page ready when I leave, and the Diagnostics line "Keep the page ready"')
+    elif held:
+        print('  -> %d kill(s) happened even while keep-ready held the process: the tablet was desperate for memory (close tabs), or the hold is not enough' % held)
+
+
 def tab_analysis(batches):
     """PERF15: tab switching. `tabs hibernate tab= live= max= avail=` (a tab was put to sleep: its next switch loads the page again), `tabs switch-done tab= kind=live|revive first-frame=Nms` (how long the switch took to the first frame) and the engine kills."""
     hib, sw, kills, trims = [], [], 0, 0
@@ -912,6 +979,7 @@ def show(title, c, n=8):
 
 def main(argv):
     base, repo, days, short, verify, fetch = None, None, 14, False, False, True
+    all_advice = False
     i = 0
     while i < len(argv):
         if argv[i] == '--dir':
@@ -926,6 +994,8 @@ def main(argv):
             verify = True
         elif argv[i] == '--no-fetch':
             fetch = False
+        elif argv[i] == '--all-advice':
+            all_advice = True
         i += 1
     batches, hist, source, note = [], None, '', ''
     if base is not None:
@@ -944,7 +1014,7 @@ def main(argv):
         else:
             source = 'no private clone found'
     dedupe(batches)
-    r = analyse(batches)
+    r = analyse(batches, None if all_advice or not batches else str(batches[-1].get('app', '?')))
     if short:
         line = brief(r, batches)
         if line:
@@ -993,7 +1063,9 @@ def main(argv):
         print('  FILE PROBLEM: ' + x)
     focus_report(batches)
     drawing_analysis(batches)
-    print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
+    self_checks(batches)
+    kills_analysis(batches)
+    print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor, %s; judge the numbers before you relay them) ==' % ('every build in these files (--all-advice)' if all_advice else 'newest build only: ' + str(batches[-1].get('app', '?')) + ', older builds\' advice is retired: --all-advice shows it'))
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
     if not r['advice']:
