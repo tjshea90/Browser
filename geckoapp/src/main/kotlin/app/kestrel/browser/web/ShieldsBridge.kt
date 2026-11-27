@@ -56,6 +56,8 @@ class ShieldsBridge(
     private val adSkips: (JSONObject) -> Unit = {},
     /** YS1: seekbar.js reports numbers (taps on a video bar, answered by the page, answered by the script, left alone) and the page of its tab: the whole message (t, s, f, o, r, p). Worker thread. */
     private val seekTaps: (JSONObject) -> Unit = {},
+    /** VC1: videobar.js reports what Kestrel's own video bar did (e = shown / own / act, a = play, pause, seek, mute, full) and the page of its tab. Worker thread. */
+    private val videoBar: (JSONObject) -> Unit = {},
     /** RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (the page's address). The answer is the place in CSS pixels as text, or "" when nothing is armed for that page. Worker thread: reads only immutable values. */
     private val backPlace: (String) -> String = { "" },
     /** RX3-BK1: a Back / Forward show: the page's address, kept by the engine's cache, the navigation type, the bytes its file cost (0 = from cache), the place at the show. Worker thread. */
@@ -64,6 +66,24 @@ class ShieldsBridge(
     private val noStore: (String) -> Unit = {},
     /** RX3-BK1: the page that was just left still had this many requests open (the page's address, the count). Worker thread. */
     private val leftPending: (String, Int) -> Unit = { _, _ -> },
+    /** RX4-M0a: how a playing video did since the page's last look: frames shown (t), dropped (d), corrupt (c), seconds (s), picture width and height (w, h) and the page of its tab (p). Numbers only. Worker thread. */
+    private val videoQuality: (JSONObject) -> Unit = {},
+    /** RX4-M0e: one scroll burst of a real page (only while the Settings switch is on): frames (n), gaps over 50 ms (a), over 100 ms (b), the longest gap in ms (mx) and the page of its tab (p). Worker thread. */
+    private val scrollGaps: (JSONObject) -> Unit = {},
+    /** LAB2 (owner message 45): is this a DEBUG build (the emulator lab)? Then pages are asked to send a page-health probe (page-config flag 256). Release builds: always false, the script does nothing. */
+    private val labBuild: () -> Boolean = { false },
+    /** LAB2: the page-health probe of a page (numbers only: text length, images, broken images, frames, videos, size, nodes). Worker thread; only ever sent by a debug build. */
+    private val labProbe: (JSONObject) -> Unit = {},
+    /** FB4: the viewport a full-screen page really got (turn.js, top frame): width (w) and height (h) in device pixels, f = 1, and the page of its tab (p). Numbers only. Worker thread. */
+    private val viewport: (JSONObject) -> Unit = {},
+    /** VP1: the page's report of a full-screen film (`vst`) or a tap on its picture (`vtap`): the answer is what the controls want done (JSON). Worker thread. */
+    private val player: (JSONObject) -> String = { "" },
+    /** ANS52g: the video format policy the pages are told (core/media/VideoLimits.policy: the owner's two settings and the hardware limits of this device); the 5th field of every page answer. Worker thread, cheap. */
+    private val videoPolicy: () -> String = { "" },
+    /** ANS52h: the picture size cap for HLS master playlists in pixels of the longer side (core/media/PictureCap; 0 = none); the 6th field of every page answer. Worker thread, cheap. */
+    private val pictureCap: () -> Int = { 0 },
+    /** ANS54e: the page's gate asks whether Kestrel's own player takes the film the person pressed (`vh`: y = play | press | kestrel, s = the element's address, b = a blob: source, ... p = the page, f = the frame): true = it was started, keep the page's element closed. UI thread (the answer waits for it). */
+    private val handOver: (JSONObject) -> Boolean = { false },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -90,8 +110,13 @@ class ShieldsBridge(
         val handler = handlerFor(raw)
         val result = GeckoResult<Any>(handler)
         handler.post {
+            val early = try { parse(raw) } catch (e: Exception) { null }
+            if (early != null && early.optString("k") == "vh") {          // ANS54e: decided on the UI thread (the tabs and the sniffed streams live there); the engine's request waits for the answer, the page script gives up after 700 ms
+                Io.ui { val ok = try { handOver(early) } catch (e: Exception) { Log.w(Io.TAG, "hand over", e); false }; result.complete(if (ok) "{\"h\":1}" else "{\"h\":0}") }
+                return@post
+            }
             val reply: Any = try {
-                val m = parse(raw)
+                val m = early ?: parse(raw)                                // (one parse per message: this is the lane of every request the blocker judges)
                 if (m == null) "" else when (m.optString("k")) {
                     "req" -> if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0"
                     "cfg" -> pageConfig(m.optString("h"))
@@ -112,6 +137,12 @@ class ShieldsBridge(
                     "os" -> { openSpace(m.optString("p")); "" }
                     "yts" -> { adSkips(m); "" }
                     "sbk" -> { seekTaps(m); "" }
+                    "vbk" -> { videoBar(m); "" }
+                    "vq" -> { videoQuality(m); "" }
+                    "sg" -> { scrollGaps(m); "" }
+                    "probe" -> { if (labBuild()) labProbe(m); "" }
+                    "vpt" -> { viewport(m); "" }
+                    "vst", "vtap" -> player(m)
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -121,6 +152,10 @@ class ShieldsBridge(
                 }
             } catch (e: Exception) {
                 Log.w(Io.TAG, "shields bridge", e)
+                ""
+            } catch (e: OutOfMemoryError) { // a background lane must never take the whole browser down (the engine image goes out in 256 KB chunks; the lab run of 2026-11-15 died of this at a 16 MB heap): the extension asks again
+                Log.w(Io.TAG, "shields bridge: out of memory")
+                app.kestrel.browser.diag.Health.count("shields.oom")
                 ""
             }
             result.complete(reply)
@@ -192,7 +227,7 @@ class ShieldsBridge(
     }
 
     /**
-     * `cfg`: "<mode>:<generation>:<content id>:<flags>" (flags: 1 = the pop-up and redirect guard applies to this site). mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
+     * `cfg`: "<mode>:<generation>:<content id>:<flags>:<video policy>:<picture cap>" (flags: 1 = the pop-up and redirect guard applies to this site; the video policy is [app.kestrel.core.media.VideoLimits.policy], ANS52g; the picture cap is [app.kestrel.core.media.PictureCap.pixels], ANS52h). mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
      * While the lists are still loading (cold start) the answer is provisional - generation 0, no id, the site allow-list unknown - so the extension can already judge requests with the
      * copy it saved last time and asks again within seconds; before this, those first requests went unfiltered.
      */
@@ -204,10 +239,15 @@ class ShieldsBridge(
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
         // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
         // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players"),
+        // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
+        // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
+        // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
+        // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows ONLY the Settings switch "Videos start only when I press play": it is not a Shields feature, every site has it),
+        // 2048 = the page's gate may ASK the app whether Kestrel's own player takes the film the person pressed (ANS54e, gate-main.js; needs the press-to-play rule and a Settings row "Web videos play in" other than "The page's own player"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0) or (if (prefs().videoPressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
-        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
+        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap()
     }
 
     /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */
@@ -321,11 +361,19 @@ class ShieldsBridge(
         val loadMs: Long, val imageBytes: Int, val transfers: Int, val off: Boolean, val note: String, val at: Long,
         /** RX3-S2: how often each web request listener of the extension ran and how long it held the thread ("req 120 (5400 us), rcv 14 (200 us)"); empty until one ran. Its own field: the app logs `note` whenever it changes. */
         val listeners: String = "",
+        /** RX4-M0b / M0c: revalidations (304), cache hits and the scriptlet wait before a page, as the extension counted them (text). */
+        val revalidation: String = "",
+        /** ANS52g: what the pages' video format policy refused (the extension's counts, text). */
+        val videoFormats: String = "",
+        /** ANS52h: what the picture size cap did to HLS master playlists (the extension's counts, text). */
+        val pictureCap: String = "",
+        /** ANS53a / ANS53b: what the page-side gate held back and opened (the extension's counts, text). */
+        val startGate: String = "",
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
                 m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
-                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240), m.optString("hx").take(300), m.optString("vg").take(300),
             )
         }
     }
@@ -354,10 +402,11 @@ class ShieldsBridge(
             val avg = if (s.checks > 0) s.totalUs / s.checks else 0L
             val state = when {
                 s.off -> "OFF this session (too many errors)"
+                s.generation > 0 && s.imageBytes > 0 && s.transfers == 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, engine ready from the saved copy in ${s.loadMs} ms (no transfer from the app)" // RX4-M0d
                 s.generation > 0 && s.imageBytes > 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, loaded in ${s.loadMs} ms, ${s.transfers} transfer(s)"
                 else -> "list not loaded yet"
             }
-            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one${if (s.perRequestAsks > 0) " (each held ${s.perRequestUs / s.perRequestAsks} us on average)" else ""}, ${s.errors} errors.${if (s.listeners.isNotEmpty()) " Extension listeners (calls, time held): ${s.listeners}." else ""} ${s.note}".trim()
+            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one${if (s.perRequestAsks > 0) " (each held ${s.perRequestUs / s.perRequestAsks} us on average)" else ""}, ${s.errors} errors.${if (s.listeners.isNotEmpty()) " Extension listeners (calls, time held): ${s.listeners}." else ""}${if (s.revalidation.isNotEmpty()) " Revalidations and waits: ${s.revalidation}." else ""} ${s.note}".trim()
         }
 
         private const val ASSET_URI = "resource://android/assets/kestrel-shields/"

@@ -5,6 +5,7 @@
 #                           gecko   = Kestrel G (:geckoapp, Firefox engine, ~92 MB, tag kestrel-g-v<version>)
 #                           courier = Kestrel Courier (:courier, the small app for the owner's PHONE, ~2 MB, tag kestrel-courier-v<version>)
 # Dispatch with  app = gecko | web | courier | both (web + gecko)  and  full_build = true.  full_build = false is a ~1 minute check that the gates still pass.
+#   app = lab starts the emulator lab (emu-lab.yml: the real engine on an Android 10 emulator, no release): lab_suite + lab_minutes say what and how long.
 # Claude dispatches it through the GitHub API (mcp__github__actions_run_trigger, run_workflow) after `bash ship.sh <app> "note"`.
 #
 # MINUTES ARE THE SCARCE RESOURCE (tools/test_handoff.sh fails if either rule is undone):
@@ -27,9 +28,9 @@ on:
   workflow_dispatch:
     inputs:
       app:
-        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), courier = Kestrel Courier (the phone app), or both (web + gecko)'
+        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), courier = Kestrel Courier (the phone app), both (web + gecko), or lab = no release: the emulator lab (see lab_suite)'
         type: choice
-        options: [gecko, web, courier, both]
+        options: [gecko, web, courier, both, lab]
         default: gecko
       full_build:
         description: 'Test, build, sign and publish (several minutes of Actions time). Leave OFF for a ~1 min check of the gates.'
@@ -39,6 +40,20 @@ on:
         description: 'What changed in this release (goes into the Release text)'
         type: string
         default: ''
+      lab_suite:
+        description: 'Only for app = lab. smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video (owner message 44) with a walk down the Yahoo Finance page; snd = sound while the app is left (owner message 45); kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box (web component) turned sideways and back, on a system that hides its bars and on one that keeps them (owner message 46), then the sound check; compat = every well-known site twice (Shields on, then off) with speed, errors, scrolling, memory, broken-page checks (the minutes are the whole budget); soak = the long run of pages, videos and downloads; all = everything'
+        type: choice
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, ip, gp, pv, gv, vp, compat, soak, all]
+        default: smoke
+      lab_minutes:
+        description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'
+        type: string
+        default: '60'
+      lab_net:
+        description: 'Only for app = lab: full = the fast link of the runner, hotspot = shaped like the phone hotspot of the owner (5 Mbit/s each way)'
+        type: choice
+        options: [full, hotspot]
+        default: full
 
 # Read-only by default. Only the three build jobs below publish a Release (`gh release create`), and only they get `contents: write`, so the cheap gate jobs and the test jobs
 # (which run the repository's own scripts) never hold a token that can write.
@@ -62,7 +77,7 @@ jobs:
       courier: ${{ steps.plan.outputs.courier }}
       full: ${{ steps.plan.outputs.full }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
 
@@ -141,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -159,10 +174,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - name: Injected-script tests in Chromium
@@ -171,6 +186,18 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
           npm test
+
+  # ------------------------------------------------------------------ the real-engine lab: no release, no secrets (RX4-E1 / SOAK1; the steps are in emu-lab.yml)
+  lab:
+    needs: check
+    if: inputs.app == 'lab'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/emu-lab.yml
+    with:
+      suite: ${{ inputs.lab_suite }}
+      minutes: ${{ inputs.lab_minutes }}
+      net: ${{ inputs.lab_net }}
 
   # ------------------------------------------------------------------ Kestrel (system WebView)
   build-web:
@@ -186,7 +213,7 @@ jobs:
     env:
       APP: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -215,15 +242,6 @@ jobs:
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-web-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Remove the signing material from the workspace
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
@@ -242,7 +260,7 @@ jobs:
     env:
       APP: gecko
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -274,15 +292,6 @@ jobs:
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-gecko-apk
-          path: geckoapp/build/outputs/apk/release/geckoapp-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Remove the signing material from the workspace
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
@@ -301,7 +310,7 @@ jobs:
     env:
       APP: courier
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -329,15 +338,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
-
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-courier-apk
-          path: courier/build/outputs/apk/release/courier-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Remove the signing material from the workspace
         if: always()

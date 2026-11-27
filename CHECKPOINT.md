@@ -1,31 +1,32 @@
-# CHECKPOINT 2379 — read me first, then TASKS.md
+# CHECKPOINT 2542 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T05:27:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `5d9f1b2a` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T17:51:53Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `3d8145a3` (this checkpoint is the commit after it)
 
 ## Just done
-alpha47 RELEASED and recorded (run 43680608062 green, BUILDLOG line written, Release https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha47); owner message 42 answered in plain words with the link and limits (real YouTube watch page and the tablet NOT tested; emulator Gecko + 32 Chromium tests + an independent review that found and fixed the owner's own case: YouTube's 3 px rail)
+ANS59a coded: regular tabs are not put to sleep by a trip to another app either (LiveBudget.mayHibernateInBackground(isPrivate, awayMs, level): only a regular tab, only at trim level 80, only after 30 minutes away); tests + guard + compile green; pv lab control now expects the regular tab to stay too; note on ProcessLife.maybeExit (no isFinishing check) in research/ANS58...
 
 ## Do this next
-nothing is running. Wait for the owner: tablet test of alpha47 (tap YouTube's red bar, Settings row 'Tap the video bar to jump', Diagnostics line 'Tap on a video bar') -> read it with TASKS YS1d; open owner questions BK5 (Back instant on no-store pages yes/no) and AX1g (separate system keyboard app yes/no); RX4 (ask to try Desktop site); RX3 tablet-gated rows (BK3 BK4 M1 H1 S4-S6 D2 D3 B3 S2b BK5 ...); optional small YS1e. Sibling session claude/vibrant-hypatia-1dpn1u is a READ-ONLY review session for the owner (writes a report file only): do not interfere, merge its report file if it appears
+1) read lab gv run 43921764750 (old pv control; gp with the hold fix and photos); fix findings; 2) dispatch lab gv again (new pv control for the regular tab); 3) add Health 'life destroy' (isFinishing, isChangingConfigurations) in BrowserActivity.onDestroy to settle the process-exit question from the next Diagnostics; 4) lab vp; ship alpha60; answer 55, 57, 58, 59.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
+     M research/ANS58_PRIVATE_TAB_AND_CHALLENGE_PAGES.md
 
 ## Last ten checkpoints
 ```
-  0665c59e ckpt 2378: alpha47 DISPATCHED: workflow android.yml run 43680608062 (run_number 99, ref
-  99978930 ckpt 2377: gated kestrel-g-v0.3.0-alpha47 (gecko code 148) and pushed it: handoff self-
-  943f5a5e ckpt 2376: YS1: independent review of seekbar.js applied (real YouTube bar markup from 
-  021ec124 ckpt 2375: YS1: seekbar.js wired in (manifest, guard flag 16, sbk relay, Settings row '
-  b225c11a ckpt 2374: YS1b: seekbar.js (tap/slide on a player's progress bar -> video jumps when t
-  a7c3b677 ckpt 2373: owner message 42 written into TASKS.md as YS1 (+YS1a find why a tap on the Y
-  43ba62e0 ckpt 2372: alpha46 (gecko code 147) RELEASED + RECORDED (run 43671662558 green, APK on 
-  ba09cf6f ckpt 2371: alpha46 (gecko code 147) gated (JVM: core, tools, app incl. MiniNavTest 95, 
-  c1e9d89b ckpt 2370: gated kestrel-g-v0.3.0-alpha46 (gecko code 147) and pushed it: handoff self-
-  95cc5c99 ckpt 2369: pre-ship: alpha46: the floating navigation panel can be closed again: a long
+  421a0dd9 ckpt 2541: owner message 59 written into TASKS.md (ANS59a-b): 'It should work for regul
+  66aa33a7 ckpt 2540: ANS58a/b first cheap measure: kestrel-shields manifest exclude_matches for t
+  a23e57dc ckpt 2539: lab suite gv = gp + pv in ONE emulator boot (the queue of GitHub was slow: t
+  c70f2aac ckpt 2538: ANS58c FIX coded + tested: private tabs are NEVER put to sleep by the memory
+  c0017fa7 ckpt 2537: owner message 58 written into TASKS.md (ANS58a-d): a PRIVATE tab was reloade
+  3fb0e402 ckpt 2536: ANS57 lab scene: the gesture info and the level bars are now photographed wh
+  9a20b91e ckpt 2535: ANS57 lab gp run 1 (43918159286): volume / brightness drags, dead zone, plai
+  e3cd26c4 ckpt 2534: ANS57: lab suite gp DISPATCHED: run 43918159286 (head 55e61f02, started 17:2
+  55e61f02 ckpt 2533: ANS57 coded end to end + lab scene written: gp suite (soak.py gp_scene: A = 
+  33203ec9 ckpt 2532: ANS57 glue coded + compiles: VideoLevels (music-stream volume, window bright
 ```
 
 (1 automatic checkpoint(s) since the last deliberate one — the

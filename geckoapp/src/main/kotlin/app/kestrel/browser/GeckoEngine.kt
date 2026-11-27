@@ -68,6 +68,9 @@ object GeckoEngine {
         try { org.mozilla.gecko.GeckoThread.speculativeConnect(origin); app.kestrel.browser.diag.Health.log("engine", "warm-start", origin.take(80)) } catch (e: Throwable) { /* only a head start */ }
     }
 
+    /** The runtime if the engine has started, else null (never starts it). */
+    fun runtimeOrNull(): GeckoRuntime? = rt
+
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {
@@ -134,7 +137,7 @@ object GeckoEngine {
                 try { when { v == "true" || v == "false" -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v == "true", u); v.toIntOrNull() != null -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v.toInt(), u); else -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v, u) } } catch (e: Exception) { /* debug only */ }
             }
             // the device's decoder list: from the stored answer at once (above), from Android (off the UI thread) when this system build has not been asked yet; a changed answer re-applies the codec rule
-            if (DeviceVideo.hardware(ctx) == null) Io.exec { if (DeviceVideo.read(ctx)) applyVideo(ctx, Prefs.get(ctx)) }
+            if (DeviceVideo.hardware(ctx) == null || DeviceVideo.limits(ctx) == null) Io.exec { if (DeviceVideo.read(ctx)) applyVideo(ctx, Prefs.get(ctx)) } // ANS52g: the limits are asked for too (an update from before them has only the four letters stored)
             // DEBUG builds only (the emulator rig, research/TYPING.md): `setprop debug.kestrel.iwvisual 0` makes the keyboard resize the page's LAYOUT, `1` only the visible area (read back in Diagnostics)
             app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.iwvisual")?.let { v ->
                 if (v == "0" || v == "1") try { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.interactive_widget_default_resizes_visual", v == "1", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT) } catch (e: Exception) { /* debug only */ }
@@ -205,7 +208,9 @@ object GeckoEngine {
             "network.dns.echconfig.enabled", "security.tls.enable_kyber", "network.http.http2.enabled",
             // Firefox's own tracking protection: which lists block (content-track-digest256 = the CDN / player category), and the allow-lists Mozilla's service would fill
             "urlclassifier.trackingTable", "urlclassifier.trackingAnnotationTable", "privacy.trackingprotection.enabled", "privacy.annotate_channels.strict_list.enabled",
-            "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled")
+            "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled",
+            // FS1: the engine accepts screen.orientation.lock() only with this on; RX4-X3: is the engine's own Safe Browsing (phishing / malware pages and downloads) switched on here
+            "dom.screenorientation.allow-lock", "browser.safebrowsing.malware.enabled", "browser.safebrowsing.phishing.enabled", "browser.safebrowsing.downloads.enabled", "urlclassifier.malwareTable", "urlclassifier.phishTable")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(if (it.pref.startsWith("urlclassifier")) 220 else 40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
@@ -292,8 +297,13 @@ object GeckoEngine {
         videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "never"}"
         fun pref(name: String, set: () -> Unit) { try { set() } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-pref-failed", "$name ${e.toString().take(100)}") } }
         fun tri(name: String, v: Boolean?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
-        tri("media.mediasource.vp9.enabled", d.vp9)
+        fun triInt(name: String, v: Int?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
+        tri("media.mediasource.vp9.enabled", if (d.vp9 == null && DeviceVideo.labLimits != null) true else d.vp9) // DEBUG lab only (labLimits is never set in a release build): the emulator plays the tablet, where a hardware VP9 decoder makes Gecko offer VP9 whatever this preference says
         tri("media.av1.enabled", d.av1)
+        // ANS53a / ANS53b: with the rule on the engine itself starts nothing by itself (5 = muted starts too) and fetches nothing before play (preload none, also for preload=auto); the page-side gate does the rest
+        triInt("media.autoplay.default", if (prefs.videoPressToPlay) 5 else null)
+        triInt("media.preload.default", if (prefs.videoPressToPlay) 1 else null)
+        triInt("media.preload.auto", if (prefs.videoPressToPlay) 1 else null)
         tri("media.hevc.enabled", d.hevc)
         if (prefs.calmPages) {
             pref("ui.prefersReducedMotion") { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("ui.prefersReducedMotion", 1, u) }

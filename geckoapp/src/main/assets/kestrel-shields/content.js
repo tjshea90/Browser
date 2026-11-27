@@ -284,6 +284,78 @@
         setTimeout(check, 3000);
       } catch (err) { /* ignore */ }
     }, true);
+
+    // RX4-M0a (research/REVIEW-EXTERNAL-4.md): how smoothly do REAL videos play on this tablet? While an element plays, every 15 s (and when it pauses or ends, or the page is hidden) its
+    // getVideoPlaybackQuality() is read and only the DIFFERENCE since the last look is sent: frames shown, dropped, corrupted, seconds, picture size. Numbers; never an address. One timer for
+    // every element, none while nothing plays; the first look of an element only sets its baseline.
+    var vqState = (typeof WeakMap === 'function') ? new WeakMap() : null, vqList = [], vqTimer = 0;
+    function vqClamp(n, max) { n = Math.round(n) || 0; return n < 0 ? 0 : (n > max ? max : n); }
+    function vqLook(v, final) {
+      try {
+        if (!vqState || !v || typeof v.getVideoPlaybackQuality !== 'function') return;
+        var q = v.getVideoPlaybackQuality(), s = vqState.get(v), now = Date.now();
+        var total = q.totalVideoFrames || 0, dropped = q.droppedVideoFrames || 0, corrupt = q.corruptedVideoFrames || 0;
+        if (!s) { vqState.set(v, { t: total, d: dropped, c: corrupt, at: now }); return; }
+        var dt = total - s.t, dd = dropped - s.d, dc = corrupt - s.c, secs = (now - s.at) / 1000;
+        if (dt < 0 || dd < 0) { s.t = total; s.d = dropped; s.c = corrupt; s.at = now; return; }   // a new source started its counters again
+        if (dt < (final ? 15 : 30)) return;                                                         // too few frames to say anything: look again later
+        s.t = total; s.d = dropped; s.c = corrupt; s.at = now;
+        browser.runtime.sendMessage({ k: 'vq', t: vqClamp(dt, 20000), d: vqClamp(dd, 20000), c: vqClamp(dc, 20000), s: vqClamp(secs, 600), w: vqClamp(v.videoWidth, 20000), h: vqClamp(v.videoHeight, 20000) });
+      } catch (err) { /* ignore */ }
+    }
+    function vqTick() {
+      vqTimer = 0;
+      var any = false;
+      for (var i = vqList.length - 1; i >= 0; i--) { var v = vqList[i]; if (v.paused || v.ended) { vqList.splice(i, 1); continue; } any = true; vqLook(v, false); }
+      if (any) vqTimer = setTimeout(vqTick, 15000);
+    }
+    document.addEventListener('playing', function (e) {
+      var v = e.target;
+      if (!v || v.tagName !== 'VIDEO' || !e.isTrusted) return;
+      if (vqList.indexOf(v) < 0) vqList.push(v);
+      vqLook(v, false);
+      if (!vqTimer) vqTimer = setTimeout(vqTick, 15000);
+    }, true);
+    function vqEnd(e) { var v = e.target; if (v && v.tagName === 'VIDEO') vqLook(v, true); }
+    document.addEventListener('pause', vqEnd, true);
+    document.addEventListener('ended', vqEnd, true);
+    function vqAll() { for (var i = 0; i < vqList.length; i++) vqLook(vqList[i], true); }
+    document.addEventListener('visibilitychange', function () { if (document.hidden) vqAll(); }, true);
+    window.addEventListener('pagehide', vqAll, true);
+  } catch (e) { /* never break the page */ }
+})();
+
+// RX4-M0e (research/REVIEW-EXTERNAL-4.md): how smooth is scrolling on REAL pages? Only while the Settings switch "Measure scrolling on real pages" is on (the app's answer to the `guard` question carries `sg`; the
+// switch is OFF by default and nothing below runs without a true answer). A frame callback is requested only from a page's first scroll event until 200 ms after its last one; the frames, the gaps over 50 ms and over
+// 100 ms and the longest gap of the burst go to the app as numbers. The callback makes the page's own thread tick every frame DURING the burst, so the numbers say how well the page keeps up, not how smooth the engine is.
+(function () {
+  try {
+    if (window.top !== window || typeof window.requestAnimationFrame !== 'function') return;
+    var state = 0, asked = false, lastScroll = 0, running = false, last = 0, n = 0, a = 0, b = 0, mx = 0;
+    function ask() {
+      if (asked) return;
+      asked = true;
+      try { browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { state = (r && r.sg === true) ? 2 : 1; }, function () { state = 1; }); } catch (e) { state = 1; }
+    }
+    function flush() {
+      if (n >= 5) browser.runtime.sendMessage({ k: 'sg', n: Math.min(n, 5000), a: Math.min(a, 5000), b: Math.min(b, 5000), mx: Math.min(Math.round(mx), 10000) });
+      n = a = b = mx = 0; last = 0;
+    }
+    function tick(t) {
+      try {
+        if (last) { var d = t - last; n++; if (d > 50) a++; if (d > 100) b++; if (d > mx) mx = d; }
+        last = t;
+        if (performance.now() - lastScroll > 200) { running = false; flush(); return; }   // 200 ms without a scroll event: the burst is over
+        window.requestAnimationFrame(tick);
+      } catch (e) { running = false; }
+    }
+    window.addEventListener('scroll', function () {
+      lastScroll = performance.now();
+      if (state === 0) { ask(); return; }                  // the first scroll only asks; the switch is OFF for almost everybody
+      if (state !== 2 || running) return;
+      running = true; last = 0; n = a = b = mx = 0;
+      window.requestAnimationFrame(tick);
+    }, { passive: true });
   } catch (e) { /* never break the page */ }
 })();
 
@@ -357,6 +429,67 @@
     var wanted = true, topHost = '';
     function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1|' + topHost : '0' })); } catch (e) { /* ignore */ } }
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
+    // ANS52g: the page-side video format policy (codec-main.js) is told the policy the app wants (the `cx` of the guard answer below: "" = none) and reports what it refused: numbers and one short word. Any page script
+    // can dispatch the same event, so what comes in is checked, the word is cut to a few characters and a document gets only a handful of reports through.
+    // ANS53a / ANS53b: the page-side gate (gate-main.js: no video loads or starts before the person presses it) is told whether the rule is on (`gt` of the guard answer; closed until then) and says what it held and
+    // opened: seven numbers, checked here (any page script can dispatch the same event), a handful per document.
+    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0, ho = false;
+    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? (ho ? '1+' : '1') : '0' })); } catch (e) { /* ignore */ } } }
+    document.addEventListener(GREADY, pushGate, true);
+    document.addEventListener(GREP, function (e) {
+      try {
+        if (gReports >= 8 || typeof e.detail !== 'string') return;
+        var p = e.detail.slice(0, 80).split('|'), n = [], i;
+        if (p.length !== 7) return;
+        for (i = 0; i < 7; i++) { var v = parseInt(p[i], 10); if (!(v >= 0 && v <= 1000000)) return; n.push(v); }
+        gReports++;
+        browser.runtime.sendMessage({ k: 'vgt', n: n }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
+    // ANS54e: the gate asks whether Kestrel's own player takes the film the person pressed. Any page script can dispatch the same event, so everything is checked here (the address must be http(s), numbers are
+    // clamped, a document gets a few dozen questions) and only the answer of the app goes back. The app decides; a refusal or no answer means the page plays the film itself.
+    var AEV = '__kst_gate_ask_v1', NEV = '__kst_gate_ans_v1', asked = 0, seenAt = 0;
+    // The gate runs in the PAGE's world: any script of the page can dispatch its question. A genuine question follows a press, so it is relayed only while the engine itself says a person touched this document a moment ago
+    // (navigator.userActivation: a script cannot set it) or while our own listeners saw a trusted tap, key or play of the engine's own controls in the last 12 s (the activation lasts 5 s; a slow page answers a tap later).
+    function seen(e) { if (e && e.isTrusted) seenAt = Date.now(); }
+    ['pointerup', 'click', 'keydown', 'touchend', 'play'].forEach(function (t) { try { window.addEventListener(t, seen, { capture: true, passive: true }); } catch (x) { /* ignore */ } });
+    function touched() { try { var ua = navigator.userActivation; if (ua && typeof ua.isActive === 'boolean' && ua.isActive) return true; } catch (x) { /* an older engine */ } return Date.now() - seenAt < 12000; }
+    document.addEventListener(AEV, function (e) {
+      try {
+        if (!ho || asked >= 60 || typeof e.detail !== 'string' || e.detail.length > 3000 || !touched()) return;
+        var q = JSON.parse(e.detail), id = q.i | 0;
+        if (!(id > 0 && id < 1000000)) return;
+        function num(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }
+        // ANS55f: the film's box (gate geomOf): eleven numbers, each inside its own range, or nothing (the film then plays in the full-screen player)
+        function geo(a) {
+          if (!Array.isArray(a) || a.length !== 11) return null;
+          var lo = [-1e6, -1e6, 0, 0, 0.05, -1e6, -1e6, 1, -1e7, -1e7, 0], hi = [1e6, 1e6, 1e5, 1e5, 20, 1e6, 1e6, 1e5, 1e7, 1e7, 1], o = [], j, v;
+          for (j = 0; j < 11; j++) { v = +a[j]; if (!(v >= lo[j] && v <= hi[j])) return null; o.push(Math.round(v * 100) / 100); }
+          return o;
+        }
+        var src = (typeof q.s === 'string' && /^https?:\/\//i.test(q.s) && q.s.length <= 2000) ? q.s : '';
+        var why = (q.y === 'play' || q.y === 'press' || q.y === 'kestrel') ? q.y : 'play';
+        asked++;
+        browser.runtime.sendMessage({ k: 'vhand', y: why, s: src, b: q.b === 1 ? 1 : 0, m: String(q.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: q.l === 1 ? 1 : 0,
+          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7), g: geo(q.g) }).then(function (r) {
+          try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|' + ((r && r.h === 1) ? '1' : '0') })); } catch (x) { /* ignore */ }
+        }, function () { try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|0' })); } catch (x) { /* ignore */ } });
+      } catch (x) { /* ignore */ }
+    }, true);
+    var CCFG = '__kst_codec_cfg_v1', CREP = '__kst_codec_rep_v1', CREADY = '__kst_codec_ready_v1', cx = null, cReports = 0;
+    function pushCodec() { if (cx !== null) { try { document.dispatchEvent(new CustomEvent(CCFG, { detail: cx })); } catch (e) { /* ignore */ } } }
+    document.addEventListener(CREADY, pushCodec, true);
+    document.addEventListener(CREP, function (e) {
+      try {
+        if (cReports >= 10 || typeof e.detail !== 'string') return;
+        var p = e.detail.slice(0, 120).split('|');
+        if (p.length !== 5) return;
+        var n = [], i;
+        for (i = 0; i < 4; i++) { var v = parseInt(p[i], 10); if (!(v >= 0 && v <= 1000000000)) return; n.push(v); }
+        cReports++;
+        browser.runtime.sendMessage({ k: 'vcx', a: n[0], s: n[1], m: n[2], f: n[3], w: p[4].replace(/[^a-z0-9 x@.]/g, '').slice(0, 30) }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
     // What the page-side guard may REPORT through this event: it refused something. A `tap` (the evidence that lets a jump through) or a `vmenu` arriving through it is never believed: any script of the
     // page can dispatch the same event itself (RX3-G2). The owner's real taps are recorded below, here in the isolated world, from trusted events only.
     var KINDS = { open: 1, click: 1, overlay: 1, form: 1, redirect: 1 };
@@ -430,6 +563,7 @@
     }
     function startMedia(v) {
       try {
+        if (window.KestrelVF && window.KestrelVF.gate) window.KestrelVF.gate(v);       // ANS53a/b: the person's press: the page-side gate lets this film load
         var p = v.play();
         // a frame that was not pressed itself may be refused sound: start it muted rather than not at all
         if (p && p.catch) p.catch(function () { try { v.muted = true; var q = v.play(); if (q && q.catch) q.catch(function () { /* ignore */ }); } catch (e) { /* ignore */ } });
@@ -461,7 +595,7 @@
       } catch (e) { /* ignore */ }
       return undefined;
     });
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); ho = !!(r && r.ho === true); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
 
@@ -519,12 +653,16 @@
     window.addEventListener('contextmenu', function (e) {
       try {
         if (!e.isTrusted) return;
+        if (window.KestrelVF) window.KestrelVF.pressedAt = Date.now();                              // RW5: the release of this press is no tap (videobar.js)
+        if (window.KestrelVB && window.KestrelVB.isBar && window.KestrelVB.isBar(e.target)) return; // Kestrel's own video bar (videobar.js; RW7: known by identity, a page cannot mark its own layer as "the bar")
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         var media = null;
         for (var i = 0; i < els.length && i < 16; i++) {
           var n = els[i].tagName;
           if (n === 'VIDEO' || n === 'AUDIO') { media = els[i]; break; }
         }
+        // LP1 (owner message 44): a video inside a shadow root (finance.yahoo.com's player is one: the point test returns only the shadow HOST) or under a layer with pointer-events: none is not in that list
+        if (!media && window.KestrelVF) media = window.KestrelVF.at(e.clientX, e.clientY);
         if (!media) return;
         var src = media.currentSrc || media.src || '';
         if (!src && !(media.querySelector && media.querySelector('source'))) return;
@@ -561,8 +699,10 @@
     window.addEventListener('contextmenu', function (e) {
       try {
         if (!e.isTrusted) return;
+        if (window.KestrelVB && window.KestrelVB.isBar && window.KestrelVB.isBar(e.target)) return; // Kestrel's own video bar (videobar.js, by identity: RW7)
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
+        if (window.KestrelVF && window.KestrelVF.at(e.clientX, e.clientY)) return; // LP1: a video here (also in a shadow root, also under a layer that takes no pointer events) has its own menu: never the panel
         var before = window.getSelection ? String(window.getSelection()) : ''; // the engine selects the word AFTER this event, and clears an older selection when the press is elsewhere (found on the emulator): neither may hide a press on blank space
         if (before && window.getSelection().rangeCount) { // ... but a press ON the text that is selected belongs to that selection (the engine would select the same word again and nothing would change)
           var rs = window.getSelection().getRangeAt(0).getClientRects();
@@ -572,7 +712,22 @@
           try {
             var sel = window.getSelection ? String(window.getSelection()) : '';
             if (sel.length > 0 && sel !== before) return; // the engine selected a word: the press was on text (a selection it CLEARED, as it does on a press elsewhere, is not that)
-            browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {});
+            if (window.top === window) { browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); return; }
+            // a press inside a FRAME: an ad overlay (Google IMA) lies over a player of the page above and takes every touch. The top frame is asked whether a frame of this size covers a video; only if not is it open space.
+            // RW4: exactly ONE of the two goes to the app: the panel (told after 700 ms of silence, or when the answer is "no video") or the video menu (the answer carries the film's address and THIS frame sends it, only
+            // while the panel has not been told). A late answer after the panel was told changes nothing, so the panel and the sheet never open together.
+            var told = false;
+            var openHere = function () { if (told) return; told = true; browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); };
+            var lateTimer = setTimeout(openHere, 700);
+            browser.runtime.sendMessage({ k: 'ft', t: 'lp', w: window.innerWidth, h: window.innerHeight }).then(function (r) {
+              clearTimeout(lateTimer);
+              if (r && r.video === true) {
+                if (told) return;
+                told = true;
+                var src = (typeof r.src === 'string' && r.src.indexOf('http') === 0) ? r.src.slice(0, 2000) : '';
+                browser.runtime.sendMessage({ k: 'pop', d: 'vmenu|' + src, p: location.href }).catch(function () {});
+              } else openHere();
+            }, function () { clearTimeout(lateTimer); openHere(); });
           } catch (x) { /* never break the page */ }
         }, 200);
       } catch (x) { /* never break the page */ }

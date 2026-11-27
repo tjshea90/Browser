@@ -1,0 +1,78 @@
+package app.kestrel.core.player
+
+/**
+ * VP1 (owner message 49, research/VIDEO_PLAYER_AUDIT.md): the pure rules of Kestrel's own full-screen video controls. Android and GeckoView are not needed here; the app side is
+ * `web/PlayerController` (the clock, the views, the messages) and the page side is `kestrel-shields/player.js`.
+ *
+ * The numbers are the ones the big players agree on (the audit's table), in one place so a test can pin them and a change is one line.
+ */
+object PlayerRules {
+    /** The controls hide after this long without a touch while the film plays (research/VIDEO_PLAYER_AUDIT.md: Chromium 2.5 s, Shaka 3 s, VLC 4 s, ExoPlayer and Firefox 5 s; the middle, a little short for "the whole screen to the video").
+     *  The app raises it to what Android's accessibility setting recommends ([minOf] of nothing: the larger). Never while it is paused, buffering, ended, or a finger is on a control. */
+    const val HIDE_AFTER_MS = 3500L
+
+    /** They show for this long when full screen begins, so the person sees that they exist. */
+    const val AFTER_ENTER_MS = 3500L
+
+    /** ... and for this long after the screen has turned (the picture was covered meanwhile). */
+    const val AFTER_TURN_MS = 2500L
+
+    /** Two taps this close, on the same LEFT or RIGHT side, are a double tap (Android's own double-tap timeout on API 29 is 300 ms): the second one seeks. Since ANS53c the first tap does NOT wait for it: it toggles the controls at once. */
+    const val DOUBLE_TAP_MS = 300L
+
+    /** After a double tap that seeked, further taps on the same side seek again at once until this long passes without one (Shaka 500 ms, YouTube alike). */
+    const val BURST_MS = 500L
+
+    /**
+     * ANS51d (owner message 51: the real tablet's page script was silent for 3.5 to 14 s after a turn and then reported again; the old 3.5 s limit ended the session three times in 160 s and every restart popped the controls up):
+     * a page that has not reported for this long is taken as gone (its full-screen box lost the film, its script is dead, it was left); a page that is only busy is waited for.
+     */
+    const val PAGE_GONE_MS = 12000L
+
+    /** The page said nothing for [sinceLastReportMs]: is it gone? */
+    fun pageGone(sinceLastReportMs: Long): Boolean = sinceLastReportMs > PAGE_GONE_MS
+
+    /** One seek step of a double tap and of the skip buttons, in seconds. */
+    const val SKIP_S = 10.0
+
+    /** The left third and the right third of the picture are the seek sides, the middle third plays / pauses on a double tap. */
+    const val SIDE = 0.35
+
+    /** A length that has been the same this long is believed (a Media Source stream grows its duration segment by segment, and an ad has its own). */
+    const val STABLE_MS = 2000L
+
+    /** A length of this many seconds or more is how some players say "live" where `Infinity` is not allowed (Shaka and Plyr treat 2^32 so): no end time, no track. */
+    const val LIVE_SECONDS = 4294967296.0
+
+    /** A length may be this much smaller than the played / buffered end before it is called wrong (rounding). */
+    const val FLOOR_SLACK_S = 0.75
+
+    enum class Zone { LEFT, CENTER, RIGHT }
+
+    fun zone(xFraction: Double): Zone = when {
+        xFraction < SIDE -> Zone.LEFT
+        xFraction > 1.0 - SIDE -> Zone.RIGHT
+        else -> Zone.CENTER
+    }
+
+    /** "1:05", "0:07", "1:02:03". Negative, NaN and infinite times read as 0:00. */
+    fun formatTime(seconds: Double): String {
+        val t = if (seconds.isNaN() || seconds.isInfinite() || seconds < 0) 0L else seconds.toLong()
+        val h = t / 3600; val m = (t % 3600) / 60; val s = t % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    }
+
+    /** Where a skip of [delta] seconds lands: never before 0, never past a KNOWN [duration] (null = not known: no upper bound except the seekable end [seekableEnd] when there is one). */
+    fun skipTarget(t: Double, delta: Double, duration: Double?, seekableEnd: Double? = null): Double {
+        val raw = t + delta
+        val top = duration ?: seekableEnd
+        val bounded = if (top != null && top > 0.0) minOf(raw, top) else raw
+        return maxOf(0.0, bounded)
+    }
+
+    /** The place of [t] on a track of [duration] as 0..1. */
+    fun fraction(t: Double, duration: Double): Double = if (duration > 0.0) (t / duration).coerceIn(0.0, 1.0) else 0.0
+
+    /** The time a finger at [fraction] of the track means. */
+    fun timeAt(fraction: Double, duration: Double): Double = fraction.coerceIn(0.0, 1.0) * duration
+}

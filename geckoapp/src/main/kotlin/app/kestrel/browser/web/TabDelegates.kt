@@ -30,11 +30,11 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     // ---- RX3-S1: the engine's media session says whether the page's video plays; the neon glow holds still while it does (BrowserActivity.updateNeonBusy)
     private fun media(e: app.kestrel.core.session.NeonRules.MediaEvent) { val now = app.kestrel.core.session.NeonRules.videoAfter(tab.gecko.videoPlaying, e); if (now != tab.gecko.videoPlaying) { tab.gecko.videoPlaying = now; a.videoStateChanged(tab) } }
-    override fun onActivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.ACTIVATED)
-    override fun onPlay(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.PLAY)
+    override fun onActivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) { tab.gecko.mediaSession = mediaSession; media(app.kestrel.core.session.NeonRules.MediaEvent.ACTIVATED) } // ROT1: kept so the app can pause it while the screen turns
+    override fun onPlay(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) { tab.gecko.mediaSession = mediaSession; media(app.kestrel.core.session.NeonRules.MediaEvent.PLAY) }
     override fun onPause(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.PAUSE)
     override fun onStop(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.STOP)
-    override fun onDeactivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.DEACTIVATED)
+    override fun onDeactivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) { tab.gecko.mediaSession = null; media(app.kestrel.core.session.NeonRules.MediaEvent.DEACTIVATED) }
 
 
     private val allow = AllowOrDeny.ALLOW
@@ -46,6 +46,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Only COMMITTED pages reach the address bar. Engine-internal pages (about:neterror, our blank error backdrop) never do.
         if (url == null || url.startsWith("about:") || url.startsWith("data:")) return
         tab.url = url
+        a.pageAddressChanged(tab, url)   // the film inside the page ends when the address changes without a page load (pushState / #link)
         a.backLocated(url) // RX3-BK1: when the Back target's address was committed
         tab.pendingNav = null
         val host = UrlParts.hostOf(url)
@@ -166,7 +167,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
             }
             WebRequestError.ERROR_HTTPS_ONLY -> tab.error = ErrorScreen.HttpsUnavailable(failing, host)
             WebRequestError.ERROR_SAFEBROWSING_MALWARE_URI, WebRequestError.ERROR_SAFEBROWSING_PHISHING_URI,
-            WebRequestError.ERROR_SAFEBROWSING_HARMFUL_URI, WebRequestError.ERROR_SAFEBROWSING_UNWANTED_URI -> tab.error = ErrorScreen.Dangerous(failing, host, Category.MALWARE)
+            WebRequestError.ERROR_SAFEBROWSING_HARMFUL_URI, WebRequestError.ERROR_SAFEBROWSING_UNWANTED_URI -> {
+                if (!tab.isPrivateTab) { Health.count("safebrowsing.engineBlocks"); Health.log("page", "safebrowsing", "host=$host code=${error.code}") } // RX4-X3: the ENGINE's own protection said no (not Kestrel's list)
+                tab.error = ErrorScreen.Dangerous(failing, host, Category.MALWARE)
+            }
             WebRequestError.ERROR_CONTENT_CRASHED -> tab.error = ErrorScreen.Crashed(failing)
             else -> {
                 val code = webViewCode(error.code)
@@ -188,6 +192,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onPageStart(session: GeckoSession, url: String) {
         lastStartUrl = url
+        tab.gecko.pageStartedAt = android.os.SystemClock.uptimeMillis(); tab.gecko.pageStartUrl = url // RX4-X2
         if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(true) // downloads step aside while this page loads
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
         tab.loading = true
@@ -203,7 +208,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPageStop(session: GeckoSession, success: Boolean) {
-        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) })
+        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success)
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
@@ -224,7 +229,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onTitleChange(session: GeckoSession, title: String?) { tab.title = title ?: ""; a.tabChanged(tab) }
     override fun onCloseRequest(session: GeckoSession) { a.closeTab(tab) }
-    override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(fullScreen) }
+    override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(tab, fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
     override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite") } } // a repeat without a navigation = the compositor restarted
@@ -239,7 +244,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // The channel starts suspended and resumes on the first read: closing without reading costs no data and frees the connection. The download manager makes its own
         // (Range-capable, resumable) request through the same network stack, with the same cookies.
         try { response.body?.close() } catch (e: Exception) { /* ignore */ }
-        a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length)
+        a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length, redirected = response.redirected)
     }
 
     override fun onSlowScript(session: GeckoSession, scriptFileName: String): GeckoResult<SlowScriptResponse>? = a.askSlowScript(tab)
@@ -325,7 +330,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
         when (perm.permission) {
-            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+            // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
+            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
             PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE -> return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
             PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> {
                 // Protected video (Widevine through Android's own MediaDrm): only when the device has it and the owner has not turned it off; asked per request because it identifies the tablet to the site's licence server.
