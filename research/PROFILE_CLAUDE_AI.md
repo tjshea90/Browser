@@ -50,5 +50,37 @@ These are wall-clock waits that overlap; they are not processor time. They say: 
 - The load window is 22 s (was 100 s), `NOW_MS` 15 s, four thread names (`GeckoMain`, `JS Helper`, `DOM Worker`, `StyleThread`), features `js` + `cpu` only, so the page process has a chance to hand over its part. The toast says "first 22 seconds". `window_ms` is in the meta file.
 - If the page process is still missing, `tools/profile_digest.py` says so at the top ("THE PAGE PROCESS IS NOT IN THIS RECORDING") instead of showing the busiest thread of another process.
 
+## 8. The second recording (alpha112, 2026-11-27 20:54Z, `profiles/2026-11-27/205459-852b0843cb06`) and the new diagnostics (20:51Z)
+Owner, verbatim: "I sent a new diagnostics and a new page profile". Same page (claude.ai reload), window 22 s, 4 thread names, features js + cpu, interval 5 ms. Tags as in section 1.
+
+### 8.1 The page process is missing again, so the size of the recording was not the cause [M]
+Gathering log: "Could not generate profile from pid 13909, failure: OOM in ChunkedJSONWriteFunc::AllocChunk allocating new chunk": the same sentence as the first file. 44 s with 16 threads and 22 s with 4 threads fail the same way; the page process cannot get memory at the END of a heavy load (a 32-bit process; its PSS peak in the run was 668 MB). alpha113 therefore records one thread (`GeckoMain`), 20 s, tells the engine to give memory back 2.5 s before the end (`Application.onLowMemory()`, which the memory gate always passes on; `release_at_ms` in the meta file), and says in a toast and in the meta (`page_process: missing|present`) whether the page was in it. If it fails a third time the next step is a recording without script stacks (no `js`), which the page process can write in a fraction of the memory.
+
+### 8.2 What alpha112's change did to the parent half (same page, same flow) [M]
+| | alpha111 (44 s window) | alpha112 (22 s window) |
+| :- | :- | :- |
+| `onCompleted` events through the main thread | 1,326 | 6 |
+| all extension events (`ExtensionParent`) | 2,665 | 1,047 (all but 30 are `onBeforeRequest`) |
+| request held for the blocking `onBeforeRequest` | median 3.9 s, 90 % 4.4 s | median 2.2 s, 90 % 3.3 s, longest 4.1 s |
+| open to end of one request | median 7.9 s, 90 % 8.3 s | median 5.0 s, 90 % 6.0 s |
+| webRequest / extension share of the busiest 15 s | about 36 % | 23.6 % |
+| parent main thread saturated | 8 s to 23 s | 11 s to the end of the window (22 s) |
+Caution: one recording each; the second window ends while the thread is still full, and the request counts (1,301 and 912) are not comparable because the windows differ. The direction and the size agree with the prediction of section 4 (about half of the dispatches gone, the wait of a request down by about a third).
+The page's own numbers in the diagnostics do NOT yet show it: claude.ai first paint, 3 full loads on alpha112: 13.1, 17.4, 17.7 s (alpha109: median 13.7 s over 15 loads; alpha111: 11.1 and 12.9 s); but those 3 loads followed engine kills and one fetched 13 MB over the hotspot (`rc=17` of 1,346 requests came from the cache), so they are not the same experiment. Nothing proves a gain in first paint yet; the second recording proves the parent queue got shorter.
+
+### 8.3 The parent main thread, now with names (`python3 -B -I tools/profile_digest.py --symbolicate FILE`) [M]
+1,697 of the 1,809 native addresses of the parent's main thread were named by Mozilla's public symbol service (only library name, build id and offsets are sent; system libraries such as libc stay `libc.so+0x...`). Inclusive share of the 4,170 samples (nested functions count at each level):
+- idle in `nsAppShell::ProcessNextNativeEvent:Wait`: 31 % (one libc address, `libc.so+0x5a7b8`, is the wait)
+- `js::RunScript` 22.7 %, `XPCWrappedJS method call` 16.6 %, `nsObserverService::NotifyObservers http-on-modify-request` 11.4 %, `forEach (self-hosted)` 10.0 %, `JSActor message handler` 7.2 %
+- data delivery from the cache: `nsInputStreamPump::OnInputStreamReady` 10.3 %, `OnStateStop` 5.3 %, `nsHttpChannel::OnStopRequest` 5.1 %
+- the extension's own code (`background.js`): under 1 % (`lstTimed/<` 0.8 %, `onRequest` 0.4 %). The cost is Firefox's own dispatch: `WebRequest.sys.mjs observe` 13.9 %, `runChannelListener` 12.9 %, `getRequestData` 3.4 %, `applyChanges` 2.8 %, the conduit messages between the extension's global and the API side (`ConduitsParent send/batch`, `ConduitsChild receiveMessage`, `ExtensionChild recvRunListener`, `ExtensionParent applySafe`) about 8 % together, `applySafeWithoutClone` 5.1 %.
+So per request, about 3 ms of the parent's main thread is the single remaining dispatch (`onBeforeRequest`, blocking, cannot be dropped without losing the blocker), about 3 ms is the engine's own HTTP and cache delivery, and the rest is event-loop work. There is no cheap lever left in the extension: its code is under 1 %, and Gecko's declarativeNetRequest is no cheaper (section 5).
+
+### 8.4 The new diagnostics (alpha112 run 18:35Z to 20:51Z, 2 h 16 min) [M]
+- Keep-ready (KR1): 11 holds, all ended by the person returning; engine kills while away: 1 real (14 minutes after leaving, while the hold ran: the tablet took the content process anyway) and 2 at the same second that were the task being swiped away (`kill-away held=true` then `life destroy finishing=true` 0.1 s later): the digest counted them as kills "while held". So the hold is not a guarantee; one kill in 2 h 16 min against 7 in 17 h before it, too little data to call it.
+- A REAL CRASH, found in the crash section of this upload: the alpha111 run of 07:09 to 07:25Z ended with `RemoteServiceException: Context.startForegroundService() did not then call Service.startForeground()` for `KeepReadyService`. Cause: leaving and returning within a moment stopped the service before the system had created it; Android 8 to 11 kill the app when that happens. Fixed in alpha113 (`KeepReady.stopStep`, rule `nd3`); alpha110, 111 and 112 all have it.
+- First start after an install: alpha112's own first start ended after 25 s with no crash note again (DG1; still no cause; the person reopened it 4 s later).
+- `ui STALL` while opening Settings: none in the alpha112 run (the lazy Settings of alpha110 holds; not proof, only no counter-example).
+
 ## 7. How to use this next time
-`python3 -B -I tools/profile_digest.py` prints: gathering log and settings, share per category per thread, busy seconds, script files and functions, label frames, markers (intervals joined), NETWORK (requests once each, opened / ended per 2 s) and EXTENSION PLUMBING (held requests, events). A number that looks wrong: `--shape`, fix the reader, keep the raw file.
+`python3 -B -I tools/profile_digest.py [--symbolicate] [FILE]` prints (`--symbolicate` asks Mozilla's public symbol service for the names of the engine's own native frames: only library name, build id and offsets leave this machine; answers are cached in the temp folder): gathering log and settings, share per category per thread, busy seconds, script files and functions, label frames, markers (intervals joined), NETWORK (requests once each, opened / ended per 2 s) and EXTENSION PLUMBING (held requests, events). A number that looks wrong: `--shape`, fix the reader, keep the raw file.
