@@ -711,14 +711,14 @@ def self_checks(batches):
 
 def kills_analysis(batches):
     """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
-    Newer builds say it themselves (`gecko kill-state away=.. held=..`); for older ones the app is taken as away after `life pause` until `life resume` within the same run."""
+    Newer builds say it themselves (`gecko kill-state away=.. held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
+    more within 2 minutes is the system's "cached process" signal (the app was away); else the life lines (`life pause` / `life stop` until `life resume` in the same run) say it, which the journal thinning can drop."""
     total, away, front, held, said = 0, 0, 0, 0, 0
     gaps = []
     for b in batches:
         run_away, stop_at = False, None
-        for e in b.get('events', []):
-            if not isinstance(e, str):
-                continue
+        evs = [e for e in b.get('events', []) if isinstance(e, str)]
+        for idx, e in enumerate(evs):
             layer, ev, detail = split(e)
             tm = re.match(r'^\+([\d.]+)s ', e)
             t = float(tm.group(1)) if tm else None
@@ -732,9 +732,16 @@ def kills_analysis(batches):
                 run_away, stop_at = False, None
             elif txt.startswith('gecko onKill'):
                 total += 1
-                if run_away:
+                was_away = run_away
+                for nxt in evs[idx + 1:idx + 4]:                       # the line the app writes right after a kill
+                    m = re.search(r'recover-after-kill .*?trim=(\d+)@(\d+)s', nxt)
+                    if m:
+                        if int(m.group(1)) >= 40 and int(m.group(2)) <= 120:
+                            was_away = True
+                        break
+                if was_away:
                     away += 1
-                    if stop_at is not None and t is not None:
+                    if run_away and stop_at is not None and t is not None:
                         gaps.append((t - stop_at) / 60.0)
                 else:
                     front += 1
@@ -749,7 +756,7 @@ def kills_analysis(batches):
     gaps.sort()
     print('  %d content-process kill(s): %d while the app was away, %d with the app in front; the newest builds said it themselves %d time(s), %d of them while keep-ready was holding' % (total, away, front, said, held))
     if gaps:
-        print('  minutes between leaving the app and the kill: median %.0f, shortest %.0f, longest %.0f' % (gaps[len(gaps) // 2], gaps[0], gaps[-1]))
+        print('  minutes between leaving the app and the kill (where the life lines survived the thinning): median %.0f, shortest %.0f, longest %.0f' % (gaps[len(gaps) // 2], gaps[0], gaps[-1]))
     if said and held == 0:
         print('  -> keep-ready was NOT holding for any kill the app described: check Settings > Appearance > Keep the page ready when I leave, and the Diagnostics line "Keep the page ready"')
     elif held:
