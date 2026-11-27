@@ -248,8 +248,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         val away = !app.kestrel.browser.ProcessLife.uiVisible; val held = app.kestrel.browser.ProcessLife.keepReady
         Health.count(if (away) "gecko.kill.away" else "gecko.kill.front"); if (away && held) Health.count("gecko.kill.away.held")
         Health.log("gecko", if (away) "kill-away" else "kill-front", "held=$held")      // two event names: the live-diagnostics histogram (and so the advisor) counts event kinds
-        a.sessionGone(tab, false); scrubCrashReports()
-    }
+        a.sessionGone(tab, false); scrubCrashReports() }
 
     /** PV1: the engine writes its crash report a moment after the crash: a few seconds later its memory dump is deleted and its details are cut to the ones Diagnostics reads. */
     private fun scrubCrashReports() { val c = a.applicationContext; app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.diag.CrashNote.scrubEngineReports(c) } }, 15_000L) }
