@@ -372,5 +372,16 @@ check "digest FOCUS REPORT has the five areas and counts the security lines (PER
 check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
 
+# ---- ND1d: the profile reader (tools/profile_digest.py) reads synthetic Gecko profiles in both layouts the format has had; the digest has the SELF-CHECKS / KILLS sections and the newest-build advice
+check "profile_digest reads synthetic profiles (schema rows and columns, gzip and plain, nested processes) and says where the time went (ND1d)" 'python3 -B -I "$D/tools/test_profile_digest.py"'
+check "digest SELF-CHECKS fails on a line that says must be 0 with a number above 0, and KILLS separates away from in front (ND1)" 'mkdir -p "$T/nd1/diag/2026-11-27" && python3 -I - "$T/nd1/diag/2026-11-27/051742-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha109", "code": 210, "android": 29, "model": "x", "at": "2026-11-27T05:17:42Z", "dropped": 0, "thinned": 0,
+  "snapshot": ["Tab previews: 2 tabs, 1 with a preview, 1 for the WRONG page (must be 0); late pictures thrown away: 0"],
+  "events": ["+10.0s life stop", "+20.0s gecko onKill claude.ai", "+20.1s gecko recover-after-kill n=1 state=true current=true avail=900MB thr=144MB low=false trim=80@2s claude.ai", "+30.0s life resume", "+40.0s gecko onKill example.org", "+40.1s gecko recover-after-kill n=1 state=true current=true avail=600MB thr=144MB low=false trim=5@30s example.org"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd1/diag" > "$T/nd1/out.txt"; grep -q "FAILED .*Tab previews: 2 tabs, 1 with a preview, 1 for the WRONG page" "$T/nd1/out.txt" && grep -q "2 content-process kill(s): 1 while the app was away, 1 with the app in front" "$T/nd1/out.txt"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
