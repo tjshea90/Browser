@@ -94,6 +94,28 @@ class GlideParams(
      */
     val rareMaxPerLetter: Float = 1.1f,
     val rareFitSpan: Float = 2f,
+    /**
+     * Owner R19d (2026-11-18): "it should always input a word, the closest word to the pattern i glided, even if it picks an incorrect word". When the strict pass above finds no word at all (the ends are not near a
+     * word's first / last letter, a letter was never visited, the fit is worse than [maxPerLetter]), a second, relaxed pass drops those limits and answers with the closest word anyway (the language still breaks ties, and the
+     * strip still offers the next two). It reverses the earlier "a glide that fits nothing says so" rule on purpose. False = the old behaviour (the tests and the evaluation tools that measure the refusal).
+     */
+    val alwaysAnswer: Boolean = true,
+    /**
+     * Owner R20d: besides the one shift of the whole path (the habit), a plane through where THIS thumb lands on each part of the keyboard ([TouchField]) is learned from the first and last letter of the words kept, and taken
+     * off the path before it is judged. False = the old single shift only (the tests and evaluation tools compare the two).
+     */
+    val touchField: Boolean = true,
+    /**
+     * Owner R23c (2026-11-18): "the keyboard isn't very good at predicting between small words, notably 'the' often becomes 'there'. 'The' uses a shorter gesture than there, so it shouldn't confuse them." The length of
+     * the gesture is evidence: a word whose ideal path (the straight lines through its letters) is much longer than what the finger drew is unlikely ("there" has e-r-e more than "the"), and one that is a little shorter is
+     * only slightly unlikely (people wander). [lengthExpect] is the share of the ideal path a finger really draws (corners are cut), [lengthSigmaLow] / [lengthSigmaHigh] how far the length may stray (in ln units) below / above that,
+     * [lengthW] the price of z squared / 2 in cost units, never more than [lengthCap]. [lengthW] 0 = off.
+     */
+    val lengthW: Float = 1.0f,
+    val lengthExpect: Float = 0.92f,
+    val lengthSigmaLow: Float = 0.16f,
+    val lengthSigmaHigh: Float = 0.30f,
+    val lengthCap: Float = 4.0f,
 )
 
 /** What counts as a rare word (shared by the glide decoder and the tap suggester). ln-probabilities are on the scale of the shipped list: -12.5 is about rank 13 000 of 140 000. */
@@ -137,6 +159,12 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
     /** The offset the learned finger habit adds to every path (pitches): what the finger usually lands beside the key it aims at. Set by [learnFrom]. */
     var biasX = 0f; var biasY = 0f
+    /** R20d: where the thumb lands on each part of the keyboard, on top of the single shift. Learned by [learnFrom]; owned by whoever owns the decoder. */
+    val field = TouchField()
+    private val fo = FloatArray(2)
+    private val fx0 = kx.min(); private val fx1 = kx.max(); private val fy0 = ky.min(); private val fy1 = ky.max()
+    private fun fu(x: Float) = if (fx1 > fx0) (x - fx0) / (fx1 - fx0) else 0.5f
+    private fun fv(y: Float) = if (fy1 > fy0) (y - fy0) / (fy1 - fy0) else 0.5f
 
     /** How many words the last decode looked at closely, and the language weight it used (for the diagnostics and the tests). */
     var lastCandidates = 0; private set
@@ -150,15 +178,29 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     private val injected = ArrayList<String>()  // the remembered words the last decode put among the survivors on top of the quick pass's own
 
     /**
-     * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or
-     * nothing fits.
+     * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or a short wiggle (not a glide), and, only when [relax]
+     * is false or [GlideParams.alwaysAnswer] is off, when nothing fits (R19d: otherwise the closest word is answered anyway).
      */
-    fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3, prev2: String? = null): List<GlideCandidate> {
-        lastCandidates = 0; lastPatternLifted = false; lastPatternFlipped = false; injected.clear()
+    fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3, prev2: String? = null, relax: Boolean = true): List<GlideCandidate> {
+        val strict = decodePass(xs, ys, count, lexicons, prev, max, prev2, relaxed = false)
+        if (strict.isNotEmpty() || !relax || !p.alwaysAnswer) return strict
+        return decodePass(xs, ys, count, lexicons, prev, max, prev2, relaxed = true)       // R19d: nothing fits by the strict rules: the closest word anyway
+    }
+
+    /** True when the last [decode] had to relax its limits to find any word (Diagnostics / tests). */
+    var lastRelaxed = false; private set
+    /** The squared distance (pitches) a letter may be from the whole path before the word is dropped: [GlideParams.missLimit2], or no limit in the relaxed pass. */
+    private var missLimit2 = 0f
+
+    private fun decodePass(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int, prev2: String?, relaxed: Boolean): List<GlideCandidate> {
+        lastCandidates = 0; lastPatternLifted = false; lastPatternFlipped = false; injected.clear(); lastRelaxed = relaxed
+        missLimit2 = if (relaxed) Float.MAX_VALUE else p.missLimit2
+        val reach2 = if (relaxed) Float.MAX_VALUE else p.endReach2
         lastPrint = if (p.patGain > 0f) Fingerprint.of(xs, ys, count, keys) else null
         if (count < 2 || !resample(xs, ys, count)) return emptyList()
         // the path moved by the learned habit; everything after judges this one
         for (i in 0 until n) { qx[i] -= biasX; qy[i] -= biasY }
+        if (p.touchField && !field.isEmpty) for (i in 0 until n) { field.at(fu(qx[i]), fv(qy[i]), fo); qx[i] -= fo[0]; qy[i] -= fo[1] }       // R20d: where this thumb lands on this part of the keyboard
         // how close does the path come to each key
         for (k in 0 until 26) {
             var best = Float.MAX_VALUE
@@ -173,9 +215,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         heapN = 0
         for ((li, lex) in lexicons.withIndex()) {
             for (f in 0 until 26) {
-                if (startD[f] > p.endReach2) continue
+                if (startD[f] > reach2) continue
                 for (l in 0 until 26) {
-                    if (endD[l] > p.endReach2) continue
+                    if (endD[l] > reach2) continue
                     val ids = lex.bucket(f, l)
                     for (id in ids) quick(lex, li, id, startD[f] + endD[l])
                 }
@@ -216,8 +258,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
             val letters = distinctLetters(lex, id)
             val per = costs[h] / letters
-            if (per > p.maxPerLetter) continue
-            if (rare[h] > 0f && p.rareW > 0f) { // a rare word needs a path that really fits it
+            if (costs[h] >= Float.MAX_VALUE / 8) continue                                    // the word cannot be laid on the path at all
+            if (!relaxed && per > p.maxPerLetter) continue
+            if (!relaxed && rare[h] > 0f && p.rareW > 0f) { // a rare word needs a path that really fits it
                 val d = Math.min(1f, Rarity.below(priors[h], p.rareFloor, p.rareCap) / p.rareFitSpan)
                 if (per > p.maxPerLetter - (p.maxPerLetter - p.rareMaxPerLetter) * d) continue
             }
@@ -248,6 +291,13 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         val o = offsetFor(lex, id) ?: return
         // the offset measured now is what is LEFT after the habit so far was taken off, so it is added to the habit
         biasX = (biasX + rate * o[0]).coerceIn(-MAX_BIAS, MAX_BIAS); biasY = (biasY + rate * o[1]).coerceIn(-MAX_BIAS, MAX_BIAS)
+        if (p.touchField && mCount >= 2) {                           // R20d: where this thumb lands on the keyboard: only the first and the last letter, the points that are aimed at (the letters between are cut short at corners)
+            for (j in intArrayOf(0, mCount - 1)) {
+                val i = assign[j]; val l = letters[j]
+                field.at(fu(kx[l]), fv(ky[l]), fo)                                      // (what the path was already corrected by there: the observation is what the plane has to explain on top of the single shift)
+                field.add(fu(kx[l]), fv(ky[l]), wx[i] - kx[l] + fo[0], wy[i] - ky[l] + fo[1])
+            }
+        }
     }
 
     // ------------------------------------------------------------------ for the tests
@@ -321,7 +371,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             if (l == prevL) continue
             prevL = l
             val d = dKey[l]
-            if (d > p.missLimit2) return Float.NaN
+            if (d > missLimit2) return Float.NaN
             cov += if (d < p.visitCap) d else p.visitCap
             m++
         }
@@ -400,7 +450,22 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     private fun careful(lex: GlideLexicon, id: Int): Float {
         if (!loadLetters(lex, id)) return Float.MAX_VALUE / 8
         setWork(0f, 0f)
-        return dp(mCount)
+        val c = dp(mCount)
+        return if (c >= Float.MAX_VALUE / 8) c else c + lengthCost()
+    }
+
+    /**
+     * R23c: what the length of the gesture says against the length of the ideal path through the letters in [letters] (call after [loadLetters]): z squared / 2 of how far the ratio is from what a finger draws, priced by
+     * [GlideParams.lengthW]. "there" is 2 key widths longer than "the": a gesture of "the" is too short for it.
+     */
+    private fun lengthCost(): Float {
+        if (p.lengthW <= 0f || mCount < 2 || gestureLen <= 0f) return 0f
+        var ideal = 0f
+        for (j in 1 until mCount) { val a = letters[j - 1]; val b = letters[j]; ideal += Math.sqrt(d2(kx[a] - kx[b], ky[a] - ky[b]).toDouble()).toFloat() }
+        if (ideal < 0.5f) return 0f
+        val d = Math.log((gestureLen / (ideal * p.lengthExpect)).toDouble()).toFloat()
+        val z = if (d < 0f) d / p.lengthSigmaLow else d / p.lengthSigmaHigh
+        return Math.min(p.lengthCap, p.lengthW * 0.5f * z * z)
     }
 
     /** The second look: move the whole path by [GlideParams.biasGain] of how far it sat off the word's letters, and judge again (the better of the two, with the move charged). */
@@ -411,7 +476,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         val o = meanOffset(mCount)
         val mx = o[0] * p.biasGain; val my = o[1] * p.biasGain
         setWork(mx, my)
-        val c2 = dp(mCount) + p.biasW * (mx * mx + my * my) * mCount
+        val c2 = dp(mCount) + p.biasW * (mx * mx + my * my) * mCount + lengthCost()
         return if (c2 < cost1) c2 else cost1
     }
 

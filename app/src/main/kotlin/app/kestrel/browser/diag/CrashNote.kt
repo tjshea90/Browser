@@ -82,8 +82,13 @@ object CrashNote {
         return out
     }
 
-    /** The newest crash reports the ENGINE left in its profile folder: process type, reason, when. Empty when there are none. */
-    internal fun engineLines(ctx: Context, now: Long): List<String> {
+    /** When the crash note was written (the moment of the crash), or 0 when there is none: [LastRun] tells whether the note belongs to the run that just ended. */
+    fun noteTime(ctx: Context): Long = try { File(ctx.filesDir, FILE).let { if (it.isFile) it.lastModified() else 0L } } catch (e: Exception) { 0L }
+
+    /** When the engine wrote its newest crash report (any engine process), or 0 when it has none. */
+    fun newestEngineReportAt(ctx: Context): Long = engineExtras(ctx).maxOfOrNull { it.lastModified() } ?: 0L
+
+    private fun engineExtras(ctx: Context): List<File> {
         val moz = File(ctx.filesDir, "mozilla")
         val extras = ArrayList<File>()
         try {
@@ -93,6 +98,12 @@ object CrashNote {
                 for (d in dirs) for (f in d.listFiles { x -> x.isFile && x.name.endsWith(".extra") } ?: emptyArray()) extras.add(f)
             }
         } catch (e: Exception) { return emptyList() }
+        return extras
+    }
+
+    /** The newest crash reports the ENGINE left in its profile folder: process type, reason, when. Empty when there are none. */
+    internal fun engineLines(ctx: Context, now: Long): List<String> {
+        val extras = ArrayList(engineExtras(ctx))
         if (extras.isEmpty()) return emptyList()
         extras.sortByDescending { it.lastModified() }
         val out = ArrayList<String>()

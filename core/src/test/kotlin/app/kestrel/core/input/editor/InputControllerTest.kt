@@ -215,3 +215,45 @@ class InputControllerTest {
         assertNull(Rig("call 555-1234 ").c.previousWord()); assertNull(Rig("").c.previousWord())
     }
 }
+
+/** R18a: the whole word at the cursor, its neighbours, and replacing it where it stands. */
+class WordAroundTest {
+    private fun at(text: String, cursor: Int): Rig = Rig(text, sel = cursor)
+
+    @Test fun theWholeWordIsFoundFromAnyPlaceInsideOrAtItsEnds() {
+        for (cur in 6..11) { val w = at("hello world again", cur).c.wordAround(); assertEquals("cursor $cur", "world", w?.text); assertEquals(cur - 6, w?.left) }
+        assertEquals("hello", at("hello world", 5).c.wordAround()?.text)
+        assertNull("between two spaces", at("hello  world", 6).c.wordAround())
+        assertNull("not at a word at all", at("hello, world", 6).c.wordAround())
+    }
+
+    @Test fun codesAddressesAndSelectionsAreNotWords() {
+        assertNull(at("abc4 xyz", 2).c.wordAround()); assertNull(at("me@site.com", 4).c.wordAround()); assertNull(at("a", 1).c.wordAround()); assertNull(at("x".repeat(30), 15).c.wordAround())
+        val r = Rig("hello world", sel = 8); r.ed.userSelect(6, 11); r.sync(); assertNull(r.c.wordAround())
+    }
+
+    @Test fun anApostropheInsideStaysAndOneAtTheEdgesIsAQuote() {
+        assertEquals("don't", at("say don't now", 7).c.wordAround()?.text); assertEquals("hello", at("'hello' there", 3).c.wordAround()?.text)
+        assertNull("after the plural apostrophe", at("the dogs' bones", 9).c.wordAround())
+    }
+
+    @Test fun theWordsAroundItAreItsContext() {
+        val r = at("i went to teh store today", 12); val span = r.c.wordAround()!!
+        assertEquals("teh", span.text); assertEquals(Triple<String?, String?, String?>("went", "to", "store"), r.c.contextAround(span))
+        val s = at("teh store", 2).c; assertEquals(Triple<String?, String?, String?>(null, null, "store"), s.contextAround(s.wordAround()!!))
+        val p = at("go, teh. store", 5).c; assertEquals("punctuation is not a neighbour", Triple<String?, String?, String?>(null, null, null), p.contextAround(p.wordAround()!!))
+    }
+
+    @Test fun replacingTheWordPutsTheNewOneWhereItStoodAndTheCursorAfterIt() {
+        val r = at("i went to teh store today", 12)
+        assertTrue(r.c.replaceWordAround("the")); r.sync(); r.check()
+        assertEquals("i went to the store today", r.text); assertEquals(13, r.c.selStart); assertEquals(13, r.ed.selS)
+        assertEquals("a second replacement of the new word works too", true, r.c.replaceWordAround("this").also { r.sync() }); assertEquals("i went to this store today", r.text); r.check()
+    }
+
+    @Test fun anEditorThatChangedBehindTheKeyboardsBackIsLeftAlone() {
+        val r = at("hello world again", 8)
+        r.ed.userInsert("XX"); // the app changed the text without the keyboard hearing yet
+        assertFalse(r.c.replaceWordAround("there")); r.sync(); assertTrue(r.text.contains("XX"))
+    }
+}
