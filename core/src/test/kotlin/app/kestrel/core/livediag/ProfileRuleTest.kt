@@ -38,6 +38,8 @@ class ProfileRuleTest {
 
     @Test fun theRecordingsAreBoundedAndSampleOnlyScriptsAndProcessorTime() {
         assertTrue(ProfileRule.LOAD_MAX_MS > ProfileRule.NOW_MS && ProfileRule.LOAD_TAIL_MS < ProfileRule.LOAD_MAX_MS)
+        assertTrue("the memory release comes before the end of a load recording and after its first seconds", ProfileRule.RELEASE_BEFORE_END_MS in 1_000L..(ProfileRule.LOAD_MAX_MS / 2))
+        assertEquals(listOf("GeckoMain"), ProfileRule.THREADS.toList())
         assertEquals(listOf("js", "cpu"), ProfileRule.FEATURES.toList())
         assertTrue("no wildcard thread filter: only the named threads are sampled", ProfileRule.THREADS.none { it.contains("*") } && "GeckoMain" in ProfileRule.THREADS)
     }

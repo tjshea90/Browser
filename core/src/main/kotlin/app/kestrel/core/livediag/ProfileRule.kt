@@ -11,15 +11,19 @@ package app.kestrel.core.livediag
 object ProfileRule {
     /** After the page's load finished, keep recording this long (late scripts, the first interaction). */
     const val LOAD_TAIL_MS = 1_000L
-    /** A recording of a load stops at the latest this long after the reload: the FIRST recording (2026-11-27, claude.ai, 44 s, 5 ms samples, every process, 16 thread names) came back without the page process: the page process ran out of memory while it wrote its part (`OOM in ChunkedJSONWriteFunc::AllocChunk`, profileGatheringLog), so the next one is shorter and samples fewer threads. */
-    const val LOAD_MAX_MS = 22_000L
+    /** A recording of a load stops at the latest this long after the reload. Both real recordings (2026-11-27, claude.ai: 44 s with 16 thread names, then 22 s with 4) came back WITHOUT the page process: it failed with
+     * "OOM in ChunkedJSONWriteFunc::AllocChunk allocating new chunk" while it wrote its part (a 32-bit process holding about 650 MB: the recording's size was not the cause, the room left in that process at the end of a
+     * heavy load is). So: the shortest window that still holds the burst of a heavy page's modules (research/PROFILE_CLAUDE_AI.md), one thread, and a memory release just before the end ([RELEASE_BEFORE_END_MS]). */
+    const val LOAD_MAX_MS = 20_000L
+    /** In a load recording the engine is told to give back memory this long before the end (Android's low-memory call to the engine: it collects garbage and drops caches), so the page process has room to write its part. The recording's last seconds then hold that work: `release_at_ms` in the meta file says when. */
+    const val RELEASE_BEFORE_END_MS = 2_500L
     /** "What I do now": this long, with no reload (typing, scrolling). */
     const val NOW_MS = 15_000L
     /** A recording bigger than this stays on the tablet (the upload is base64 inside a JSON request on a hotspot). */
     const val MAX_BYTES = 12 * 1024 * 1024
 
-    /** The threads the engine samples (name parts; a thread whose name contains one of them): the page's main thread, its workers and style threads, the script engine's helper threads (parsing, compiling and garbage collection off the main thread), drawing, network and the disk cache. The names are the ones the owner's CPU lines show on this tablet (RenderThread, Cache2 I/O, Socket Thread, Classifier Upda...). */
-    val THREADS = arrayOf("GeckoMain", "JS Helper", "DOM Worker", "StyleThread")
+    /** The threads the engine samples (name parts; a thread whose name contains one of them): the main thread of each process (the page's, the parent's, the graphics process's). The helper, worker and style threads of the first two recordings were not what was asked and every thread adds its markers and samples to what the page process must write at the end. */
+    val THREADS = arrayOf("GeckoMain")
 
     /** What it records per sample: script stacks (with the script's file) and the processor time each thread used. No native stack walking: it slows a weak processor down and cannot be read without symbols. */
     val FEATURES = arrayOf("js", "cpu")

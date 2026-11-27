@@ -31,6 +31,8 @@ object PageProfiler {
         var sawStart = false; var loaded = false; var stopping = false
         val startedAt = SystemClock.uptimeMillis()
         var hard: Runnable? = null
+        var release: Runnable? = null
+        var releasedAtMs = -1L
     }
 
     @Volatile private var rec: Rec? = null
@@ -54,6 +56,18 @@ object PageProfiler {
         r.hard = hard
         Io.main.postDelayed(hard, if (load) ProfileRule.LOAD_MAX_MS else ProfileRule.NOW_MS)
         if (load) {
+            // the page process wrote nothing in two recordings (out of memory while it wrote): shortly before the end the engine is told to give memory back (Android's low-memory call, which the memory gate always passes on)
+            val release = Runnable {
+                if (rec === r && !r.stopping) {
+                    r.releasedAtMs = SystemClock.uptimeMillis() - r.startedAt
+                    Health.count("profile.release"); Health.log("life", "profile", "release")
+                    try { a.application.onLowMemory() } catch (e: Throwable) { /* the recording goes on without it */ }
+                }
+            }
+            r.release = release
+            Io.main.postDelayed(release, ProfileRule.LOAD_MAX_MS - ProfileRule.RELEASE_BEFORE_END_MS)
+        }
+        if (load) {
             a.toast("Recording the first ${ProfileRule.LOAD_MAX_MS / 1000} seconds of this page's load: it reloads now. Please leave Kestrel open until it says it was sent.")
             try { tab.session?.reload() } catch (e: Throwable) { /* the hard stop ends it */ }
         } else a.toast("Recording for ${ProfileRule.NOW_MS / 1000} seconds: use the page now (type, scroll).")
@@ -72,6 +86,7 @@ object PageProfiler {
         if (rec !== r || r.stopping) return
         r.stopping = true
         r.hard?.let { Io.main.removeCallbacks(it) }
+        r.release?.let { Io.main.removeCallbacks(it) }
         try {
             ProfilerController.stopProfiler().accept({ bytes -> Io.exec { done(ctx, r, bytes, why) } }, { e -> fail(ctx, r, "the engine said " + (e?.message ?: "nothing")) })
         } catch (e: Throwable) { fail(ctx, r, "it could not be stopped (" + e.javaClass.simpleName + ")") }
@@ -92,17 +107,39 @@ object PageProfiler {
         Health.count("profile.done"); Health.log("life", "profile", "done why=$why kb=$kb mode=" + (if (r.load) "load" else "now"))
         try { File(ctx.cacheDir, "profile-last.json.gz").writeBytes(bytes) } catch (e: Exception) { /* the copy is a courtesy */ }
         if (bytes.size > ProfileRule.MAX_BYTES) { say(ctx, "The recording is $kb KB: too big to send. It stays on this tablet."); return }
-        LiveDiag.sendProfile(System.currentTimeMillis(), bytes, meta(ctx, r, why, kb)) { msg -> say(ctx, msg) }
+        val missing = pageProcessMissing(bytes)
+        if (missing) { Health.count("profile.nopage"); say(ctx, "The page itself is missing from this recording (its process ran out of memory while it wrote its part). It is sent anyway: the rest still helps. Closing other tabs first may help.") }
+        LiveDiag.sendProfile(System.currentTimeMillis(), bytes, meta(ctx, r, why, kb, missing)) { msg -> say(ctx, msg) }
     }
 
     /** The companion file: which build, which settings, which kind of recording, which site (a sensitive one is never named: it cannot be recorded). Nothing else. */
-    private fun meta(ctx: Context, r: Rec, why: String, kb: Int): String = JSONObject().apply {
+    private fun meta(ctx: Context, r: Rec, why: String, kb: Int, pageMissing: Boolean): String = JSONObject().apply {
         val pi = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0) } catch (e: Exception) { null }
         put("v", 1); put("kind", "gecko-profile"); put("app", pi?.versionName ?: "?"); @Suppress("DEPRECATION") put("code", pi?.versionCode ?: 0); put("android", Build.VERSION.SDK_INT); put("model", Build.MODEL ?: "?")
         put("mode", if (r.load) "load" else "now"); put("window_ms", if (r.load) ProfileRule.LOAD_MAX_MS else ProfileRule.NOW_MS); put("ended", why); put("site", r.site); put("kb", kb); put("ms", SystemClock.uptimeMillis() - r.startedAt)
+        put("page_process", if (pageMissing) "missing" else "present"); if (r.releasedAtMs >= 0) put("release_at_ms", r.releasedAtMs)
         put("settings", JSONObject(LiveDiag.settingsMap()))
         put("features", ProfileRule.FEATURES.joinToString(",")); put("threads", ProfileRule.THREADS.joinToString(","))
     }.toString()
+
+    /** The engine writes a child process's failure into the recording's own gathering log ("Could not generate profile from pid ..."): look for that sentence in the (gzip) JSON, streamed, never held whole. */
+    internal fun pageProcessMissing(bytes: ByteArray): Boolean = try {
+        val needle = "Could not generate profile from pid".toByteArray(Charsets.US_ASCII)
+        java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(bytes)).use { gz ->
+            val buf = ByteArray(64 * 1024 + needle.size)
+            var keep = 0; var total = 0L; var found = false
+            while (!found && total < 96L * 1024 * 1024) {
+                val n = gz.read(buf, keep, 64 * 1024)
+                if (n <= 0) break
+                total += n
+                val end = keep + n
+                var i = 0
+                while (i + needle.size <= end && !found) { var k = 0; while (k < needle.size && buf[i + k] == needle[k]) k++; if (k == needle.size) found = true else i++ }
+                keep = minOf(needle.size - 1, end); System.arraycopy(buf, end - keep, buf, 0, keep)
+            }
+            found
+        }
+    } catch (e: Exception) { false }
 
     private fun say(ctx: Context, msg: String) = Io.ui { Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show() }
 }
