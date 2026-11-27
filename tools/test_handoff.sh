@@ -392,5 +392,17 @@ open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app
 PYEOF
 python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd3/diag" > "$T/nd3/out.txt"; grep -q "1 content-process kill(s): 1 while the app was away, 0 with the app in front; the newest builds said it themselves 1 time(s), 1 of them while keep-ready was holding" "$T/nd3/out.txt" && grep -q "2 more engine .kill(s). came with the app being swiped away" "$T/nd3/out.txt"'
 
+check "digest HEAVY PAGES BY BUILD splits warm from cold full loads per build (ND3e)" 'mkdir -p "$T/nd3e/diag/2026-11-27" && python3 -I - "$T/nd3e/diag/2026-11-27/205115-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha112", "code": 213, "android": 29, "model": "x", "at": "2026-11-27T20:51:15Z", "dropped": 0, "thinned": 0,
+  "snapshot": [], "events": ["+0.5s run start utc=2026-11-27T18:00:00Z build=0.3.0-alpha111 code=212",
+    "+30.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=12000 lcp=20000 dcl=9000 load=25000 rn=1200 rc=1100 kb=100 js=1000 css=2",
+    "+0.5s run start utc=2026-11-27T19:00:00Z build=0.3.0-alpha112 code=213",
+    "+40.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=17000 lcp=30000 dcl=9000 load=41000 rn=1300 rc=17 kb=13000 js=1000 css=2",
+    "+90.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=300 lcp=300 dcl=100 load=500 rn=20 rc=10 kb=10 js=2 css=2"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd3e/diag" > "$T/nd3e/out.txt"; grep -q "alpha111 .*warm 1: first paint 12.0 s, load 25.0 s .*| cold none" "$T/nd3e/out.txt" && grep -q "alpha112 .*warm none .*| cold 1: first paint 17.0 s, load 41.0 s" "$T/nd3e/out.txt"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
