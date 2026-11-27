@@ -718,6 +718,52 @@ def self_checks(batches):
         print('  FAILED  %-26s %-16s %s' % (f, app, line))
 
 
+def heavy_by_build(batches, min_requests=900):
+    """ND3e: did a build make a HEAVY page faster? Full loads (at least [min_requests] requests, e.g. claude.ai's ~1,200 script modules) of one site, grouped by the build that made them, split into WARM loads (80 % or more of the
+    requests came from the cache, `rc` of `rn`) and cold ones (after a kill or a cache loss the same page fetches 13 MB over the hotspot: not the same experiment). A load's build is the newest `run start ... build=` line before it,
+    else the file's own app version. The medians are the numbers to compare; 3 loads or fewer prove nothing."""
+    by = {}
+    for b in batches:
+        build = str(b.get('app') or '?')
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            m = re.search(r'run start .*build=(\S+)', e)
+            if m:
+                build = m.group(1)
+            if ' page timing host=' not in e:
+                continue
+            g = lambda k: (re.search(r'\b%s=(-?\d+)' % k, e) or [None, None])[1]
+            host = (re.search(r'host=(\S+)', e) or [None, '?'])[1]
+            rn, rc, fcp, load = g('rn'), g('rc'), g('fcp'), g('load')
+            if not rn or int(rn) < min_requests or not fcp or int(fcp) <= 0:
+                continue
+            warm = int(rc or 0) >= 0.8 * int(rn)
+            by.setdefault(host, {}).setdefault(build.replace('0.3.0-', ''), []).append((warm, int(fcp) / 1000.0, int(load) / 1000.0 if load and int(load) > 0 else None))
+    print('\n== HEAVY PAGES BY BUILD (full loads of %d+ requests; WARM = 80 %% of them from the cache; medians in seconds; 3 loads or fewer prove nothing) ==' % min_requests)
+    if not by:
+        print('  none in these files')
+        return
+    import statistics
+
+    def med(v):
+        return statistics.median(v) if v else None
+    for host, builds in sorted(by.items()):
+        print('  ' + host)
+        def key(x):
+            m = re.search(r'(\d+)', x[0])
+            return int(m.group(1)) if m else 0
+        for build, loads in sorted(builds.items(), key=key)[-8:]:
+            warm = [x for x in loads if x[0]]
+            cold = [x for x in loads if not x[0]]
+            def part(v):
+                if not v:
+                    return 'none'
+                loads_s = [x[2] for x in v if x[2] is not None]
+                return '%d: first paint %.1f s, load %s' % (len(v), med([x[1] for x in v]), ('%.1f s' % med(loads_s)) if loads_s else '?')
+            print('     %-10s warm %-34s | cold %s' % (build, part(warm), part(cold)))
+
+
 def kills_analysis(batches):
     """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
     Newer builds say it themselves (`gecko kill-away held=..` / `gecko kill-front held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
@@ -1103,6 +1149,7 @@ def main(argv):
     drawing_analysis(batches)
     self_checks(batches)
     kills_analysis(batches)
+    heavy_by_build(batches)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor, %s; judge the numbers before you relay them) ==' % ('every build in these files (--all-advice)' if all_advice else 'newest build only: ' + str(batches[-1].get('app', '?')) + ', older builds\' advice is retired: --all-advice shows it'))
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
