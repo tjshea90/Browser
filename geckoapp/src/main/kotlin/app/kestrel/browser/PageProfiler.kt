@@ -54,7 +54,7 @@ object PageProfiler {
         r.hard = hard
         Io.main.postDelayed(hard, if (load) ProfileRule.LOAD_MAX_MS else ProfileRule.NOW_MS)
         if (load) {
-            a.toast("Recording this page's load: it reloads now and takes up to a minute and a half. Please leave Kestrel open.")
+            a.toast("Recording the first ${ProfileRule.LOAD_MAX_MS / 1000} seconds of this page's load: it reloads now. Please leave Kestrel open until it says it was sent.")
             try { tab.session?.reload() } catch (e: Throwable) { /* the hard stop ends it */ }
         } else a.toast("Recording for ${ProfileRule.NOW_MS / 1000} seconds: use the page now (type, scroll).")
     }
@@ -99,7 +99,7 @@ object PageProfiler {
     private fun meta(ctx: Context, r: Rec, why: String, kb: Int): String = JSONObject().apply {
         val pi = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0) } catch (e: Exception) { null }
         put("v", 1); put("kind", "gecko-profile"); put("app", pi?.versionName ?: "?"); @Suppress("DEPRECATION") put("code", pi?.versionCode ?: 0); put("android", Build.VERSION.SDK_INT); put("model", Build.MODEL ?: "?")
-        put("mode", if (r.load) "load" else "now"); put("ended", why); put("site", r.site); put("kb", kb); put("ms", SystemClock.uptimeMillis() - r.startedAt)
+        put("mode", if (r.load) "load" else "now"); put("window_ms", if (r.load) ProfileRule.LOAD_MAX_MS else ProfileRule.NOW_MS); put("ended", why); put("site", r.site); put("kb", kb); put("ms", SystemClock.uptimeMillis() - r.startedAt)
         put("settings", JSONObject(LiveDiag.settingsMap()))
         put("features", ProfileRule.FEATURES.joinToString(",")); put("threads", ProfileRule.THREADS.joinToString(","))
     }.toString()

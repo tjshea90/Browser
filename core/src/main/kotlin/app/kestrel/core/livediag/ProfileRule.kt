@@ -10,16 +10,16 @@ package app.kestrel.core.livediag
  */
 object ProfileRule {
     /** After the page's load finished, keep recording this long (late scripts, the first interaction). */
-    const val LOAD_TAIL_MS = 4_000L
-    /** A recording of a load never runs longer than this (the engine's buffer is finite and the tablet is slow). */
-    const val LOAD_MAX_MS = 100_000L
+    const val LOAD_TAIL_MS = 1_000L
+    /** A recording of a load stops at the latest this long after the reload: the FIRST recording (2026-11-27, claude.ai, 44 s, 5 ms samples, every process, 16 thread names) came back without the page process: the page process ran out of memory while it wrote its part (`OOM in ChunkedJSONWriteFunc::AllocChunk`, profileGatheringLog), so the next one is shorter and samples fewer threads. */
+    const val LOAD_MAX_MS = 22_000L
     /** "What I do now": this long, with no reload (typing, scrolling). */
-    const val NOW_MS = 25_000L
+    const val NOW_MS = 15_000L
     /** A recording bigger than this stays on the tablet (the upload is base64 inside a JSON request on a hotspot). */
     const val MAX_BYTES = 12 * 1024 * 1024
 
     /** The threads the engine samples (name parts; a thread whose name contains one of them): the page's main thread, its workers and style threads, the script engine's helper threads (parsing, compiling and garbage collection off the main thread), drawing, network and the disk cache. The names are the ones the owner's CPU lines show on this tablet (RenderThread, Cache2 I/O, Socket Thread, Classifier Upda...). */
-    val THREADS = arrayOf("GeckoMain", "DOM Worker", "StyleThread", "JS Helper", "BackgroundThreadPool", "TaskController", "Compositor", "RenderThread", "Renderer", "Socket Thread", "Cache2 I/O", "URL Classifier", "Classifier Update", "IPC I/O", "IPDL Background", "AndroidUI")
+    val THREADS = arrayOf("GeckoMain", "JS Helper", "DOM Worker", "StyleThread")
 
     /** What it records per sample: script stacks (with the script's file) and the processor time each thread used. No native stack walking: it slows a weak processor down and cannot be read without symbols. */
     val FEATURES = arrayOf("js", "cpu")
