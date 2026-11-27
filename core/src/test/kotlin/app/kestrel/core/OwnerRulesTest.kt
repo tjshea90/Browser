@@ -991,6 +991,7 @@ class OwnerRulesTest {
     @Test fun nd1KeepReadyIsQuietEndsWhenTheAppReturnsAndNeverKeepsAClosedAppAlive() {
         val svc = source("geckoapp/src/main/kotlin/app/kestrel/browser/KeepReadyService.kt")
         assertTrue("one quiet foreground service, answered with startForeground, never restarted by Android", svc.contains("startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)") && svc.contains("return START_NOT_STICKY") && svc.contains("NotificationManager.IMPORTANCE_MIN"))
+        assertTrue("a refusal to go foreground (or any failure on leaving) never takes the browser down", svc.contains("private fun promoteSafely(") && svc.contains("if (!promoteSafely(60)) return") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("keep-ready-refused\", \"leave \""))
         assertTrue("it sends nothing and holds no wake lock, no Wi-Fi lock and no network", !svc.contains("WakeLock") && !svc.contains("WifiLock") && !svc.contains("HttpURLConnection") && !svc.contains("Socket("))
         assertTrue("the notification says nothing about any page and is hidden on the lock screen; it has a Let go button", svc.contains("VISIBILITY_SECRET") && svc.contains("\"Let go\"") && !svc.contains("tab.url"))
         assertTrue("it ends by itself after the chosen time and lets the process go when nothing is on screen", svc.contains("handler.postDelayed(timeout, minutes * 60_000L)") && svc.contains("if (!ProcessLife.uiAlive) ProcessLife.maybeExit()"))
@@ -1024,6 +1025,7 @@ class OwnerRulesTest {
         val pp = source("geckoapp/src/main/kotlin/app/kestrel/browser/PageProfiler.kt")
         assertTrue("the rule is asked before the engine's profiler is started, and with the private-tab facts", pp.indexOf("ProfileRule.whyNot(") in 0 until pp.indexOf("ProfilerController.startProfiler(") && pp.contains("tab?.isPrivateTab == true, PrivateGuard.active()"))
         assertTrue("it samples only the rule's threads and features (no native stack walking), never a wildcard", pp.contains("startProfiler(ProfileRule.THREADS, ProfileRule.FEATURES)") && !pp.contains("stackwalk"))
+        assertTrue("a private tab that appeared while it recorded throws the recording away BEFORE anything is written or sent", pp.indexOf("if (PrivateGuard.active()) { Health.count(\"profile.discarded\")") in 0 until pp.indexOf("profile-last.json.gz") && pp.indexOf("profile.discarded") in 0 until pp.indexOf("LiveDiag.sendProfile("))
         assertTrue("the recording goes only through the live-diagnostics channel (switch, token, private repository, no private tab)", pp.contains("LiveDiag.sendProfile(") && !pp.contains("HttpURLConnection") && !pp.contains("api.github.com"))
         val callers = listOf("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").map { source(it) }
         assertEquals("PageProfiler.start( appears once outside its own file: the Settings listener", 1, callers.sumOf { Regex("PageProfiler\\.start\\(").findAll(it).count() })
