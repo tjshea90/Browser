@@ -1,22 +1,22 @@
-# CHECKPOINT 3448 — read me first, then TASKS.md
+# CHECKPOINT 3454 — read me first, then TASKS.md
 
-**Written:** 2026-11-27T06:09:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `0e98a59d` (this checkpoint is the commit after it)
+**Written:** 2026-11-27T06:22:50Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `92556b87` (this checkpoint is the commit after it)
 
 ## Just done
-ND1d/ND1e CODED (not shipped yet): core ProfileRule (+5 tests), geckoapp PageProfiler (ProfilerController start/reload/stop/upload), LiveDiag.sendProfile (bytes, streamed base64), Settings buttons in the live diagnostics section, TabDelegates hooks, diag/ProcMem (per-process PSS), CpuMeter sys load, digest lines (memory by process, run queue), tools/profile_digest.py + tools/test_profile_digest.py + test_handoff 98 green, OwnerRulesTest nd1d/nd1e, CLAUDE.md + research/DIAG_2026-11-27.md section 4; :geckoapp:compileDebugKotlin green; alpha110 CI run 45949557236 still running
+pre-ship: alpha111: two new instruments, so the next review can see what claude.ai really does on your tablet (alpha110 is inside this build). WHY: in every upload so far the page process, where claude.ai runs, was invisible: Android 10 hides other processes from the app, so the memory and processor numbers only ever described the main process, and the answer to why claude.ai needs 12 to 25 seconds to a first paint (the page keeps the processor busy for 90 percent of its load, no setting changed it) was a guess. WHAT CHANGED: (1) Memory of EVERY process. Once a minute while Kestrel is in front, it asks Android how much memory each of its processes holds (the main one, the page process, the graphics process, the crash helper) and puts the numbers, with the peak of the run, into the Diagnostics and the uploads. This tells whether the kills come from the page process alone and what the graphics process costs. (2) The processor load of the whole tablet is noted when one process is busy (how many tasks were running on the 4 cores), if Android lets Kestrel read it. (3) Settings > Live diagnostics (with your GitHub token saved) has two new buttons. Record a profile of this page: reloads the page in front once and records, for up to a minute and a half, what the engine spends its time on (script work, garbage collection, drawing, network), then sends the recording to your PRIVATE repository so Claude can read it. Record 25 seconds of what I do now: the same without a reload, so you can type or scroll while it records (to find why typing in claude.ai waits up to 5 seconds sometimes). The recording holds the addresses of the page's own files and the names of its scripts, no passwords, nothing you type, no cookies. It is refused in a private tab or while a private tab is open, for sign-in, bank, mail, health and other sensitive sites, for local addresses, without the Live diagnostics switch and token, and it never starts by itself. The page is slower while it records. (4) tools/profile_digest.py reads the recording for Claude. NOT RUN on your tablet: the recorder (whether this engine build records at all: if not, the toast says so), the size of a real recording (anything over 12 MB stays on the tablet), the upload over the hotspot, the memory readings and the processor-load line (Android may refuse the file). TO TRY IT: open claude.ai, Settings > Live diagnostics > Record a profile of this page, leave Kestrel open until it says it was sent, then tell me.
 
 ## Do this next
-1) when run 45949557236 is green: get_release_by_tag, record-release alpha110 (note in the ckpt 3439 commit message), tick ND1c, answer the owner. 2) full :app:testDebugUnitTest result of the background run (scratchpad t_app2.log: EXIT line) must be green before alpha111 3) alpha111: bump geckoapp versionCode 211->212 / 0.3.0-alpha111, write the note (profile recorder + per-process memory: say plainly NOT run on the tablet), bash ship.sh gecko, dispatch, record
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M research/DIAG_2026-11-27.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  1f3ac22f ckpt 3448: ND1d/ND1e CODED (not shipped yet): core ProfileRule (+5 tests), geckoapp Pag
   8433cdc4 ckpt 3440: alpha110 DISPATCHED ONCE: run 45949557236 (run number 311, head 91326acd, re
   91326acd ckpt 3439: gated kestrel-g-v0.3.0-alpha110 (gecko code 211) and pushed it: handoff self
   8d2e39d0 ckpt 3432: KR1 keep-the-page-ready DONE in code: core KeepReady (4 tests) + geckoapp Ke
@@ -26,8 +26,7 @@ ND1d/ND1e CODED (not shipped yet): core ProfileRule (+5 tests), geckoapp PagePro
   af9b1f64 ckpt 3378: VPS2 (owner: NoBull P.40, in depth research for every repo + Claude + LinkMe
   3affc266 ckpt 3377: VPS1 written into TASKS in the owner's words + research/VPS_IDEAS.md (ranked
   100a331b ckpt 3376: alpha109 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha109, run 457282
-  93113be6 ckpt 3373: alpha109 build DISPATCHED ONCE: run 45728212306 (run number 310), head 40149
 ```
 
-(7 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
