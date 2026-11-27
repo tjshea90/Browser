@@ -87,7 +87,7 @@ class SettingsLazyTest {
         val closed = count(view())
         val all = view().also { it.openAll() }
         val open = count(all)
-        assertTrue("closed $closed views against $open when everything is open: at least 6 times smaller", closed * 6 < open)
+        assertTrue("closed $closed views against $open when everything is open (the web build has the fewest rows; Kestrel G has about twice as many): at least 4 times smaller", closed * 4 < open)
         assertTrue("a closed Settings is a few dozen views, not hundreds ($closed)", closed < 150)
     }
 
