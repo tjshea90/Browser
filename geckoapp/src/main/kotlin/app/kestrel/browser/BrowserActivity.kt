@@ -2911,6 +2911,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private val settingsListener = object : SettingsListener {
         override fun openAutoTune() { startActivity(Intent(this@BrowserActivity, app.kestrel.browser.optimizer.OptimizerActivity::class.java)) }
+        override fun keepReadyOff() { KeepReadyService.stop(applicationContext, "off") }   // KR1
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
