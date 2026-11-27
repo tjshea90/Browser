@@ -1,21 +1,23 @@
-# CHECKPOINT 3440 — read me first, then TASKS.md
+# CHECKPOINT 3448 — read me first, then TASKS.md
 
-**Written:** 2026-11-27T06:05:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `91326acd` (this checkpoint is the commit after it)
+**Written:** 2026-11-27T06:09:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `0e98a59d` (this checkpoint is the commit after it)
 
 ## Just done
-alpha110 DISPATCHED ONCE: run 45949557236 (run number 311, head 91326acd, ref claude/eager-hawking-6z6tcf, app=gecko full_build=true). Gates before it: handoff self-test, :core:test, :app:testDebugUnitTest (515), :geckoapp:compileDebugKotlin, :app:lintRelease 0 errors. A background loop writes the tag appearance to the scratchpad tagwait110.log (cap 30 min)
+ND1d/ND1e CODED (not shipped yet): core ProfileRule (+5 tests), geckoapp PageProfiler (ProfilerController start/reload/stop/upload), LiveDiag.sendProfile (bytes, streamed base64), Settings buttons in the live diagnostics section, TabDelegates hooks, diag/ProcMem (per-process PSS), CpuMeter sys load, digest lines (memory by process, run queue), tools/profile_digest.py + tools/test_profile_digest.py + test_handoff 98 green, OwnerRulesTest nd1d/nd1e, CLAUDE.md + research/DIAG_2026-11-27.md section 4; :geckoapp:compileDebugKotlin green; alpha110 CI run 45949557236 still running
 
 ## Do this next
-WAIT for run 45949557236 (mcp__github__actions_list list_workflow_jobs resource_id 45949557236; never dispatch alpha110 again). When all jobs are green: mcp__github__get_release_by_tag tjshea90 Browser kestrel-g-v0.3.0-alpha110 shows the APK, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha110 "$(cat <scratchpad>/note110.txt)" with the IDENTICAL note (the text is in the run's head_commit message / ship.sh output; also copy at /tmp/claude-0/-home-user/5d71be5f-e0a0-5db4-9e01-d1e6d144170f/scratchpad/note110.txt if the container lives), tick ND1c in TASKS.md, then answer the owner with the Release link on its own line. MEANWHILE build ND1d for alpha111 (drafts in the scratchpad nd1d/: ProfileRule.kt+test, PageProfiler.kt, patch_livediag.py; profile_digest.py + synth_profile.py in the scratchpad): copy into core/app/geckoapp, Settings buttons in liveDiagSection, SettingsListener.recordProfile, TabDelegates pageStarted/pageStopped hooks, tools/profile_digest.py + test_handoff check, CLAUDE.md note; plus ProcMem (per-process PSS via ActivityManager.getProcessMemoryInfo: the page process is invisible to /proc on Android 10) and /proc/loadavg in CpuMeter busy lines
+1) when run 45949557236 is green: get_release_by_tag, record-release alpha110 (note in the ckpt 3439 commit message), tick ND1c, answer the owner. 2) full :app:testDebugUnitTest result of the background run (scratchpad t_app2.log: EXIT line) must be green before alpha111 3) alpha111: bump geckoapp versionCode 211->212 / 0.3.0-alpha111, write the note (profile recorder + per-process memory: say plainly NOT run on the tablet), bash ship.sh gecko, dispatch, record
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
+     M research/DIAG_2026-11-27.md
 
 ## Last ten checkpoints
 ```
+  8433cdc4 ckpt 3440: alpha110 DISPATCHED ONCE: run 45949557236 (run number 311, head 91326acd, re
   91326acd ckpt 3439: gated kestrel-g-v0.3.0-alpha110 (gecko code 211) and pushed it: handoff self
   8d2e39d0 ckpt 3432: KR1 keep-the-page-ready DONE in code: core KeepReady (4 tests) + geckoapp Ke
   2bdf5109 ckpt 3420: ND1: Settings lazy sections (SettingsView.section(title){rows}, Chevron, OPE
@@ -25,5 +27,7 @@ WAIT for run 45949557236 (mcp__github__actions_list list_workflow_jobs resource_
   3affc266 ckpt 3377: VPS1 written into TASKS in the owner's words + research/VPS_IDEAS.md (ranked
   100a331b ckpt 3376: alpha109 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha109, run 457282
   93113be6 ckpt 3373: alpha109 build DISPATCHED ONCE: run 45728212306 (run number 310), head 40149
-  40149389 ckpt 3372: alpha109 prepared: geckoapp versionCode 210 / 0.3.0-alpha109, extension 1.0.
 ```
+
+(7 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
