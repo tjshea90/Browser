@@ -718,6 +718,46 @@ def self_checks(batches):
         print('  FAILED  %-26s %-16s %s' % (f, app, line))
 
 
+def first_starts_analysis(batches):
+    """ND4 (owner 2026-11-27: "The app still crashes after update"): the FIRST START after an install that ended without a crash note or an engine report, from the `Last run ended` blocks the uploads carry. Each is
+    printed once with how long it ran and how long after the INSTALL time it ended; the spread against the install time (13 to 34 s in 27 of 27 updates, research/DG1_FIRST_RUN_AFTER_INSTALL.md section 4) is tighter than
+    against the process's own age, which points at a system timer that starts with the install and not at the app's own start-up. Newer builds add `inst{...}` (an install session still active while the run lived) and
+    `life install-result status=...` (when the installer said it was finished) to the same note."""
+    import datetime
+    seen = {}
+    for b in batches:
+        sn = b.get('snapshot')
+        lines = sn if isinstance(sn, list) else str(sn or '').split('\n')
+        for i, l in enumerate(lines):
+            m = re.search(r'build (\S+) \(code (\d+)\), started (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC, last note (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC \(ran about ([^)]*)\)', l)
+            if not m or not any('FIRST START' in x for x in lines[i + 1:i + 3]):
+                continue
+            key = (m.group(1), m.group(3))
+            if key in seen:
+                continue
+            inst = [x for x in lines[i + 1:i + 3] if 'FIRST START' in x][0]
+            im = re.search(r'install at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC', inst)
+            mem = next((x.strip() for x in lines[i + 1:i + 12] if 'memory at the last note' in x), '')
+            sess = re.search(r'inst\{[^}]*\}', mem)
+            fmt = '%Y-%m-%d %H:%M:%S'
+            try:
+                rel = (datetime.datetime.strptime(m.group(4), fmt) - datetime.datetime.strptime(im.group(1), fmt)).total_seconds() if im else None
+            except Exception:
+                rel = None
+            seen[key] = (m.group(1).replace('0.3.0-', ''), m.group(5), rel, sess.group(0) if sess else '')
+    print('\n== FIRST START AFTER AN INSTALL (runs that ended on screen with no crash note: ND4, research/DG1_FIRST_RUN_AFTER_INSTALL.md) ==')
+    if not seen:
+        print('  none in these files')
+        return
+    rels = sorted(r[2] for r in seen.values() if r[2] is not None)
+    print('  %d first start(s) that ended by themselves; seconds from the INSTALL to the end: median %.0f, shortest %.0f, longest %.0f (builds %s to %s)' % (
+        len(seen), rels[len(rels) // 2] if rels else 0, rels[0] if rels else 0, rels[-1] if rels else 0, min(r[0] for r in seen.values()), max(r[0] for r in seen.values())))
+    for (b, st), (bn, ran, rel, sess) in sorted(seen.items(), key=lambda kv: kv[0][1])[-6:]:
+        print('   %-9s started %s, ran %-8s ended %s s after the install %s' % (bn, st, ran, ('%.0f' % rel) if rel is not None else '?', sess))
+    if not any(r[3] for r in seen.values()):
+        print('  (no run carries the `inst{...}` token yet: builds before alpha114 did not write it)')
+
+
 def heavy_by_build(batches, min_requests=900):
     """ND3e: did a build make a HEAVY page faster? Full loads (at least [min_requests] requests, e.g. claude.ai's ~1,200 script modules) of one site, grouped by the build that made them, split into WARM loads (80 % or more of the
     requests came from the cache, `rc` of `rn`) and cold ones (after a kill or a cache loss the same page fetches 13 MB over the hotspot: not the same experiment). A load's build is the newest `run start ... build=` line before it,
@@ -1149,6 +1189,7 @@ def main(argv):
     drawing_analysis(batches)
     self_checks(batches)
     kills_analysis(batches)
+    first_starts_analysis(batches)
     heavy_by_build(batches)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor, %s; judge the numbers before you relay them) ==' % ('every build in these files (--all-advice)' if all_advice else 'newest build only: ' + str(batches[-1].get('app', '?')) + ', older builds\' advice is retired: --all-advice shows it'))
     for k, v in r['advice'].most_common(10):
