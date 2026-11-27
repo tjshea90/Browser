@@ -19,7 +19,7 @@ class LocalStampTest {
         assertEquals("2026-11-27 10:28", LocalStamp.format(1_795_755_520_000L, 5 * 3_600_000 + 30 * 60_000))   // a half-hour zone
         assertEquals("2024-02-29 12:00", LocalStamp.format(1_709_208_000_000L, 0))                    // a leap day
         assertEquals("2100-02-28 23:59", LocalStamp.format(4_107_542_340_000L, 0))                    // 2100 is not a leap year ...
-        assertEquals("2100-03-01 00:00", LocalStamp.format(4_107_542_400_000L + 86_400_000L, 0))      // ... so the next day is March 1st
+        assertEquals("2100-03-01 00:00", LocalStamp.format(4_107_542_400_000L, 0))                    // ... so the next minute is March 1st
         assertEquals("2000-02-29 00:00", LocalStamp.format(951_782_400_000L, 0))                      // 2000 is
         assertEquals("1969-12-31 23:59", LocalStamp.format(-60_000L, 0))                              // before the epoch
     }
@@ -34,7 +34,7 @@ class LocalStampTest {
     }
 
     @Test fun everyMinuteAroundTheEndOfAYearAndALeapDay() {
-        var ms = 1_735_689_000_000L                                            // 2024-12-31T23:10:00Z
+        var ms = 1_735_686_600_000L                                            // 2024-12-31T23:10:00Z
         repeat(120) { assertEquals(reference(ms, 0), LocalStamp.format(ms, 0)); ms += 60_000L }
         ms = 1_709_164_800_000L                                                // 2024-02-29T00:00:00Z
         repeat(24 * 60) { assertEquals(reference(ms, 3_600_000), LocalStamp.format(ms, 3_600_000)); ms += 60_000L }
