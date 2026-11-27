@@ -1018,4 +1018,30 @@ class OwnerRulesTest {
         val gecko = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("the restored preview of the selected tab owns its page (else the diagnostics count it as wrong and the next address update drops it)", gecko.contains("sel.thumb = selThumb; sel.thumbPage = ThumbRule.pageOf(sel.url)"))
     }
+
+    /** ND1d / ND1e (owner 2026-11-27; research/DIAG_2026-11-27.md section 4): a page can be recorded with the engine's profiler, only by the two Settings buttons, never in or beside a private tab, only with the owner's switch and token; every process's memory is read. */
+    @Test fun nd1dTheProfileRecorderStartsOnlyFromTheTwoSettingsButtonsAndAsksTheRuleFirst() {
+        val pp = source("geckoapp/src/main/kotlin/app/kestrel/browser/PageProfiler.kt")
+        assertTrue("the rule is asked before the engine's profiler is started, and with the private-tab facts", pp.indexOf("ProfileRule.whyNot(") in 0 until pp.indexOf("ProfilerController.startProfiler(") && pp.contains("tab?.isPrivateTab == true, PrivateGuard.active()"))
+        assertTrue("it samples only the rule's threads and features (no native stack walking), never a wildcard", pp.contains("startProfiler(ProfileRule.THREADS, ProfileRule.FEATURES)") && !pp.contains("stackwalk"))
+        assertTrue("the recording goes only through the live-diagnostics channel (switch, token, private repository, no private tab)", pp.contains("LiveDiag.sendProfile(") && !pp.contains("HttpURLConnection") && !pp.contains("api.github.com"))
+        val callers = listOf("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").map { source(it) }
+        assertEquals("PageProfiler.start( appears once outside its own file: the Settings listener", 1, callers.sumOf { Regex("PageProfiler\\.start\\(").findAll(it).count() })
+        assertTrue("and that is the recordProfile button handler", callers[0].contains("override fun recordProfile(load: Boolean) { closeSettings(); PageProfiler.start(this@BrowserActivity, current, load) }"))
+        val ld = source("app/src/main/kotlin/app/kestrel/browser/diag/LiveDiag.kt")
+        val send = ld.substring(ld.indexOf("fun sendProfile("), ld.indexOf("private class Extras("))
+        assertTrue("sendProfile has the same gates as the diagnostics upload: switch, token, a private repository, no private tab (asked again before the bytes go)", send.contains("!enabled || token.isEmpty()") && send.contains("RepoState.PRIVATE -> {}") && send.contains("PrivateGuard.active()") && send.indexOf("PrivateGuard.active()", send.indexOf("RepoState.ERROR")) > 0)
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("the two buttons are in the live-diagnostics section and only with a token", set.contains("button(\"Record a profile of this page\"") && set.contains("button(\"Record 25 seconds of what I do now\"") && set.indexOf("if (ld.hasToken()) {\n                button(\"Record a profile") > 0)
+        assertTrue("the reader for Claude exists and is tested by the handoff self-test", source("tools/profile_digest.py").contains("ProfilerController.stopProfiler()") && source("tools/test_handoff.sh").contains("test_profile_digest.py"))
+    }
+
+    @Test fun nd1ePerProcessMemoryAndTheRunQueueAreRead() {
+        val pm = source("app/src/main/kotlin/app/kestrel/browser/diag/ProcMem.kt")
+        assertTrue("the system's own memory service is asked (the page process is hidden from /proc on Android 10), on the IO lane, one reading a minute, only while the app is in front", pm.contains("getProcessMemoryInfo") && pm.contains("Io.exec") && pm.contains("EVERY_MS = 60_000L") && !pm.contains("/proc/"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("it runs with the CPU meter: started when the app comes to the front, stopped when it goes", act.contains("CpuMeter.start(packageName); app.kestrel.browser.diag.ProcMem.start(applicationContext)") && act.contains("CpuMeter.stop(); app.kestrel.browser.diag.ProcMem.stop()"))
+        assertTrue("its numbers join the live-diagnostics device facts", source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt").contains("ProcMem.numbers()"))
+        assertTrue("the busy moments carry the system run queue", source("app/src/main/kotlin/app/kestrel/browser/diag/CpuMeter.kt").contains("/proc/loadavg") && source("app/src/main/kotlin/app/kestrel/browser/diag/CpuMeter.kt").contains("+ sysLoad()"))
+    }
 }
