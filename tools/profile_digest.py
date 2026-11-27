@@ -271,20 +271,89 @@ def busiest_window(t, width_ms=15000):
     return best * 1000.0, width_ms
 
 
-def marker_report(t, out, top=10):
-    rowsm = rows(t.th.get('markers'), ['name', 'startTime', 'endTime', 'phase', 'category'])
-    if not rowsm:
+def _marker_key(d):
+    """What ties the START row of an interval marker to its END row besides the name: the payload's id / flow / name, when it has one."""
+    if isinstance(d, dict):
+        for k in ('id', 'flow', 'name'):
+            if k in d:
+                return (k, d[k])
+    return None
+
+
+def marker_intervals(t):
+    """Every interval marker of a thread as (name, start, end, data). The real file (2026-11-27, 110,000 markers in the parent's main thread) stores an interval THREE ways: phase 1 = one row with both times; phase 2 = a START row
+    (startTime set, endTime 0) and phase 3 = an END row (startTime 0, endTime set) that must be joined to the nearest earlier open start of the same name (and id / flow, when the payload has one; nested ones last in, first out).
+    An end whose start fell before the buffer began (the very first 'Awake' row is one) and a start still open at the end have no length: left out. Phase 0 rows are instants, no length."""
+    out, opened = [], defaultdict(list)
+    for r in rows(t.th.get('markers'), ['name', 'startTime', 'endTime', 'phase', 'data']):
+        nm, ph = t.s(r.get('name')), r.get('phase')
+        a, b = r.get('startTime'), r.get('endTime')
+        d = r.get('data') if isinstance(r.get('data'), dict) else None
+        num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+        if ph == 1 and num(a) and num(b) and b >= a:
+            out.append((nm, a, b, d))
+        elif ph == 2 and num(a):
+            opened[(nm, _marker_key(d))].append((a, d))
+        elif ph == 3 and num(b):
+            stack = opened.get((nm, _marker_key(d)))
+            if stack:
+                a0, d0 = stack.pop()
+                if b >= a0:
+                    out.append((nm, a0, b, d0 or d))
+    return out
+
+
+def _quantile(sorted_vals, p):
+    return sorted_vals[min(len(sorted_vals) - 1, int(len(sorted_vals) * p))] if sorted_vals else 0.0
+
+
+def _host_of(url):
+    m = re.match(r'^[a-z][a-z0-9+.-]*://([^/?#]+)', url or '')
+    return m.group(1) if m else '?'
+
+
+def network_report(t, intervals, out):
+    """The requests this process's main thread saw (Network markers): how many, how big, from the cache or not, how long each was open, and WHEN they were opened and ended: a page that asks for a thousand files in a burst and gets them
+    ten seconds later shows it here (the claude.ai recording: 1,212 script modules, all cache hits, opened at 8-14 s, ended at 16-24 s, with the main thread full in between)."""
+    loads = [(a, b, d) for nm, a, b, d in intervals if isinstance(d, dict) and d.get('type') == 'Network']
+    if not loads:
         return
-    dur, cnt = Counter(), Counter()
-    for r in rowsm:
-        nm = t.s(r.get('name'))
-        cnt[nm] += 1
-        if isinstance(r.get('startTime'), (int, float)) and isinstance(r.get('endTime'), (int, float)) and r['endTime'] > r['startTime']:
-            dur[nm] += r['endTime'] - r['startTime']
-    out.append('  markers: %d in all; the most time in an interval marker (ms, count):' % len(rowsm))
+    times = [s['time'] for s in t.samples if isinstance(s.get('time'), (int, float))]
+    t0 = min(times) if times else min(a for a, b, d in loads)
+    durs = sorted(b - a for a, b, d in loads)
+    nbytes = sum(d['count'] for a, b, d in loads if isinstance(d.get('count'), (int, float)))
+    cache = Counter(str(d.get('cache') or '?') for a, b, d in loads)
+    status = Counter(str(d.get('status') or '?').replace('STATUS_', '') for a, b, d in loads)
+    out.append('  network: %d requests, %d bytes, cache %s, ends %s; open-to-end median %.0f ms, 90%% %.0f ms, longest %.0f ms' % (
+        len(loads), nbytes, ' '.join('%s %d' % kv for kv in cache.most_common(4)), ' '.join('%s %d' % kv for kv in status.most_common(3)),
+        _quantile(durs, 0.5), _quantile(durs, 0.9), durs[-1]))
+    hosts = Counter(_host_of(d.get('URI') or '') for a, b, d in loads)
+    out.append('    hosts: ' + ', '.join('%s %d' % (h[:40], c) for h, c in hosts.most_common(5)))
+    opened, ended = Counter(), Counter()
+    for a, b, d in loads:
+        opened[int((a - t0) / 2000.0)] += 1
+        ended[int((b - t0) / 2000.0)] += 1
+    wins = sorted(set(opened) | set(ended))
+    wins = [w for w in wins if 0 <= w < 40]
+    out.append('    opened / ended per 2 s from the first sample (second: opened/ended): ' + ' '.join('%d:%d/%d' % (w * 2, opened[w], ended[w]) for w in wins))
+
+
+def marker_report(t, out, top=10):
+    allrows = rows(t.th.get('markers'), ['name', 'phase'])
+    if not allrows:
+        return
+    cnt = Counter(t.s(r.get('name')) for r in allrows)
+    iv = marker_intervals(t)
+    dur, many, longest = Counter(), Counter(), {}
+    for nm, a, b, d in iv:
+        dur[nm] += b - a
+        many[nm] += 1
+        longest[nm] = max(longest.get(nm, 0.0), b - a)
+    out.append('  markers: %d rows, %d intervals (start and end rows joined); the most time inside one kind of interval (ms, how many, longest one; nested intervals count in both):' % (len(allrows), len(iv)))
     for nm, ms in dur.most_common(top):
-        out.append('     %9.0f ms  %6d x  %s' % (ms, cnt[nm], nm[:70]))
+        out.append('     %9.0f ms  %6d x  longest %7.0f ms  %s' % (ms, many[nm], longest[nm], nm[:60]))
     out.append('  the most frequent markers: ' + ', '.join('%s %d' % (nm[:30], c) for nm, c in cnt.most_common(8)))
+    network_report(t, iv, out)
 
 
 def detail_report(t, out):
