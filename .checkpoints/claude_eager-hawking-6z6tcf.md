@@ -1,21 +1,22 @@
-# CHECKPOINT 3479 — read me first, then TASKS.md
+# CHECKPOINT 3493 — read me first, then TASKS.md
 
-**Written:** 2026-11-27T07:30:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `697d4eb7` (this checkpoint is the commit after it)
+**Written:** 2026-11-27T07:45:15Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `claude/eager-hawking-6z6tcf` · **builds on:** `82958ce5` (this checkpoint is the commit after it)
 
 ## Just done
-ND2: marker pairing fixed in tools/profile_digest.py (phase 1/2/3), network + extension-plumbing reports; background.js listeners narrowed to frames+xhr (rvStart too); web tests 135/135
+pre-ship: alpha112: the first real look inside a page load, and a first fix (alpha110 and alpha111 are inside this build). WHAT THE RECORDING SHOWED: the recording of claude.ai you sent was read the same hour. It holds the main process only: the page process ran out of memory while it handed over its part, so this build records a shorter window to try again. The main process half is already clear. claude.ai asks for about 1,250 script files in one burst at load, all from the disk cache, and every one of them must pass through the main process thread, which is also where Kestrel's blocker runs. For about 15 seconds that thread is completely full, and each request waits roughly 8 seconds in the queue, whether the file is 139 bytes or 300 KB. Firefox's own hand-over of each request to the blocker and back costs about a third of that busy time; Kestrel's own blocker code is about 1 percent of it. WHAT CHANGED: (1) The blocker's second listener, which only counted finished requests for the Diagnostics, now ignores the page's scripts, pictures and fonts and watches only pages, frames, style sheets and fetch calls. On your recording that removes 1,326 of 2,665 messages through the main thread, about half of the blocker's per-request work. Expected: claude.ai reaches its first paint a few seconds sooner (an estimate, not measured). Files that fail to load are still reported for every kind of file; the Diagnostics lose only the cache and 304 counts, and the 404 or 500 answers, of scripts, pictures and fonts. (2) The profile reader now joins start and end rows, counts each request once, and prints how long requests wait for the blocker, so the next recording answers the next question. (3) Record a profile of this page now records the first 22 seconds of the load (fewer threads, a smaller recording) and says so. NOT RUN ON THE TABLET: the shorter claude.ai load itself, and the new recording window. PLEASE: open claude.ai, Settings > Live diagnostics > Record a profile of this page, once more (keep Kestrel open until the toast says it was sent). This time the page process should be in it. A recording holds the addresses of the page's files and the names of its scripts, no passwords, nothing you type, no cookies; never made in or next to a private tab.
 
 ## Do this next
-finish alpha112: write research/PROFILE_CLAUDE_AI.md + TASKS boxes; run :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin tools/test_handoff.sh; bump geckoapp/build.gradle.kts 212->213 alpha112; ship.sh gecko; dispatch; record-release
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M tools/test_profile_digest.py
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  5111ed55 ckpt 3479: ND2: marker pairing fixed in tools/profile_digest.py (phase 1/2/3), network 
   cf0d3989 ckpt 3465: alpha110 AND alpha111 RELEASED AND RECORDED (BUILDLOG lines 211 and 212). ND
   9a47bf75 ckpt 3461: alpha111 RE-DISPATCHED ONCE after fixes: run 45954070324 (run number 313, he
   240256a0 ckpt 3460: gated kestrel-g-v0.3.0-alpha111 (gecko code 212) and pushed it: handoff self
@@ -25,7 +26,6 @@ finish alpha112: write research/PROFILE_CLAUDE_AI.md + TASKS boxes; run :core:te
   1f3ac22f ckpt 3448: ND1d/ND1e CODED (not shipped yet): core ProfileRule (+5 tests), geckoapp Pag
   8433cdc4 ckpt 3440: alpha110 DISPATCHED ONCE: run 45949557236 (run number 311, head 91326acd, re
   91326acd ckpt 3439: gated kestrel-g-v0.3.0-alpha110 (gecko code 211) and pushed it: handoff self
-  8d2e39d0 ckpt 3432: KR1 keep-the-page-ready DONE in code: core KeepReady (4 tests) + geckoapp Ke
 ```
 
 (13 automatic checkpoint(s) since the last deliberate one — the
