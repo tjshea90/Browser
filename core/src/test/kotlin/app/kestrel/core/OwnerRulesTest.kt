@@ -986,4 +986,36 @@ class OwnerRulesTest {
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("Settings has ONE drawing choice, and says when Kestrel changed it by itself", set.contains("choice(\"How pages are drawn\"") && set.contains("info(\"Kestrel changed this by itself\"") && !set.contains("choice(\"Hardware drawing trial"))
     }
+
+    /** ND1 / KR1 (owner 2026-11-27: "Use the newest diagnostics and improve the browser as much as possible"; research/DIAG_2026-11-27.md): the page stays ready while the app is away, Settings builds only open sections, a restored preview keeps its page. */
+    @Test fun nd1KeepReadyIsQuietEndsWhenTheAppReturnsAndNeverKeepsAClosedAppAlive() {
+        val svc = source("geckoapp/src/main/kotlin/app/kestrel/browser/KeepReadyService.kt")
+        assertTrue("one quiet foreground service, answered with startForeground, never restarted by Android", svc.contains("startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)") && svc.contains("return START_NOT_STICKY") && svc.contains("NotificationManager.IMPORTANCE_MIN"))
+        assertTrue("it sends nothing and holds no wake lock, no Wi-Fi lock and no network", !svc.contains("WakeLock") && !svc.contains("WifiLock") && !svc.contains("HttpURLConnection") && !svc.contains("Socket("))
+        assertTrue("the notification says nothing about any page and is hidden on the lock screen; it has a Let go button", svc.contains("VISIBILITY_SECRET") && svc.contains("\"Let go\"") && !svc.contains("tab.url"))
+        assertTrue("it ends by itself after the chosen time and lets the process go when nothing is on screen", svc.contains("handler.postDelayed(timeout, minutes * 60_000L)") && svc.contains("if (!ProcessLife.uiAlive) ProcessLife.maybeExit()"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("declared, not exported, special use with its subtype, and the swipe-away default (stopWithTask) is NOT switched off", man.contains(".KeepReadyService") && man.contains("android:foregroundServiceType=\"specialUse\"") && man.contains("PROPERTY_SPECIAL_USE_FGS_SUBTYPE") && man.contains("FOREGROUND_SERVICE_SPECIAL_USE") && !man.contains("stopWithTask"))
+        val life = source("app/src/main/kotlin/app/kestrel/browser/ProcessLife.kt")
+        assertTrue("a hold keeps the process while it runs, so the person's pause is not read as a quit, and ends with it", life.contains("if (keepReady) return"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the app ends the hold when it comes back and starts it only when leaving, not while it is closing", act.contains("KeepReadyService.stop(this)") && act.contains("keepReadyOnLeave()") && act.contains("isFinishing || isChangingConfigurations") && act.contains("KeepReady.applies(choice, hasPage, low, finishing)"))
+        val del = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("every engine kill says whether the app was away and whether the hold ran (the digest's KILLS section)", del.contains("gecko.kill.away") && del.contains("gecko.kill.front") && del.contains("\"kill-state\""))
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("Settings has the choice (Kestrel G only) and turning it off ends a running hold", set.contains("Flavor.hasKeepReady") && set.contains("choice(\"Keep the page ready when I leave\"") && set.contains("l.keepReadyOff()"))
+        assertTrue("one hour is the default and the choice is in a backup", source("core/src/main/kotlin/app/kestrel/core/mem/KeepReady.kt").contains("const val DEFAULT = HOUR") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"keep_ready\", T.INT, 0, 3)"))
+    }
+
+    @Test fun nd1SettingsBuildsOnlyTheSectionsThatAreOpenAndTheDateNeedsNoLocale() {
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("a section's rows run only while it is open", set.contains("private fun section(text: String, rows: () -> Unit)") && set.contains("if (isOpen) fill()") && set.contains("val nowOpen = text !in OPEN"))
+        assertTrue("no row is built outside a section (every section call carries its rows)", !Regex("""^\s+section\("[^"]+"\)\s*$""", RegexOption.MULTILINE).containsMatchIn(set))
+        for (path in listOf("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt", "app/src/webview/kotlin/app/kestrel/browser/BrowserActivity.kt")) {
+            val a = source(path)
+            assertTrue("$path: the filter status date is plain arithmetic, not the phone's locale patterns (830 ms the first time per run)", a.contains("LocalStamp.format(prefs.lastUpdateMs") && !a.contains("DateFormat.getDateTimeInstance"))
+        }
+        val gecko = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the restored preview of the selected tab owns its page (else the diagnostics count it as wrong and the next address update drops it)", gecko.contains("sel.thumb = selThumb; sel.thumbPage = ThumbRule.pageOf(sel.url)"))
+    }
 }
