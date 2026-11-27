@@ -226,7 +226,7 @@ def symbolicate_thread(t, post=None, cache_path=None, per_job=400):
                 t.symbols[loc] = nm
                 named += 1
     return 'symbols: %d native addresses in %d libraries, %d named by Mozilla\'s symbol service (%d asked now, the rest from the cache)%s' % (
-        n_addr, len({v[0] for v in t.libof.values()}), named, asked, ('; FAILED: ' + failed + ' (the addresses stay as they are)') if failed else '')
+        n_addr, len({v[0] for v in t.libof.values()}), named, asked, ('; FAILED: ' + failed + ' (native frames stay unnamed: they show library+offset)') if failed else '')
 
 
 def native_report(t, out, top=14):

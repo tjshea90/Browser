@@ -117,5 +117,55 @@ for layout in ('schema', 'cols'):
     check(layout + ': extension API events are listed by event', re.search(r'extension API event webRequest.onCompleted\s+1 x\s+median\s+2800 ms', mrep) is not None)
     check(layout + ': hosts are counted', 'assets-proxy.example.com 2' in mrep and 'other.example.org 1' in mrep)
     check(layout + ': opened and ended per 2 s are listed', '0:2/2 2:1/1' in mrep and 'opened / ended per 2 s' in mrep)
+# --symbolicate: the engine's own addresses get names from Mozilla's public symbol service (injected here, no network in the test); only library name, build id and offsets are sent; the answers are cached; a failure keeps the addresses
+import tempfile
+sp = make('schema')
+sth = sp['threads'][0]
+sstr = sth['stringTable']
+a1, a2 = len(sstr), len(sstr) + 1
+sstr += ['0x80001000', '0x80002000']
+sth['frameTable']['data'] += [[a1, 1], [a2, 1]]
+nf = len(sth['frameTable']['data'])
+sth['stackTable']['data'] += [[1, nf - 2], [1, nf - 1]]
+ns = len(sth['stackTable']['data'])
+last_t = sth['samples']['data'][-1][1]
+for i in range(600):
+    sth['samples']['data'].append([ns - 2 if i % 3 else ns - 1, last_t + 1 + i, 1000])
+sp['libs'] = [{'name': 'libxul.so', 'debugName': 'libxul.so', 'breakpadId': 'ABCDEF0', 'start': 0x80000000, 'end': 0x81000000, 'offset': 0},
+              {'name': 'libc.so', 'debugName': 'libc.so', 'breakpadId': 'FFFF', 'start': 0x90000000, 'end': 0x90100000, 'offset': 0}]
+sent = []
+
+
+def fake_post(url, payload):
+    sent.append((url, payload))
+    job = payload['jobs'][0]
+    names = {0x1000: ('mozilla::net::nsHttpChannel::OnDataAvailable', None), 0x2000: ('mozilla::dom::Foo::Bar', ['inline_helper'])}
+    frames = []
+    for k, fr in enumerate(job['stacks'][0]):
+        fn, inl = names[fr[1]]
+        d = {'frame': k, 'module': 'libxul.so', 'module_offset': hex(fr[1]), 'function': fn}
+        if inl:
+            d['inlines'] = [{'function': x} for x in inl]
+        frames.append(d)
+    return {'results': [{'stacks': [frames]}]}
+
+
+def raising_post(url, payload):
+    raise OSError('no network in this test')
+
+
+cdir = tempfile.mkdtemp()
+cpath = os.path.join(cdir, 'cache.json')
+plain = pd.report(sp)
+check('without --symbolicate the addresses stay and no class is invented', '0x80001000' in plain and 'HTTP channels in this process' not in plain)
+rep = pd.report(sp, symbolicate=True, post=fake_post, cache_path=cpath)
+check('symbolicate: both engine addresses are named', 'symbols: 2 native addresses in 1 libraries, 2 named by Mozilla' in rep)
+check('symbolicate: only the library, its build id and offsets are sent', len(sent) == 1 and sent[0][1]['jobs'][0]['memoryMap'] == [['libxul.so', 'ABCDEF0']] and sorted(f[1] for f in sent[0][1]['jobs'][0]['stacks'][0]) == [0x1000, 0x2000] and 'claude' not in json.dumps(sent[0][1]))
+check('symbolicate: the names reach the native report (inline first, then the function)', 'mozilla::net::nsHttpChannel::OnDataAvailable' in rep and 'inline_helper < mozilla::dom::Foo::Bar' in rep)
+check('symbolicate: a named frame is classified (HTTP channels)', 'HTTP channels in this process' in rep)
+rep2 = pd.report(sp, symbolicate=True, post=raising_post, cache_path=cpath)
+check('symbolicate: the second look needs no network (cache)', '2 named by Mozilla' in rep2 and '0 asked now' in rep2 and 'FAILED' not in rep2)
+rep3 = pd.report(sp, symbolicate=True, post=raising_post, cache_path=os.path.join(cdir, 'empty.json'))
+check('symbolicate: a failing service keeps the report (native frames show library+offset)', 'FAILED: OSError' in rep3 and 'libxul.so+0x1000' in rep3 and 'THE BUSIEST MAIN THREAD' in rep3)
 print('profile_digest self-test: %s' % ('OK' if not fails else '%d FAILED' % len(fails)))
 sys.exit(1 if fails else 0)
