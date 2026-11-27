@@ -36,15 +36,18 @@ class KeepReadyService : Service() {
 
         /** Why the last hold ended, set by whoever ends it; empty when Android ended it (the task was swiped away, or the process was killed). */
         @Volatile private var endWhy = ""
+        /** A start was asked for and no stop since: a quick leave-and-return can ask for the stop before the system has created the service (then [ProcessLife.keepReady] is still false), and it must still be stopped. */
+        @Volatile private var requested = false
 
         fun start(ctx: Context, minutes: Int) {
-            try { endWhy = ""; ctx.startForegroundService(Intent(ctx, KeepReadyService::class.java).putExtra(EXTRA_MINUTES, minutes)) }
-            catch (e: Exception) { Health.count("keepready.refused"); Health.log("life", "keep-ready-refused", e.javaClass.simpleName) }   // Android 12 and newer can refuse a start from the background: the app is then simply cached like before
+            try { endWhy = ""; requested = true; ctx.startForegroundService(Intent(ctx, KeepReadyService::class.java).putExtra(EXTRA_MINUTES, minutes)) }
+            catch (e: Exception) { requested = false; Health.count("keepready.refused"); Health.log("life", "keep-ready-refused", e.javaClass.simpleName) }   // Android 12 and newer can refuse a start from the background: the app is then simply cached like before
         }
 
         /** The app is back in front (or the person turned the choice off): the hold is no longer needed. */
         fun stop(ctx: Context, why: String = "returned") {
-            if (!ProcessLife.keepReady) return
+            if (!requested && !ProcessLife.keepReady) return
+            requested = false
             endWhy = why
             try { ctx.stopService(Intent(ctx, KeepReadyService::class.java)) } catch (e: Exception) { /* already gone */ }
         }
@@ -102,7 +105,7 @@ class KeepReadyService : Service() {
         handler.removeCallbacks(timeout)
         val why = endWhy.ifEmpty { "removed" }
         endWhy = ""
-        ProcessLife.keepReady = false
+        ProcessLife.keepReady = false; requested = false
         Health.count("keepready.end.$why")
         Health.log("life", "keep-ready-end", "why=$why held=${(SystemClock.elapsedRealtime() - startedAt) / 1000}s")
         super.onDestroy()
