@@ -247,7 +247,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // KR1: was the app away (the memory killer takes cached processes) and was the keep-ready service holding the process? The digest's KILLS section and the advisor read these.
         val away = !app.kestrel.browser.ProcessLife.uiVisible; val held = app.kestrel.browser.ProcessLife.keepReady
         Health.count(if (away) "gecko.kill.away" else "gecko.kill.front"); if (away && held) Health.count("gecko.kill.away.held")
-        Health.log("gecko", "kill-state", "away=$away held=$held")
+        Health.log("gecko", if (away) "kill-away" else "kill-front", "held=$held")      // two event names: the live-diagnostics histogram (and so the advisor) counts event kinds
         a.sessionGone(tab, false); scrubCrashReports()
     }
 

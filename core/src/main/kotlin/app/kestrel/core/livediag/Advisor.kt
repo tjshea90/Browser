@@ -17,7 +17,7 @@ object Advisor {
     /** The only keys a suggestion may change by itself, with their allowed values (type: B = boolean, I = int range). The app refuses anything else. */
     class Allowed(val bool: Boolean, val min: Int = 0, val max: Int = 0)
     val APPLICABLE: Map<String, Allowed> = mapOf(
-        "tabs_kept" to Allowed(false, 0, 2), "neon" to Allowed(false, 0, 2), "scroll_feel" to Allowed(false, 0, 2), "instant_back" to Allowed(true),
+        "tabs_kept" to Allowed(false, 0, 2), "keep_ready" to Allowed(false, 0, 3), "neon" to Allowed(false, 0, 2), "scroll_feel" to Allowed(false, 0, 2), "instant_back" to Allowed(true),
         "pages_via_phone" to Allowed(true), "vid_fps30" to Allowed(true), "video_cap" to Allowed(false, 0, 4), "net_h3" to Allowed(true),
     )
 
@@ -45,8 +45,15 @@ object Advisor {
             null, null, "Android's Battery Saver was on when this was sent: it slows the processor (this tablet has four slow cores already) and holds background work back, which shows as lag in typing, scrolling and video, whatever the browser does"))
 
         // memory: the engine was killed or crashed
-        val kills = n("gecko onKill") + n("gecko onCrash")
+        // ND1 (research/DIAG_2026-11-27.md): the diagnostics showed 10 of 11 engine kills happened while the app was in the BACKGROUND (Android takes cached processes first): closing tabs does little for those, keeping the
+        // page ready does. Builds from alpha110 say where the app was (`gecko kill-away` / `gecko kill-front`); older kills are counted as "in front" (the old behaviour of this rule) because nothing says otherwise.
+        val killAway = n("gecko kill-away"); val killFront = n("gecko kill-front")
+        val unsaid = (n("gecko onKill") - killAway - killFront).coerceAtLeast(0L)
+        val kills = killFront + unsaid + n("gecko onCrash")
         val tk = i("tabs_kept", 0)
+        val kr = i("keep_ready", 2)
+        if (killAway >= 2 && kr == 0) out.add(Advice("kills-away", 3, "Appearance", "Keep the page ready when I leave", "off", "1 hour", "keep_ready", 2,
+            "the page engine was ended $killAway times while Kestrel was in the background (Android takes background apps first, and every return loads the page again); keeping it ready holds the page while you are away"))
         if (kills >= 2 && tk != 1) out.add(Advice("kills-tabs", 3, "Appearance", "Tabs kept ready", TABS[tk.coerceIn(0, 2)], TABS[1], "tabs_kept", 1,
             "the page engine was killed or crashed $kills times in the last week (on a 2 GB tablet that is usually memory); fewer tabs kept ready leave it more room"))
         if (kills >= 4 && tk == 1) out.add(Advice("kills-close", 3, "Everyday use", "Open tabs", "", "close the tabs you are not using", null, null,

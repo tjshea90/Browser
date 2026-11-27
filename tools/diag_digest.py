@@ -711,7 +711,7 @@ def self_checks(batches):
 
 def kills_analysis(batches):
     """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
-    Newer builds say it themselves (`gecko kill-state away=.. held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
+    Newer builds say it themselves (`gecko kill-away held=..` / `gecko kill-front held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
     more within 2 minutes is the system's "cached process" signal (the app was away); else the life lines (`life pause` / `life stop` until `life resume` in the same run) say it, which the journal thinning can drop."""
     total, away, front, held, said = 0, 0, 0, 0, 0
     gaps = []
@@ -745,7 +745,7 @@ def kills_analysis(batches):
                         gaps.append((t - stop_at) / 60.0)
                 else:
                     front += 1
-            elif txt.startswith('gecko kill-state'):
+            elif txt.startswith('gecko kill-away') or txt.startswith('gecko kill-front'):
                 said += 1
                 if 'held=true' in txt:
                     held += 1

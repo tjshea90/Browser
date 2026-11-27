@@ -1001,7 +1001,7 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("the app ends the hold when it comes back and starts it only when leaving, not while it is closing", act.contains("KeepReadyService.stop(this)") && act.contains("keepReadyOnLeave()") && act.contains("isFinishing || isChangingConfigurations") && act.contains("KeepReady.applies(choice, hasPage, low, finishing)"))
         val del = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
-        assertTrue("every engine kill says whether the app was away and whether the hold ran (the digest's KILLS section)", del.contains("gecko.kill.away") && del.contains("gecko.kill.front") && del.contains("\"kill-state\""))
+        assertTrue("every engine kill says whether the app was away and whether the hold ran (the digest's KILLS section)", del.contains("gecko.kill.away") && del.contains("gecko.kill.front") && del.contains("\"kill-away\"") && del.contains("\"kill-front\""))
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("Settings has the choice (Kestrel G only) and turning it off ends a running hold", set.contains("Flavor.hasKeepReady") && set.contains("choice(\"Keep the page ready when I leave\"") && set.contains("l.keepReadyOff()"))
         assertTrue("one hour is the default and the choice is in a backup", source("core/src/main/kotlin/app/kestrel/core/mem/KeepReady.kt").contains("const val DEFAULT = HOUR") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"keep_ready\", T.INT, 0, 3)"))
