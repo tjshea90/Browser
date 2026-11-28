@@ -18,6 +18,7 @@ class FakeCdn : Fetcher {
     val requests = CopyOnWriteArrayList<String>()
     val failFirst = ConcurrentHashMap<String, Int>()      // url -> fail this many requests with a reset first
     val statusFor = ConcurrentHashMap<String, Int>()      // url -> always answer this status
+    val resetAfter = ConcurrentHashMap<String, Int>()    // url -> the FIRST reply of it ends in a reset after this many body bytes (a connection that dies in the middle of a big part)
     val denyFirst = ConcurrentHashMap<String, Int>()      // url -> answer 403 to this many requests first, then serve it (an edge hiccup, a spent token)
     /** Decides per request: a status to answer instead of the file, or null to serve it. Runs before everything else except [failFirst]. */
     @Volatile var gate: ((FetchRequest) -> Int?)? = null
@@ -26,6 +27,7 @@ class FakeCdn : Fetcher {
     @Volatile var chunkDelayMs = 0L
     @Volatile var chunk = 8 * 1024
     @Volatile var ignoreRange = false
+    val redirects = ConcurrentHashMap<String, String>()   // url -> the address the answer really comes from (a 302 the fetcher followed): [FetchResponse.finalUrl] says it
     @Volatile override var windowBytes = 0L
     val concurrent = AtomicInteger()
     val maxConcurrent = AtomicInteger()
@@ -39,16 +41,19 @@ class FakeCdn : Fetcher {
         gate?.invoke(req)?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
         denyFirst[req.url]?.let { n -> if (n > 0) { denyFirst[req.url] = n - 1; return Resp(403, req.url, emptyMap(), ByteArray(0), 0, 0, this) } }
         statusFor[req.url]?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
-        val d = files[req.url] ?: return Resp(404, req.url, emptyMap(), ByteArray(0), 0, 0, this)
+        val eff = redirects[req.url] ?: req.url
+        val d = files[eff] ?: return Resp(404, eff, emptyMap(), ByteArray(0), 0, 0, this)
+        val cut = resetAfter.remove(req.url)
         if (req.from >= 0 && !ignoreRange) {
-            if (req.from >= d.size) return Resp(416, req.url, mapOf("Content-Range" to "bytes */${d.size}"), ByteArray(0), 0, 0, this)
+            if (req.from >= d.size) return Resp(416, eff, mapOf("Content-Range" to "bytes */${d.size}"), ByteArray(0), 0, 0, this)
             val last = if (req.toInclusive >= 0) minOf(req.toInclusive, d.size - 1L) else d.size - 1L
-            return Resp(206, req.url, mapOf("Content-Range" to "bytes ${req.from}-$last/${d.size}"), d, req.from.toInt(), (last - req.from + 1).toInt(), this)
+            return Resp(206, eff, mapOf("Content-Range" to "bytes ${req.from}-$last/${d.size}"), d, req.from.toInt(), (last - req.from + 1).toInt(), this, cut)
         }
-        return Resp(200, req.url, emptyMap(), d, 0, d.size, this)
+        return Resp(200, eff, emptyMap(), d, 0, d.size, this, cut)
     }
 
-    class Resp(override val status: Int, override val finalUrl: String, private val headers: Map<String, String>, data: ByteArray, off: Int, len: Int, private val cdn: FakeCdn) : FetchResponse {
+    class Resp(override val status: Int, override val finalUrl: String, private val headers: Map<String, String>, data: ByteArray, off: Int, len: Int, private val cdn: FakeCdn, private val cutAfter: Int? = null) : FetchResponse {
+        private var served = 0
         @Volatile private var aborted = false
         private var closed = false
         private val inner = ByteArrayInputStream(data, off, len)
@@ -60,7 +65,11 @@ class FakeCdn : Fetcher {
                 if (aborted) throw IOException("aborted")
                 if (cdn.chunkDelayMs > 0) try { Thread.sleep(cdn.chunkDelayMs) } catch (e: InterruptedException) { /* ignore */ }
                 if (aborted) throw IOException("aborted")
-                return inner.read(b, o, minOf(l, cdn.chunk))
+                if (cutAfter != null && served >= cutAfter) throw IOException("fake reset in the middle of the body")
+                val want = if (cutAfter != null) minOf(l, cdn.chunk, cutAfter - served) else minOf(l, cdn.chunk)
+                val n = inner.read(b, o, want)
+                if (n > 0) served += n
+                return n
             }
         }
         override fun abort() { aborted = true }

@@ -222,6 +222,8 @@ class StreamEngine(
         val responses = CopyOnWriteArrayList<FetchResponse>()
         val drain = ReentrantLock()
         val keys = HashMap<Int, ByteArray>()
+        @Volatile var finalUrl: String? = null         // RVW1 V10: where the playlist read by [fetchSmall] came from after redirects
+        val keysByUrl = HashMap<String, ByteArray>()   // RVW1 V1: the same key address named by many tags is fetched once
         @Volatile var lastBytesAt = 0L
         /** RX3-D1: some byte of this download arrived since this job object exists; with [StreamRec.next] and the staged parts it says "this is not a fresh download from a dead host". */
         @Volatile var gotBytes = false
@@ -699,12 +701,13 @@ class StreamEngine(
                 if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
                 text = readText(job, fetcher, rec.url)
             }
+            val base = if (rec.playlistText == null) job.finalUrl ?: rec.url else rec.url   // RVW1 V10: relative addresses resolve against where a playlist we read ourselves came from
             val media: Hls.Media = if (text.trimStart('\uFEFF', ' ', '\n', '\r', '\t').startsWith("<")) {
-                val man = Dash.parse(text, rec.url) ?: throw Failed(Reason.BAD_PLAYLIST)
+                val man = Dash.parse(text, base) ?: throw Failed(Reason.BAD_PLAYLIST)
                 when (man.problem) { Hls.Problem.LIVE -> throw Failed(Reason.LIVE); Hls.Problem.DRM -> throw Failed(Reason.DRM); Hls.Problem.UNSUPPORTED -> throw Failed(Reason.UNSUPPORTED); else -> {} }
                 val rep = man.reps.firstOrNull { it.id == (rec.repId ?: it.id) } ?: throw Failed(Reason.BAD_PLAYLIST)
                 rep.media ?: throw Failed(Reason.UNSUPPORTED)
-            } else (Hls.parse(text, rec.url) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)).media
+            } else (Hls.parse(text, base) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)).media
             when (media.problem) {
                 Hls.Problem.LIVE -> throw Failed(Reason.LIVE)
                 Hls.Problem.DRM -> throw Failed(Reason.DRM)
@@ -747,6 +750,7 @@ class StreamEngine(
             if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
             val f = File(dir, "init.seg")
             fetchTo(job, fetcher, init.url, init.from, if (init.len >= 0) init.from + init.len - 1 else -1, f, count = false)
+            if (init.key >= 0 && init.key < media.keys.size) decryptInit(job, media, init, f)   // RVW2 V11
             FileInputStream(f).use { input ->
                 val buf = ByteArray(64 * 1024)
                 while (true) { val r = input.read(buf); if (r < 0) break; sink.pwrite(synchronized(lock) { job.written }, buf, 0, r); synchronized(lock) { job.written += r } }
@@ -755,6 +759,22 @@ class StreamEngine(
             synchronized(lock) { rec.initDone = true; rec.appended = job.written }
         }
         synchronized(lock) { job.base = job.written + job.stagedBytes; job.inflight.set(0) }
+    }
+
+    /**
+     * RVW2 V11: an EXT-X-KEY before the EXT-X-MAP encrypts the initialization section too (AES-128, the tag's IV; RFC 8216 4.3.2.5). It was written to the file as it came, so the saved fMP4 began with cipher text and no
+     * player could open it. An init section is small (a few KB): it is decrypted in memory and the file replaced. A section that is not a multiple of 16 bytes is left as it is (not encrypted after all).
+     */
+    private fun decryptInit(job: Job, media: Hls.Media, init: Hls.Init, f: File) {
+        if (f.length() <= 0 || f.length() > 4L * 1024 * 1024 || f.length() % 16 != 0L) return
+        val key = keyBytes(job, media, init.key)
+        val iv = media.keys[init.key].iv ?: Hls.sequenceIv(media.segments.firstOrNull()?.seq ?: 0L)
+        val plain = try {
+            val c = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            c.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
+            c.doFinal(f.readBytes())
+        } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) }
+        f.writeBytes(plain)
     }
 
     private fun applyName(rec: StreamRec, media: Hls.Media) {
@@ -820,20 +840,53 @@ class StreamEngine(
         job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0
         for (i in job.rec.next until media.segments.size) {
             val f = File(dir, "$i.seg")
-            if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").delete()
+            if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").let { pf -> if (pf.length() < RESUME_MIN) pf.delete() }   // RVW2 V4: a big part is kept: the next try continues it
         }
     }
 
-    private fun readText(job: Job, fetcher: Fetcher, url: String): String {
-        val resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
-        try {
-            if (resp.status !in 200..299) throw statusFailure(resp.status)
-            val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
-            val out = java.io.ByteArrayOutputStream()
-            val buf = ByteArray(16 * 1024)
-            while (true) { if (job.stop) throw Stopped(); val r = body.read(buf); if (r < 0) break; out.write(buf, 0, r); if (out.size() > 8 * 1024 * 1024) throw Failed(Reason.BAD_PLAYLIST) }
-            return out.toString("UTF-8")
-        } catch (e: IOException) { if (job.stop) throw Stopped(); throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+    private fun readText(job: Job, fetcher: Fetcher, url: String): String = fetchSmall(job, fetcher, url, 8 * 1024 * 1024, Reason.BAD_PLAYLIST).toString(Charsets.UTF_8)
+
+    /**
+     * RVW1 V1 (research/REVIEW_2026-11-20_DOWNLOAD.md): a playlist or an AES key is read with the patience a segment has. It used to be ONE try: only the lowest-quality variant arrives with its text, so every other
+     * variant, every separate-audio rendition and every key started with a read of its own, and a single reset, timeout, 429 or 5xx failed the whole job (a FetchException is no IOException and a Retry is no Failed, so
+     * both fell through to "Could not write the file"). Refusals that cannot get better (TLS, a bad or local address, 4xx) fail at once with their own reason; the rest are tried [MAX_TRIES] times with the segment back-off
+     * and the server's own Retry-After (bounded). [limit] is the most a good answer can be: more than that fails with [tooBig] without being kept.
+     */
+    private fun fetchSmall(job: Job, fetcher: Fetcher, url: String, limit: Int, tooBig: Reason): ByteArray {
+        var tries = 0
+        while (true) {
+            if (job.stop) throw Stopped()
+            var resp: FetchResponse? = null
+            try {
+                resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
+                if (resp.status !in 200..299) throw statusFailure(resp.status, resp)
+                job.finalUrl = resp.finalUrl.takeIf { it.isNotEmpty() }
+                val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(minOf(16 * 1024, limit + 1))
+                while (true) { if (job.stop) throw Stopped(); val r = body.read(buf); if (r < 0) break; out.write(buf, 0, r); if (out.size() > limit) throw Failed(tooBig) }
+                return out.toByteArray()
+            } catch (e: FetchException) {
+                if (job.stop) throw Stopped()
+                when (e.kind) {
+                    FetchException.Kind.TLS -> throw Failed(Reason.TLS)
+                    FetchException.Kind.LOCAL_NET -> throw Failed(Reason.LOCAL_NET)
+                    FetchException.Kind.INSECURE_REDIRECT -> throw Failed(Reason.INSECURE_REDIRECT)
+                    FetchException.Kind.BAD_URL -> throw Failed(Reason.BAD_URL)
+                    else -> {}
+                }
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            } catch (e: Retry) {
+                if (job.stop) throw Stopped()
+                if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
+                backoff(job, tries, e.retryAfterMs)
+            } catch (e: IOException) {
+                if (job.stop) throw Stopped()
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            } finally { if (resp != null) { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } } }
+        }
     }
 
     private fun finish(job: Job): DlState {
@@ -953,6 +1006,7 @@ class StreamEngine(
                 while (!job.stop && job.failure == null && synchronized(lock) { job.recovering } > 0) pause(job, 100) // another worker is asking the server again for a refused part: no new request meanwhile
                 if (job.stop || job.failure != null) break
                 val idx = claim(job, media.segments.size) ?: break
+                if (idx == WAIT) { pause(job, 100); continue }   // RVW1 V13: the read-ahead is full: look again in a moment (the segment everybody waits for is being fetched)
                 try {
                     val seg = media.segments[idx]
                     fetchTo(job, fetcher, seg.url, seg.from, if (seg.len >= 0) seg.from + seg.len - 1 else -1, File(dir, "$idx.seg"), count = true)
@@ -974,8 +1028,11 @@ class StreamEngine(
     /** The lowest segment nobody has and nobody is fetching: in order, so the output can grow as soon as the first ones are in. */
     private fun claim(job: Job, n: Int): Int? = synchronized(lock) {
         var i = job.rec.next
-        while (i < n) { if (!job.staged.get(i) && !job.claimed.get(i) && !job.skipped.get(i)) { job.claimed.set(i); return i }; i++ }
-        null
+        // RVW1 V13: no further than [READ_AHEAD] segments past the one the output waits for. While that one sat in its back-off the other workers carried on to the END of the stream (staging up to the whole video next to
+        // the output: twice the disk, on a tablet with little of it). When everything inside the reach is staged or taken but more is wanted, the answer is [WAIT], not "nothing left".
+        val reach = minOf(n.toLong(), i.toLong() + READ_AHEAD).toInt()
+        while (i < reach) { if (!job.staged.get(i) && !job.claimed.get(i) && !job.skipped.get(i)) { job.claimed.set(i); return i }; i++ }
+        if (reach < n) WAIT else null
     }
 
     /** Append every staged segment from the output's position onward, in order. One worker does it at a time; the others carry on fetching. */
@@ -1075,15 +1132,15 @@ class StreamEngine(
 
     private fun keyBytes(job: Job, media: Hls.Media, ki: Int): ByteArray {
         synchronized(lock) { job.keys[ki]?.let { return it } }
+        val url = media.keys[ki].url
+        // RVW1 V1: a playlist that repeats the same EXT-X-KEY before every segment names ONE key many times: it is asked for once (each tag used to be a serial request inside the drain lock, each one fatal on failure)
+        synchronized(lock) { job.keysByUrl[url]?.let { job.keys[ki] = it; return it } }
         val fetcher = fetchers(job.rec.fetcher) ?: fetchers(0) ?: throw Failed(Reason.NETWORK)
-        val resp = open(job, fetcher, FetchRequest(media.keys[ki].url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
-        try {
-            if (resp.status !in 200..299) throw statusFailure(resp.status)
-            val b = resp.body?.readBytes() ?: throw Failed(Reason.BAD_PLAYLIST)
-            if (b.size != 16) throw Failed(Reason.UNSUPPORTED) // an AES-128 key is exactly 16 bytes; anything else is a licence server's answer
-            synchronized(lock) { job.keys[ki] = b }
-            return b
-        } catch (e: IOException) { throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+        // RVW1 S5: at most 17 bytes are ever kept (an AES-128 key is exactly 16; a bigger answer is a licence server's, or an endless body that a malicious playlist points at)
+        val b = fetchSmall(job, fetcher, url, 16, Reason.UNSUPPORTED)
+        if (b.size != 16) throw Failed(Reason.UNSUPPORTED)
+        synchronized(lock) { job.keys[ki] = b; job.keysByUrl[url] = b }
+        return b
     }
 
     // ---- one segment: fetched into [dest] (".part" first, renamed when whole), retried with back-off
@@ -1118,7 +1175,10 @@ class StreamEngine(
             if (!net.online) { synchronized(lock) { if (job.stopState == null) job.stopState = DlState.WAITING_NETWORK; job.stop = true }; throw Stopped() }
             val ctr = LongArray(1)
             try {
-                FileOutputStream(part).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr) }
+                // RVW2 V4: a part of unknown length that already holds a megabyte or more (a single-file DASH stream, a big segment) is CONTINUED where it stopped, not started over at byte 0 after a reset, a pause or a kill:
+                // the next request asks for `bytes=<have>-` (a server that ignores it sends everything: the first <have> bytes are skipped). Parts with a known byte range, and small ones, start afresh as before.
+                val have = if (from < 0 && toInclusive < 0 && part.isFile && part.length() >= RESUME_MIN) part.length() else 0L
+                FileOutputStream(part, have > 0).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr, have) }
                 // a web page where a video part should be (an expired or blocked link that answers 200): never let its text into the video
                 if (looksLikeHtmlFile(part)) { part.delete(); if (count) job.inflight.addAndGet(-ctr[0]); throw Failed(Reason.BAD_CONTENT) }
                 if (!part.renameTo(dest)) throw Failed(Reason.STORAGE)
@@ -1227,17 +1287,17 @@ class StreamEngine(
     }
 
     /** Streams one segment (in bounded windows when the fetcher wants them, resuming after a short reply) into [out]; [ctr] counts the bytes added to the progress. */
-    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean, ctr: LongArray) {
+    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean, ctr: LongArray, startPos: Long = 0L) {
         val window = fetcher.windowBytes
         val known = from >= 0 && toInclusive >= 0
         val segLen = if (known) toInclusive - from + 1 else -1L
-        var pos = 0L                                   // bytes of this segment stored so far
+        var pos = startPos                             // bytes of this segment stored so far (RVW2 V4: those of an earlier try included)
         while (true) {
             val rf: Long; val rt: Long
             when {
                 known -> { rf = from + pos; rt = if (window > 0) minOf(toInclusive, rf + window - 1) else toInclusive }
                 window > 0 -> { rf = pos; rt = pos + window - 1 }
-                else -> { rf = -1; rt = -1 }
+                else -> { rf = if (pos > 0) pos else -1; rt = -1 }   // RVW2 V4: a continued part asks for the rest
             }
             val sent = job.rec.headers
             val resp = open(job, fetcher, FetchRequest(url, rf, rt, null, sent, priv = job.rec.priv))
@@ -1250,7 +1310,9 @@ class StreamEngine(
                 if (st == 206) total = totalOf(resp.header("Content-Range"))
                 val body = resp.body ?: throw FetchException(FetchException.Kind.PROTOCOL, "no body")
                 var skip = if (whole && rf > 0) rf else 0L // a server that ignored Range sent everything: drop what is before the part we asked for
-                var limit = if (whole && rt >= 0) rt - maxOf(rf, 0L) + 1 else Long.MAX_VALUE // and stop after it
+                // RVW1 V2: and stop after it ONLY when the part's own end is known (a byte-range part: its last byte). The request's end `rt` is just the end of this WINDOW: a segment of unknown length asked for in windows
+                // (the Gecko fetcher asks for 4 MiB at a time) that a PHP / worker proxy answered with a plain 200 was cut at the window, renamed, appended and shown as a finished video with no error.
+                var limit = if (whole && known) toInclusive - maxOf(rf, 0L) + 1 else Long.MAX_VALUE
                 val buf = ByteArray(32 * 1024)
                 while (limit > 0) {
                     if (job.stop) throw Stopped()
@@ -1286,16 +1348,19 @@ class StreamEngine(
     /** The answer to a PART of a stream: refusals are tried again first ([Denied]); everything else is judged as before ([statusFailure]). */
     private fun partFailure(job: Job, status: Int, resp: FetchResponse?, sent: Map<String, String>): RuntimeException =
         if (status == 401 || status == 403 || status == 410 || (status == 404 && partsFetched(job)))
-            Denied(status, sent, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+            Denied(status, sent, retryAfterOf(resp))
         else statusFailure(status, resp)
 
     /** True once any part of this download came in (in this run or an earlier one): a refusal after that is more likely an edge hiccup or an expiry than a wrong address. */
     private fun partsFetched(job: Job): Boolean = synchronized(lock) { job.stagedCount > 0 || job.rec.next > 0 || job.written > 0 }
 
+    /** RVW1 V12: the server's Retry-After as milliseconds: seconds or an HTTP date, never more than 10 minutes (`Retry-After: 3600` used to stall a worker for an hour, and a date was read as 0). */
+    private fun retryAfterOf(resp: FetchResponse?): Long = app.kestrel.core.download.HttpSemantics.retryAfterMs(resp?.header("Retry-After"), clock.now()) ?: 0L
+
     private fun statusFailure(status: Int, resp: FetchResponse? = null): RuntimeException = when {
         status == 401 || status == 403 || status == 410 -> Failed(Reason.LINK_EXPIRED, status)
         status == 404 || status in 400..499 && status != 408 && status != 429 -> Failed(Reason.HTTP, status)
-        else -> Retry(status, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+        else -> Retry(status, retryAfterOf(resp))
     }
 
     private fun totalOf(contentRange: String?): Long = contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
@@ -1381,6 +1446,9 @@ class StreamEngine(
 
     companion object {
         private const val MAX_TRIES = 6
+        private const val READ_AHEAD = 16     // RVW1 V13
+        private const val RESUME_MIN = 1L shl 20   // RVW2 V4: a part of this size or more is continued, not restarted
+        private const val WAIT = -2            // RVW1 V13: [claim] says "nothing to take right now"
 
         /**
          * The runs of a joined file between discontinuities, from the "index:offset;" pairs the engine kept while appending ([StreamRec.breaks]): the byte range and the playlist's own length of each.

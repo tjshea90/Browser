@@ -546,4 +546,96 @@ class MediaListFramesTest {
         l.applyStream("https://cdn.test/two.m3u8", live = false, drm = false, durationMs = 2_700_000, adMs = 0, breaks = 0)
         assertEquals(1, l.usableCount()); assertNull(l.find("https://cdn.test/one.m3u8"))
     }
+
+    @Test fun anAddressNamedInThePageTextAndThenReallyRequestedIsVerifiedByTheRequest() {
+        // RVW1 F2: inline JSON names the stream, hls.js then asks for it. The request is the proof: before the fix `fromMarkup` stayed true for ever and the badge never lit.
+        val u = "https://c.test/s/master.m3u8"
+        fun markup(url: String, kind: MediaKind) = MediaCandidate(url, kind, "", -1, "https://site.test/watch").also { it.fromMarkup = true }
+        val l = MediaList()
+        assertTrue(l.add(markup(u, MediaKind.HLS)))
+        assertEquals("only named in a script so far: not counted", 0, l.usableCount())
+        assertTrue("the player's request is news for the list", l.add(hls(u)))
+        assertEquals("a request with a media type verifies it", 1, l.usableCount())
+        assertFalse("and is only news once", l.add(hls(u)))
+        val other = MediaList()
+        assertTrue(other.add(hls(u)))
+        other.add(markup(u, MediaKind.HLS))                       // the other order: the request already proved it, the later text does not take that back
+        assertEquals(1, other.usableCount())
+    }
+
+    @Test fun aShortStreamThatReallyPlayedOrWasChosenIsAVideoNotAPreview() {
+        // RVW1 F7: X / Twitter clips, Reels and Streamable HLS are 5-20 s long; the 20 s floor hid them for ever, even when the person played one
+        val u = "https://video.test/clip/master.m3u8"
+        val l = MediaList()
+        l.add(hls(u))
+        l.applyStream(u, live = false, drm = false, durationMs = 12_000, adMs = 0, breaks = 0)
+        assertEquals("a 12 s stream nobody played is a preview or an ad", 0, l.usableCount())
+        assertTrue(l.applyInfo(u, 0, 0, 12_000, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000))
+        assertEquals("it played for 3 s: it is the video of this page", 1, l.usableCount())
+        val l2 = MediaList()
+        l2.add(hls(u)); l2.applyStream(u, live = false, drm = false, durationMs = 12_000, adMs = 0, breaks = 0)
+        l2.touch(u)
+        assertEquals("the owner chose it", 1, l2.usableCount())
+        val l3 = MediaList()
+        l3.add(hls(u)); l3.applyStream(u, live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)
+        l3.applyInfo(u, 0, 0, 0, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000)
+        assertEquals("a live stream cannot be saved however long it played", 0, l3.usableCount())
+        val l4 = MediaList()
+        l4.add(hls(u)); l4.applyStream(u, live = false, drm = true, durationMs = 12_000, adMs = 0, breaks = 0)
+        l4.applyInfo(u, 0, 0, 12_000, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000)
+        assertEquals("a protected stream is never offered", 0, l4.usableCount())
+    }
+
+    @Test fun theBestLookingUnverifiedSourceIsCheckedFirstAndALabelFromTheMarkupNamesTheRow() {
+        // RVW1 F11: <source> elements listed best-first; the page text names them with their labels, the wire may see one of them first
+        fun src(url: String, label: String?) = MediaCandidate(url, MediaKind.FILE, "", -1, "https://site.test/watch").also { it.fromMarkup = true; it.label = label }
+        val l = MediaList()
+        l.add(src("https://c.test/v1080.mp4", "1080p")); l.add(src("https://c.test/v720.mp4", "720p")); l.add(src("https://c.test/v480.mp4", "480")); l.add(src("https://c.test/v360.mp4", null)); l.add(src("https://c.test/v240_240p.mp4", null))
+        val check = l.unverifiedToCheck(3).map { it.url.substringAfterLast('/') }
+        assertEquals("the best three, not the last three listed", listOf("v1080.mp4", "v720.mp4", "v480.mp4"), check)
+        val wire = MediaList()
+        wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "video/mp4", 9_000_000, "https://site.test/watch"))
+        assertTrue("the label arrives later and is learned", wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "", -1, "https://site.test/watch").also { it.label = "720p" }))
+        assertEquals("720p", wire.find("https://c.test/clip.mp4")!!.label)
+        assertEquals("a label already known is kept", false, wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "", -1, "https://site.test/watch").also { it.label = "480p" }))
+        assertEquals("720p", wire.find("https://c.test/clip.mp4")!!.label)
+    }
+
+    @Test fun whatThePagesElementSaidAboutARedirectedAddressReachesTheFileTheWireSaw() {
+        // RVW2 F16: <video src="/play?id=1"> answers 302 to a signed CDN file; the element says currentSrc = the first address
+        val first = "https://site.test/play?id=1"; val fin = "https://cdn.test/signed/movie.mp4?sig=abc"
+        fun wire() = MediaCandidate(fin, MediaKind.FILE, "video/mp4", 80_000_000, "https://site.test/watch").also { it.alias = first }
+        val a = MediaList()
+        assertTrue(a.applyInfo(first, 1280, 720, 5_400_000, null, VideoRole.PLAYER, played = true, element = 2, areaPx = 90_000) == false)    // nobody listed it yet: it waits
+        assertTrue(a.add(wire()))
+        val c = a.find(fin)!!
+        assertEquals(720, c.height); assertEquals(5_400_000L, c.durationMs); assertTrue("it played", c.played)
+        assertEquals("found under the address before the redirect too", c, a.find(first))
+        val b = MediaList()                                          // the other order: the wire first, then the element
+        b.add(wire())
+        assertTrue(b.applyInfo(first, 1280, 720, 5_400_000, null, VideoRole.PLAYER, played = true, element = 2, areaPx = 90_000))
+        assertEquals(720, b.find(fin)!!.height)
+        val m = MediaList()                                          // the page's markup listed the first address; the wire then sees the final one: ONE row, with what was learned
+        m.add(MediaCandidate(first, MediaKind.FILE, "", -1, "https://site.test/watch").also { it.fromMarkup = true; it.label = "720p" })
+        m.add(wire())
+        assertEquals(1, m.size)
+        assertEquals("720p", m.find(fin)!!.label); assertEquals("a request that really happened verifies it", false, m.find(fin)!!.fromMarkup)
+    }
+
+    @Test fun theRungsOfAMasterAreNeverCountedNorLookedAtNextToIt() {
+        // RVW2 F17: the player asks for the master, then for its rungs (or the rungs arrive first, with the master read later)
+        fun h(u: String) = MediaCandidate(u, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch")
+        val master = "https://c.test/m/master.m3u8"; val r1 = "https://c.test/m/720/index.m3u8"; val r2 = "https://c.test/m/360/index.m3u8"
+        val l = MediaList()
+        for (u in listOf(master, r1, r2)) { l.add(h(u)); l.applyStream(u, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0) }
+        assertEquals("three playlists look like three films", 3, l.usableCount())
+        l.noteChildren(listOf(r1, r2))
+        assertEquals("only the master counts", 1, l.usableCount())
+        val late = MediaList()                                       // the master was read before the player asked for the rung
+        late.add(h(master)); late.noteChildren(listOf(r1))
+        late.add(h(r1)); late.applyStream(r1, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0)
+        assertEquals(listOf(master), late.streamsToLook(5).map { it.url })
+        late.applyStream(master, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0)
+        assertEquals(1, late.usableCount())
+    }
 }
