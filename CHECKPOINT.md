@@ -1,13 +1,13 @@
-# CHECKPOINT 3569 — read me first, then TASKS.md
+# CHECKPOINT 3582 — read me first, then TASKS.md
 
-**Written:** 2026-11-28T08:04:23Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `fc35be0f` (this checkpoint is the commit after it)
+**Written:** 2026-11-28T08:19:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `9e7fc88e` (this checkpoint is the commit after it)
 
 ## Just done
-Second owner message (ND6: after PDL1, look for improvements from sent diagnostics and code) written to TASKS.md as ND6/ND6a, NOT started (waits for PDL1 shipped). The UserPromptSubmit hook DID fire for it (INBOX has an automatic entry), so the hooks are live from the second message on.
+PDL1 CODED (not yet released): core Handed.kt (HandedStreams registry, HandedResponse one-shot with 2% cut guard, HandedFetcher kind 4 = site first + engine stream as fallback / kind 5 = engine stream only), Model.kt (FETCHER_HANDED 4, FETCHER_ONE_SHOT 5, FetchResponse.oneShot, Kind.HANDED_GONE, Reason.PAGE_FILE 20), Engine.kt (blob/data enqueue, probe marks the job one-shot, no limiter, longer stall, PAGE_FILE on a broken stream, wipe partial, Delete-only row, handedRunning), Planner text, PhoneBackend skips kind 5; Gecko: net/HandedOver.kt, TabDelegates.onExternalResponse keeps the body, BrowserActivity (drop on decline/refusal, kindFor + startNow/phone drop in startDownload, feedsDownload keeps the tab awake), GeckoApp registers kinds 4/5, counters download.handed.*; research/PDL1_PAGE_MADE_DOWNLOADS.md. HandedTest 17/17 green, :geckoapp and :app compile green (needed gradle WITHOUT --offline).
 
 ## Do this next
-PDL1 design decided after reading Engine.kt/Model.kt/GeckoFetcher.kt: (1) core/download/HandedStreams.kt = one-shot registry of the engine's own WebResponse bodies keyed by address (expires after ~2 min, closes what nobody claimed, max 4); (2) core/download/HandedFetcher.kt = Fetcher decorator for kind 2: asks the real (Gecko) fetcher first, and when the answer is not a usable file (html type where the engine's own response was not html, 4xx/5xx, FetchException) or the address is blob:/data:, serves the engine's own stream instead (status 200, headers from the engine response, no range, no speed limiter); a normal link closes the engine's stream at once as today; (3) TabDelegates.onExternalResponse offers the body to the registry instead of closing it, BrowserActivity.startDownload uses fetcher kind 2 only when a stream was offered for that address, a declined/cancelled question drops it; (4) Reason/Planner text for a handed stream that was cut ('open the page and download again'); (5) JVM tests in core first (EngineTest-style fakes: whole file, cut stream, html shell, normal link unchanged), then ship gecko code 216 / alpha115. Then ND6a.
+PDL1 remaining: (1) the full suites were started with ./gradlew -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest (run it again in the background and poll its log for EXIT if the result is not in a ckpt line below), then :app:lintDebug; (2) OwnerRulesTest-style source tests may read TabDelegates/BrowserActivity text: fix any red test, never skip one; (3) bump geckoapp/build.gradle.kts to versionCode 216 / 0.3.0-alpha115, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA115_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes), bash ship.sh gecko with that note, ONE android.yml dispatch (app=gecko full_build=true), verify tag + jobs + release, bash tools/record-release.sh with the identical note, tick PDL1a-d with evidence (HandedTest, run id), answer the owner in plain words incl. what was NOT run (no Proton account, tablet untested, WebView build unchanged); (4) then ND6a (claim it first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ PDL1 design decided after reading Engine.kt/Model.kt/GeckoFetcher.kt: (1) core/d
 
 ## Last ten checkpoints
 ```
+  3261ff02 ckpt 3569: Second owner message (ND6: after PDL1, look for improvements from sent diagn
   59778a61 ckpt 3567: Owner message (Proton Drive zip download fails in Kestrel with 'The site sen
   a50908c2 ckpt 3539: alpha114 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha114, run 460786
   6ee3c3de ckpt 3537: ND5c: research/ND5_CAPTCHA_LOGIN.md has the Shields-off analysis and the bis
@@ -25,8 +26,7 @@ PDL1 design decided after reading Engine.kt/Model.kt/GeckoFetcher.kt: (1) core/d
   62e73b2d ckpt 3533: gated kestrel-g-v0.3.0-alpha114 (gecko code 215) and pushed it: handoff self
   8c29adfa ckpt 3532: owner sent a screenshot: my.nobullnetworks.com/login says Captcha verificati
   202c2cbe ckpt 3531: pre-ship: alpha114: Kestrel steps out of the way when you update, and the pa
-  e1a80876 ckpt 3526: pre-ship: alpha114: Kestrel steps out of the way when you update, and the pa
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(12 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
