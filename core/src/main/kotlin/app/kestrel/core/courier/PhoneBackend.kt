@@ -5,6 +5,7 @@ import app.kestrel.core.download.Clock
 import app.kestrel.core.download.DEST_PUBLIC
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
+import app.kestrel.core.download.FETCHER_ONE_SHOT
 import app.kestrel.core.download.Reason
 import app.kestrel.core.download.Source
 import app.kestrel.core.media.StreamSource
