@@ -22,7 +22,9 @@ enum class Reason(val code: Int) {
     /** Streams (video): a live stream, copy protection (DRM), a format that cannot be saved, a playlist that could not be read. */
     LIVE(15), DRM(16), UNSUPPORTED(17), BAD_PLAYLIST(18),
     /** The site sent a web page where the file should be (an expired link, a sign-in wall, a portal page). */
-    BAD_CONTENT(19);
+    BAD_CONTENT(19),
+    /** PDL1: the file came straight out of the page (a service worker stream, a blob: file) and the stream ended or is gone: it cannot be asked for again, only made again by the page. */
+    PAGE_FILE(20);
 
     companion object { fun of(code: Int): Reason = values().firstOrNull { it.code == code } ?: NONE }
 }
@@ -65,7 +67,7 @@ class Rec(@JvmField val id: Long) {
     @JvmField var lastMod: String? = null     // strong Last-Modified only
     @JvmField var dateHdr: String? = null
     @JvmField var ranges = -1                 // -1 unknown, 0 no, 1 yes
-    @JvmField var fetcher = 0                 // which Fetcher implementation (0 URLConnection, 1 Gecko)
+    @JvmField var fetcher = 0                 // which Fetcher implementation (0 URLConnection, 1 Gecko, 2 the phone over the LAN, 4 Gecko + the engine's own stream as a fallback, 5 the engine's own stream only: PDL1)
     @JvmField var risk = 0
     @JvmField var meteredOk = false
     @JvmField var done = 0L
@@ -121,6 +123,14 @@ class Source(
 
 const val DEST_PUBLIC = 0
 const val DEST_APP_PRIVATE = 2
+
+/**
+ * PDL1 (see [HandedFetcher]): fetcher kinds for a download the browser engine handed over WITH its response body (kinds 0 URLConnection, 1 Gecko and 2 the phone's LAN are older).
+ * [FETCHER_HANDED] = ask the site as usual and use the engine's own stream only when that answer is not the file; the engine records [FETCHER_ONE_SHOT] on the download the moment it
+ * started from the engine's stream (so a restart or a retry knows the file can only be made again by the page).
+ */
+const val FETCHER_HANDED = 4
+const val FETCHER_ONE_SHOT = 5
 
 /** Buttons a row can show, first = primary. */
 enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE, /** A finished stream kept as a .ts: write an MP4 from it now. */ MAKE_MP4, /** A download waiting for the phone: do it on the tablet itself instead. */ DOWNLOAD_HERE,
@@ -187,12 +197,14 @@ interface FetchResponse : Closeable {
     val finalUrl: String
     fun header(name: String): String?
     val body: InputStream?
+    /** PDL1: this reply is the browser engine's own stream of the file: it cannot be asked for again (no ranges, no second connection, no continuing after a break) and nothing may slow it down. */
+    val oneShot: Boolean get() = false
     /** Must unblock a thread that is reading [body] (that thread then gets an IOException). */
     fun abort()
 }
 
 class FetchException(val kind: Kind, message: String?, cause: Throwable? = null) : Exception(message, cause) {
-    enum class Kind { TIMEOUT, RESET, OFFLINE, DNS, TLS, LOCAL_NET, PROTOCOL, INSECURE_REDIRECT, BAD_URL }
+    enum class Kind { TIMEOUT, RESET, OFFLINE, DNS, TLS, LOCAL_NET, PROTOCOL, INSECURE_REDIRECT, BAD_URL, /** PDL1: the engine's own stream of this file is no longer there (it was read, closed, expired, or the app restarted). */ HANDED_GONE }
 }
 
 /** Blocking; called on worker threads. Follows redirects itself (<= 10, never https -> http) and reports the final URL. */
