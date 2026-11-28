@@ -24,6 +24,8 @@ class GeckoTabData {
     var pageStartedAt = 0L
     /** PV1: this tab's current session has painted a page of its own (set at the first contentful paint, cleared when a session is made): a live tab coming back needs no curtain over the page view. */
     @JvmField var painted = false
+    /** EM1k: the address of the page the engine last painted (first contentful paint); the "last look" of a page that is still loading is taken only when it matches the tab's address now. In memory only. */
+    @JvmField var paintedFor = ""
     var pageStartUrl = ""
     var pictureH = 0
     /** ANS54e: Kestrel's own player failed on a film of this page (before its first picture): until this uptime the page's own player plays its films (no second hand-over). */
