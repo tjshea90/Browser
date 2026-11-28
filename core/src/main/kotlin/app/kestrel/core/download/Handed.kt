@@ -106,8 +106,9 @@ class HandedResponse(private val e: HandedStreams.Entry) : FetchResponse {
  * the address cannot be asked for again (a service worker's stream, blob:, data:) or the download already started from it. Otherwise (kind [FETCHER_HANDED]) the site is asked as usual,
  * which keeps several connections, pause and continue; the engine's stream is used only when that answer is not the file (an error, a web page where the engine's own answer was none,
  * an answer that cannot be reached) and is closed as soon as the ordinary answer proves good. A refusal for safety (certificate, https to http, own network) is never worked around.
+ * [note] is told what happened ("ordinary" = the site's own answer was the file, "used" = the engine's stream was served, "gone" = it was no longer there): counters for Diagnostics, never an address.
  */
-class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams, private val onlyHanded: Boolean = false) : Fetcher {
+class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams, private val onlyHanded: Boolean = false, private val note: (String) -> Unit = {}) : Fetcher {
     override val probeWindow: Long get() = real.probeWindow
     override val windowBytes: Long get() = real.windowBytes
 
@@ -123,14 +124,16 @@ class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams
             }
         }
         val good = usable(resp, ContentSniff.isHtmlType(own.header("Content-Type")))
-        if (good != null) { handed.drop(req.url); return good }
+        if (good != null) { handed.drop(req.url); note("ordinary"); return good }
         try { resp.abort() } catch (e: Exception) { /* ignore */ }
         try { resp.close() } catch (e: Exception) { /* ignore */ }
         return claim(req.url)
     }
 
     private fun claim(url: String): FetchResponse {
-        val e = handed.take(url) ?: throw FetchException(FetchException.Kind.HANDED_GONE, "the page's own stream of this file is gone")
+        val e = handed.take(url)
+        if (e == null) { note("gone"); throw FetchException(FetchException.Kind.HANDED_GONE, "the page's own stream of this file is gone") }
+        note("used")
         return HandedResponse(e)
     }
 

@@ -30,6 +30,7 @@ object HandedOver {
         val body = response.body ?: return key
         try { response.setReadTimeoutMillis(READ_TIMEOUT_MS) } catch (e: Throwable) { /* the engine's default stays */ }
         streams.offer(key, response.statusCode, HashMap(response.headers), body)
+        app.kestrel.browser.diag.Health.count("download.handed.offered") // a count only: never the address (a private tab's downloads are counted the same, with no site)
         return key
     }
 

@@ -36,8 +36,8 @@ class GeckoApp : Application() {
             val gecko = app.kestrel.browser.net.GeckoFetcher(app.kestrel.browser.download.UrlConnectionFetcher())
             app.kestrel.browser.download.DownloadController.setFetcher(1, gecko)
             // PDL1: the same network stack, with the engine's own stream of a handed-over download as the fallback / the only source (core HandedFetcher)
-            app.kestrel.browser.download.DownloadController.setFetcher(app.kestrel.core.download.FETCHER_HANDED, app.kestrel.core.download.HandedFetcher(gecko, app.kestrel.browser.net.HandedOver.streams))
-            app.kestrel.browser.download.DownloadController.setFetcher(app.kestrel.core.download.FETCHER_ONE_SHOT, app.kestrel.core.download.HandedFetcher(gecko, app.kestrel.browser.net.HandedOver.streams, onlyHanded = true))
+            app.kestrel.browser.download.DownloadController.setFetcher(app.kestrel.core.download.FETCHER_HANDED, app.kestrel.core.download.HandedFetcher(gecko, app.kestrel.browser.net.HandedOver.streams, note = { app.kestrel.browser.diag.Health.count("download.handed.$it") }))
+            app.kestrel.browser.download.DownloadController.setFetcher(app.kestrel.core.download.FETCHER_ONE_SHOT, app.kestrel.core.download.HandedFetcher(gecko, app.kestrel.browser.net.HandedOver.streams, onlyHanded = true, note = { app.kestrel.browser.diag.Health.count("download.handed.$it") }))
         }
         if (getProcessName() == packageName) app.kestrel.browser.diag.CrashNote.install(this) // AX2: an uncaught exception leaves a note the next Diagnostics shows
         if (getProcessName() == packageName) app.kestrel.browser.diag.LastRun.begin(this) // CR1: reads how the last run ended (IO thread) and starts this run's note
