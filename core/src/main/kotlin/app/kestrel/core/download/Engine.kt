@@ -222,6 +222,9 @@ class Engine(
         view(job, q.indexOfFirst { it.rec.id == id }, q.size)
     }
 
+    /** PDL1: a download is being saved from the engine's own stream (a page is feeding it): the tab of that page must not be put to sleep. */
+    fun handedRunning(): Boolean = synchronized(lock) { jobs.values.any { it.rec.fetcher == FETCHER_ONE_SHOT && (it.rec.state.active || it.rec.state == DlState.QUEUED) } }
+
     /** The service must stay alive while anything is queued, moving bytes or waiting for the network. */
     fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK } }
 
@@ -241,7 +244,9 @@ class Engine(
         r.url = s.url; r.pageUrl = s.pageUrl; r.headers = s.headers; r.mime = s.mime; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk; r.risk = s.risk; r.destKind = s.destKind; r.nameFixed = s.nameFixed
         r.name = FileNames.sanitize(s.nameHint ?: FileNames.fromUrl(s.url) ?: "download")
         r.created = clock.now(); r.updated = r.created
-        if (!(s.url.startsWith("http://", true) || s.url.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
+        // PDL1: a blob: or data: file made by the page can only come from the engine's own stream
+        val handedAddress = (s.fetcher == FETCHER_HANDED || s.fetcher == FETCHER_ONE_SHOT) && (s.url.startsWith("blob:", true) || s.url.startsWith("data:", true))
+        if (!(s.url.startsWith("http://", true) || s.url.startsWith("https://", true) || handedAddress)) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
         if (!r.priv) store.insert(r.snapshot())
         synchronized(lock) { jobs[id] = Job(r) }
         changed(id)
@@ -387,7 +392,8 @@ class Engine(
                 DlState.RUNNING -> {
                     plan(j)
                     synchronized(lock) {
-                        if (j.alive > 0 && now - j.lastBytesAt > cfg.stallMs) { // no bytes for a long time: cut the sockets, the workers retry
+                        val stall = if (j.rec.fetcher == FETCHER_ONE_SHOT) cfg.stallMs * 8 else cfg.stallMs // PDL1: a page that decrypts its file block by block is slower than a server
+                        if (j.alive > 0 && now - j.lastBytesAt > stall) { // no bytes for a long time: cut the sockets, the workers retry
                             j.lastBytesAt = now
                             for (w in j.workers) try { w.resp?.abort() } catch (e: Exception) { /* ignore */ }
                         }
@@ -492,7 +498,7 @@ class Engine(
                 else -> resp.header("Content-Length")?.trim()?.toLongOrNull() ?: -1L
             }
             val acceptRanges = resp.header("Accept-Ranges")?.trim()?.lowercase()
-            val ranges = when { encoded || total < 0 -> 0; ranged || acceptRanges == "bytes" -> 1; acceptRanges == "none" -> 0; else -> -1 }
+            val ranges = if (resp.oneShot) 0 else when { encoded || total < 0 -> 0; ranged || acceptRanges == "bytes" -> 1; acceptRanges == "none" -> 0; else -> -1 }
             val ctype = resp.header("Content-Type")?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() }
             val etag = resp.header("ETag")?.trim()?.takeIf { HttpSemantics.isStrongEtag(it) }
             val lm = resp.header("Last-Modified")?.trim()
@@ -502,8 +508,9 @@ class Engine(
             if (wantsBinary && ContentSniff.isHtmlType(ctype)) { quiet(resp); fail(job, Reason.BAD_CONTENT, 0); throw Exit() } // an honest "text/html" where a video or file was expected: nothing is created
             synchronized(lock) { job.expectBinary = wantsBinary; job.sniffed = false }
             val name = if (rec.nameFixed) FileNames.withExtensionFor(ctype ?: rec.mime, rec.name) else FileNames.choose(resp.header("Content-Disposition"), resp.finalUrl, ctype ?: rec.mime, rec.name)
-            val sink = try { sinks.create(name, ctype ?: rec.mime, total, rec.priv, rec.destKind) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
-            val seg = Seg(0, 0, total, 0)
+            // PDL1: the engine's own stream states a length it may not keep (a site may state the stored size): it shows progress, but the file ends where the stream ends, and the sink is not sized by it
+            val sink = try { sinks.create(name, ctype ?: rec.mime, if (resp.oneShot) -1L else total, rec.priv, rec.destKind) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
+            val seg = Seg(0, 0, if (resp.oneShot) -1L else total, 0)
             seg.worker = true
             val reqEnd = if (ranged) (cr?.last ?: -2L) + 1 else -1L
             seg.live = !ranged
@@ -514,6 +521,7 @@ class Engine(
                 rec.lastMod = if (etag == null && HttpSemantics.isStrongLastModified(lm, date)) lm else null
                 rec.dateHdr = date
                 rec.destUri = sink.uri; rec.segs.clear(); rec.segs.add(seg); rec.done = 0
+                if (resp.oneShot) rec.fetcher = FETCHER_ONE_SHOT // stored with the first checkpoint: a restart or a retry knows only the page can make this file again
                 job.sink = sink; sinksReadable = sink.readable; job.useOriginal = false; rec.state = DlState.RUNNING; job.lastBytesAt = now
             }
             control.execute { checkpoint(job); plan(job) } // the record now has its file and segment: durable before the first byte
@@ -557,7 +565,11 @@ class Engine(
                 if (opened.vLen > 0 && !sameTail(job, opened)) { quiet(opened.resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
                 pump(job, seg, opened)
             }
-            catch (e: IOException) { quiet(opened.resp); transient(job, seg, 0, 0, 0); windowEndedAt = -1L; continue }
+            catch (e: IOException) {
+                quiet(opened.resp)
+                if (opened.resp.oneShot) { if (job.stop) throw Stopped(); fail(job, Reason.PAGE_FILE, 0); throw Exit() } // PDL1: the engine's stream broke; nothing can be asked for again
+                transient(job, seg, 0, 0, 0); windowEndedAt = -1L; continue
+            }
             windowEndedAt = clock.now()
             quiet(opened.resp)
         }
@@ -695,7 +707,7 @@ class Engine(
                 return
             }
             if (n == 0) continue
-            limiter.acquire(n) { job.stop }                                                 // Settings > Downloads > Speed limit
+            if (!o.resp.oneShot) limiter.acquire(n) { job.stop }                            // Settings > Downloads > Speed limit (not for the engine's own stream: its Java-side queue has no back-pressure)
             if (job.stop) { o.resp.abort(); throw Stopped() }
             if (cursor == 0L && !job.sniffed) { // the very first bytes of the file: a server that sends a web page as "application/octet-stream" is still caught
                 job.sniffed = true
@@ -734,6 +746,7 @@ class Engine(
             FetchException.Kind.INSECURE_REDIRECT -> { fail(job, Reason.INSECURE_REDIRECT, 0); throw Exit() }
             FetchException.Kind.LOCAL_NET -> { fail(job, Reason.LOCAL_NET, 0); throw Exit() }
             FetchException.Kind.BAD_URL -> { fail(job, Reason.BAD_URL, 0); throw Exit() }
+            FetchException.Kind.HANDED_GONE -> { fail(job, Reason.PAGE_FILE, 0); throw Exit() }
             else -> {}
         }
     }
@@ -827,7 +840,7 @@ class Engine(
             startQueued()
             return
         }
-        if (st == DlState.FAILED && reason == Reason.BAD_CONTENT) synchronized(lock) { wipePartial(job) } // nothing worth keeping: the "file" is a web page
+        if (st == DlState.FAILED && (reason == Reason.BAD_CONTENT || reason == Reason.PAGE_FILE)) synchronized(lock) { wipePartial(job) } // nothing worth keeping: the "file" is a web page, or a stream that cannot be continued
         val again: Boolean
         synchronized(lock) {
             rec.state = st; rec.reason = reason; rec.detail = detail
@@ -907,11 +920,11 @@ class Engine(
             DlState.WAITING_NETWORK -> if (r.canContinue(readable(job))) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
             DlState.NEEDS_DECISION -> listOf(Action.RESTART, Action.CANCEL)
             DlState.VERIFYING -> emptyList()
-            DlState.FAILED -> listOf(Action.RETRY, Action.DELETE)
+            DlState.FAILED -> if (r.reason == Reason.PAGE_FILE) listOf(Action.DELETE) else listOf(Action.RETRY, Action.DELETE) // a page-made file is made again by the page: Retry could only fail again
             DlState.COMPLETED -> listOf(Action.OPEN, Action.SHARE, Action.DELETE)
             DlState.CANCELED -> emptyList()
         }
-        val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
+        val host = try { java.net.URI(r.url.removePrefix("blob:")).host } catch (e: Exception) { null } // a blob: address names its page's site after the scheme
         return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, r.total, r.done, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, queuePos = queuePos, queueSize = queueSize)
     }
 }

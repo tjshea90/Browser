@@ -145,7 +145,7 @@ class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams
     }
 
     private class Peeked(private val inner: FetchResponse, head: ByteArray, n: Int) : FetchResponse by inner {
-        override val body: InputStream? = SequenceInputStream(ByteArrayInputStream(head, 0, n), inner.body)
+        override val body: InputStream? = SequenceInputStream(ByteArrayInputStream(head, 0, n), inner.body!!)
     }
 
     private companion object { const val PEEK = 512 }
