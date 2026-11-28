@@ -248,6 +248,27 @@ class HandedTest {
         assertFalse(h.engine.handedRunning())
     }
 
+    @Test(timeout = 60_000) fun everyFailedDownloadIsReportedOnceWithItsReasonAndAFinishedOneNever() {
+        val failed = java.util.concurrent.CopyOnWriteArrayList<DownloadView>()
+        val h = H(FakeServer(page).also { it.contentType = "text/html" })
+        h.engine.addListener(object : Engine.Listener {
+            override fun onChanged(id: Long) {}
+            override fun onFailed(v: DownloadView) { failed.add(v) }
+        })
+        fun waitFor(n: Int) { val end = System.currentTimeMillis() + 10_000; while (failed.size < n && System.currentTimeMillis() < end) Thread.sleep(5) }
+        h.failed(h.engine.enqueue(Source("https://files.test/get/archive.zip")))                       // a web page where a zip was expected
+        waitFor(1)
+        h.handed.offer(swUrl, 200, swHeaders(3L * MiB), Breaking(testBytes(3 * MiB, 21), MiB))
+        h.failed(h.engine.enqueue(Source(swUrl, nameHint = "termux.zip", fetcher = FETCHER_HANDED)))   // a page's stream that breaks
+        waitFor(2)
+        h.completed(h.engine.enqueue(Source("https://site.test/docs/page.html")))                       // finished: no report
+        Thread.sleep(100)
+        assertEquals(listOf(Reason.BAD_CONTENT, Reason.PAGE_FILE), failed.map { it.reason })
+        assertEquals("the site is in the snapshot", "files.test", failed[0].host)
+        assertEquals("termux.zip", failed[1].name)
+        assertFalse(failed.any { it.priv })
+    }
+
     // ---------------------------------------------------------------------------------------------------------------- the registry
 
     @Test fun anUnclaimedStreamIsClosedWhenItIsTooOldAndAnOlderOfferForTheSameAddressIsClosedWhenReplaced() {
