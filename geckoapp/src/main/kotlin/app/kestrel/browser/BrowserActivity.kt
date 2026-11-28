@@ -1079,7 +1079,7 @@ open class BrowserActivity : Activity(), DockListener {
         // LiveBudget.afterTrim decides how many tabs stay live from the level AND the memory the kernel reports as available (it used to close every other tab at any level >= 10).
         if (level >= 15) BackPictures.clear() // the system wants memory: the pictures are the first thing to give back
         if (level >= 10) enforceLiveLimit(LiveBudget.afterTrim(level, Health.memAvailableMb(), liveBudget())) // a popup's opener must survive (window.opener): enforceLiveLimit skips those
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { if (LiveBudget.mayHibernateInBackground(it.isPrivateTab, if (pausedAt == 0L) 0L else SystemClock.uptimeMillis() - pausedAt, level)) hibernate(it) }   // ANS58c / ANS59: a private tab in front never sleeps, a regular one only after a long absence at the worst trim
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { if (!feedsDownload(it) && LiveBudget.mayHibernateInBackground(it.isPrivateTab, if (pausedAt == 0L) 0L else SystemClock.uptimeMillis() - pausedAt, level)) hibernate(it) }   // ANS58c / ANS59: a private tab in front never sleeps, a regular one only after a long absence at the worst trim
     }
 
     // ================================================================== UI construction
@@ -1871,6 +1871,14 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
 
+    /** PDL1: this tab's page handed a download over with its own stream (Proton Drive's service worker, a blob: file) and that download is still running: putting the tab to sleep would close the page and cut the file. */
+    private fun feedsDownload(t: Tab): Boolean {
+        if (t.gecko.handedAt == 0L) return false
+        if (DownloadController.handedRunning() || SystemClock.uptimeMillis() - t.gecko.handedAt < 60_000L) return true // a minute of grace: the job starts a moment after the page handed the stream over
+        t.gecko.handedAt = 0L
+        return false
+    }
+
     private fun detach(v: View) { (v.parent as? ViewGroup)?.removeView(v) }
 
     private fun updateNeonCover() {
@@ -1893,7 +1901,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun enforceLiveLimit(max: Int = liveBudget()) {
         val live = tabs.filter { it.session != null }
         // PERF24: the owner's number limits the REGULAR tabs, the memory rule (max) all live tabs; the cheapest tab to bring back sleeps first, a heavy page last (core LiveBudget.sleepPlan; never a private tab: its logins would go, ANS58c)
-        val plan = LiveBudget.sleepPlan(live.map { LiveBudget.SleepCand(it.id, it.lastActive, it === current, hasLiveChild(it), it.isPrivateTab, it.reloadMs) }, max, LiveBudget.regularCap(prefs.tabsKeptCount))
+        val plan = LiveBudget.sleepPlan(live.map { LiveBudget.SleepCand(it.id, it.lastActive, it === current, hasLiveChild(it) || feedsDownload(it), it.isPrivateTab, it.reloadMs) }, max, LiveBudget.regularCap(prefs.tabsKeptCount))
         var count = live.size
         for (id in plan) {
             val t = live.firstOrNull { it.id == id } ?: continue
@@ -4063,6 +4071,7 @@ open class BrowserActivity : Activity(), DockListener {
             app.kestrel.core.download.DownloadGuardRules.Verdict.GO -> { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
             app.kestrel.core.download.DownloadGuardRules.Verdict.REFUSE_QUIETLY -> {
                 if (!tab.isPrivateTab) { Health.count("download.autoRefused"); Health.log("download", "auto-refused", UrlParts.hostOf(url) ?: "") }
+                app.kestrel.browser.net.HandedOver.streams.drop(url) // PDL1: nobody will read the engine's stream of this file
                 toast("Blocked another download this page started by itself"); leaveDownloadTab(tab); return
             }
             app.kestrel.core.download.DownloadGuardRules.Verdict.ASK -> { /* the question below */ }
@@ -4080,12 +4089,15 @@ open class BrowserActivity : Activity(), DockListener {
         }
         // RV7: one such question per tab at a time: a page that fires file after file would stack a dialog for each; while one is open the rest are refused quietly
         if (byItself) {
-            if (!autoQuestionTabs.add(tab.id)) { Health.count("download.autoRefused"); toast("Blocked another download this page started by itself"); leaveDownloadTab(tab); return }
+            if (!autoQuestionTabs.add(tab.id)) { Health.count("download.autoRefused"); app.kestrel.browser.net.HandedOver.streams.drop(url); toast("Blocked another download this page started by itself"); leaveDownloadTab(tab); return }
         }
         askYesNo(if (byItself) "A page started a download" else "Download this file?", msg, "Download", "Cancel", { ok ->
             if (byItself) autoQuestionTabs.remove(tab.id)
             if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers)
-            else if (byItself) autoDownloadDeclinedAt[declineKey(tab, url)] = SystemClock.uptimeMillis() // the next self-started downloads of this SITE in this tab are refused quietly for a minute
+            else {
+                app.kestrel.browser.net.HandedOver.streams.drop(url) // PDL1: declined: the engine's stream of the file is let go (the page sees its download cancelled)
+                if (byItself) autoDownloadDeclinedAt[declineKey(tab, url)] = SystemClock.uptimeMillis() // the next self-started downloads of this SITE in this tab are refused quietly for a minute
+            }
             leaveDownloadTab(tab)
         })
     }
@@ -4116,10 +4128,17 @@ open class BrowserActivity : Activity(), DockListener {
             // a video named like a release, or one whose own name says nothing on a page that names the episode, is saved as "Ozark S02E05.mp4" (owner message 26, AL6); every other file keeps the server's name
             val raw = nameOverride ?: Downloads.fileName(url, cd, mime)
             val named = if (nameOverride == null) MediaNames.friendlyFileName(raw, mime, tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "", tab.nameClues) else raw
-            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, named, mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null || named != raw))
+            // PDL1: a download the engine handed over with its own stream starts from it when only it can make the file (a service worker's stream, blob:), or asks the site first and keeps the stream as a fallback
+            val kind = app.kestrel.browser.net.HandedOver.kindFor(url)
+            val onId: ((Long) -> Unit)? = when (kind) {
+                app.kestrel.core.download.FETCHER_ONE_SHOT -> { id -> DownloadController.startNow(this, id) }                                                       // the page waits with its stream: no place in a queue behind other files
+                app.kestrel.core.download.FETCHER_HANDED -> { id -> if (DownloadController.isPhoneRow(id)) app.kestrel.browser.net.HandedOver.streams.drop(url) } // the phone took the download over: the stream is not needed
+                else -> null
+            }
+            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, named, mime, headers, fetcher = kind, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null || named != raw), onId)
             askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup); no toast any more
         }
-        if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.", "Download", "Cancel", { ok -> if (ok) go() })
+        if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.", "Download", "Cancel", { ok -> if (ok) go() else app.kestrel.browser.net.HandedOver.streams.drop(url) })
         else go()
     }
 
