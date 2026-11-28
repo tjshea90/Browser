@@ -10,7 +10,7 @@ import org.junit.Test
 
 /** ANS54e: which films a page hands to Kestrel's own player (owner message 54: "I want the web video players to use this"). */
 class WebHandOverTest {
-    private fun el(src: String = "", blob: Boolean = false, mime: String = "", loop: Boolean = false, w: Int = 640, h: Int = 360, t: Double = 0.0, d: Double = 0.0) = Element(src, blob, mime, loop, w, h, t, d)
+    private fun el(src: String = "", blob: Boolean = false, mime: String = "", loop: Boolean = false, w: Int = 640, h: Int = 360, t: Double = 0.0, d: Double = 0.0, ad: Boolean = false) = Element(src, blob, mime, loop, w, h, t, d, ad)
     private val film = Known("https://v.example/film/master.m3u8", MediaKind.HLS, 600_000L, true, master = true)
     private val unknownLength = Known("https://v.example/other/master.m3u8", MediaKind.HLS, 0L, true, master = true)
 
@@ -138,5 +138,53 @@ class WebHandOverTest {
         assertNull(WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(), listOf(film)))
         assertEquals(film.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.FULLSCREEN, el(), listOf(film))!!.url)
         assertEquals(film.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.LATE, el(), listOf(film))!!.url)
+    }
+
+    // ---- ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video")
+
+    @Test fun anAdvertisementOnThePagesElementIsLeftToThePage() {
+        // the pre-roll plays on the page's own element: the address at the press is the ad's, the page's player says an ad plays, and no film is known yet
+        val ad = "https://cdn.example/media/spot-30.mp4"
+        assertNull("the player says an ad plays: the page plays it itself", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = ad, d = 30.0, ad = true), emptyList()))
+        assertNull("a 90 s ad is no longer 'short': only the page's own word counts", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = ad, d = 90.0, ad = true), emptyList()))
+        assertNull("a script player (blob) in an ad state and no film known", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true, ad = true), emptyList()))
+        assertNull("a script player in an ad state and only a SHORT list known: that list is the ad", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true, ad = true), listOf(Known("https://v.example/ad/master.m3u8", MediaKind.HLS, 20_000L, true, master = true))))
+        assertNull("full screen with an ad state and a short list", WebHandOver.decide(WebHandOver.ALWAYS, Why.FULLSCREEN, el(ad = true), listOf(Known("https://v.example/ad/master.m3u8", MediaKind.HLS, 20_000L, true, master = true))))
+        assertNotNull("the same element without the ad state is handed over as before", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = "https://cdn.example/media/film.mp4", d = 5400.0), emptyList()))
+    }
+
+    @Test fun anAdvertisementWithAFilmKnownGivesTheFilm() {
+        val ad = "https://cdn.example/media/spot-30.mp4"
+        val d = WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = ad, d = 30.0, ad = true), listOf(film))!!
+        assertEquals("the ad is not played: the long film of the frame is", film.url, d.url)
+        assertEquals(film.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = "https://cdn.example/ads/spot.mp4"), listOf(film))!!.url)
+        assertEquals(film.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true, ad = true), listOf(film))!!.url)
+    }
+
+    @Test fun anAddressThatNamesAnAdvertisementIsNotHandedOver() {
+        for (u in listOf("https://cdn.example/ads/spot.mp4", "https://cdn.example/media/ad/1234.mp4", "https://cdn.example/video_ad_15.mp4", "https://cdn.example/x/preroll-30.mp4", "https://cdn.example/x/pre-roll.mp4",
+            "https://cdn.example/advert/1.mp4", "https://cdn.example/adserver/v/1.mp4", "https://cdn.example/a.mp4?vast=1", "https://cdn.example/imasdk/a.mp4", "https://cdn.example/v.mp4?adunit=3", "https://cdn.example/ADS/Spot.MP4")) {
+            assertEquals(u, true, WebHandOver.looksLikeAdAddress(u))
+            assertNull(u, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = u, d = 25.0), emptyList()))
+        }
+        for (u in listOf("https://cdn.example/movies/ad-astra-2019.mp4", "https://cdn.example/film.mp4?ad=0", "https://ads.example.com/film.mp4", "https://cdn.example/shadow/bread.mp4", "https://cdn.example/uploads/head.mp4",
+            "https://cdn.example/loading/film_adventure.mp4", "https://cdn.example/Madrid.mp4", "https://cdn.example/")) {
+            assertEquals(u, false, WebHandOver.looksLikeAdAddress(u))
+        }
+        assertNotNull("a film called ad-astra is still handed over", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = "https://cdn.example/movies/ad-astra-2019.mp4", d = 7000.0), emptyList()))
+    }
+
+    @Test fun aClipKestrelsPlayerPlayedToItsEndIsNotHandedOverAgain() {
+        val ad = "https://cdn.example/media/spot-30.mp4"
+        // the ad ended in Kestrel's player (position = length), the person pressed play again on the page two minutes later: the page plays it itself, so its ad plugin can finish and go on to the film
+        assertEquals(true, WebHandOver.playedThrough(ad, ad, 30_000L, 30_000L, 120_000L))
+        assertEquals("a token that is new in every ad request does not make it another clip", true, WebHandOver.playedThrough("$ad?tok=2", "$ad?tok=1", 29_500L, 30_000L, 5_000L))
+        assertEquals("stopped half way: the person left it, not the end of an ad", false, WebHandOver.playedThrough(ad, ad, 12_000L, 30_000L, 5_000L))
+        assertEquals("another clip", false, WebHandOver.playedThrough(ad, "https://cdn.example/media/other.mp4", 30_000L, 30_000L, 5_000L))
+        assertEquals("a film (over two minutes) watched to its end and pressed again is still Kestrel's", false, WebHandOver.playedThrough(ad, ad, 600_000L, 600_000L, 5_000L))
+        assertEquals("long ago", false, WebHandOver.playedThrough(ad, ad, 30_000L, 30_000L, 11 * 60_000L))
+        assertEquals("never stopped", false, WebHandOver.playedThrough(ad, ad, 30_000L, 30_000L, -1L))
+        assertEquals("length unknown", false, WebHandOver.playedThrough(ad, ad, 30_000L, 0L, 5_000L))
+        assertEquals("no address", false, WebHandOver.playedThrough("", "", 30_000L, 30_000L, 5_000L))
     }
 }

@@ -1020,7 +1020,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var o = { k: 'vh', y: (m.y === 'press' || m.y === 'kestrel') ? m.y : 'play', s: (typeof m.s === 'string' && /^https?:\/\//i.test(m.s) && m.s.length <= 2000) ? m.s : '', b: m.b === 1 ? 1 : 0,
     m: String(m.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: m.l === 1 ? 1 : 0, w: Math.round(n(m.w, 20000)), h: Math.round(n(m.h, 20000)), t: n(m.t, 1e7), d: n(m.d, 1e7),
     p: String(page).slice(0, 300), f: String(frame).slice(0, 2000),       // (the frame is matched against the sniffed streams of that frame, whose address is not cut at 300: knownIn compares them whole)
-    tp: sender.frameId === 0 ? 1 : 0, g: null };                          // ANS55f: tp = the film is in the top document (a frame's box cannot be placed on the page); g = its box, eleven numbers (the content script checked their ranges)
+    tp: sender.frameId === 0 ? 1 : 0, g: null, a: m.a === 1 ? 1 : 0 };      // ANS61: a = the page's own player says an advertisement plays (an ad-state class, gate-main.js adNow)                          // ANS55f: tp = the film is in the top document (a frame's box cannot be placed on the page); g = its box, eleven numbers (the content script checked their ranges)
   if (Array.isArray(m.g) && m.g.length === 11) { var g = [], j, v; for (j = 0; j < 11; j++) { v = +m.g[j]; if (!isFinite(v)) { g = null; break; } g.push(v); } o.g = g; }
   return send(o).then(function (r) { try { var j = r ? JSON.parse(r) : null; return { h: (j && j.h === 1) ? 1 : 0 }; } catch (e) { return { h: 0 }; } }, function () { return { h: 0 }; });
 });

@@ -471,7 +471,7 @@
         var why = (q.y === 'play' || q.y === 'press' || q.y === 'kestrel') ? q.y : 'play';
         asked++;
         browser.runtime.sendMessage({ k: 'vhand', y: why, s: src, b: q.b === 1 ? 1 : 0, m: String(q.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: q.l === 1 ? 1 : 0,
-          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7), g: geo(q.g) }).then(function (r) {
+          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7), g: geo(q.g), a: q.a === 1 ? 1 : 0 }).then(function (r) {
           try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|' + ((r && r.h === 1) ? '1' : '0') })); } catch (x) { /* ignore */ }
         }, function () { try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|0' })); } catch (x) { /* ignore */ } });
       } catch (x) { /* ignore */ }
