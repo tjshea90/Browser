@@ -20,6 +20,7 @@ import app.kestrel.browser.download.MediaStoreSinks
 import app.kestrel.core.download.Sink
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
+import app.kestrel.browser.readCapped
 import app.kestrel.core.update.DexMetadata
 import app.kestrel.core.update.Release
 import app.kestrel.core.update.ReleaseAsset
@@ -193,6 +194,8 @@ object UpdateManager {
         setRequestProperty("User-Agent", "Kestrel-updater/1") // GitHub requires one; it names the app, nothing about the user or device
     }
 
+    /** RVW3 SC6: the most bytes of one answer of the release API that are read (the real ones are a few hundred KB). */
+    private const val MAX_ANSWER = 2_000_000
     private class RateLimited : IOException("rate limited")
     private class HttpError(val code: Int) : IOException("HTTP $code")
 
@@ -212,7 +215,7 @@ object UpdateManager {
             when (val code = c.responseCode) {
                 304 -> return old
                 200 -> {
-                    val text = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                    val text = c.inputStream.use { it.readCapped(MAX_ANSWER).toString(Charsets.UTF_8) }   // RVW3 SC6: bounded (the engine's own watch below is capped at 2 MB too)
                     val tag = c.getHeaderField("ETag")
                     if (tag != null && text.length < 300_000) {
                         val keys = (s.getString("cache_keys", "") ?: "").split(',').filter { it.isNotEmpty() && it != key }.toMutableList()

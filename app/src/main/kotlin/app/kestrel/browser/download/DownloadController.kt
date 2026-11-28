@@ -80,11 +80,46 @@ object DownloadController {
         applyLimit()
     }
 
-    /** What the limiter is set to right now, in KB/s (0 = no limit). Pure: the one place the two rules meet. */
-    fun effectiveKBps(userKBps: Int, pageBusy: Boolean, yieldToPages: Boolean, pageKBps: Int = PAGE_KBPS): Int =
-        if (pageBusy && yieldToPages) (if (userKBps <= 0) pageKBps else minOf(userKBps, pageKBps)) else userKBps.coerceAtLeast(0)
+    // RVW3 PB3: downloads also step aside while Kestrel's own player plays a film (full screen or inside the page). Two or three download connections took about half of the 5 Mbit/s hotspot from an HLS film that needs
+    // about 2.5 Mbit/s: the player stepped down a picture size or stalled. The player renews a short lease once a second while it plays ([filmPlaying]); a lease that is not renewed ends by itself after
+    // [FILM_LEASE_MS] (a player that died can never leave the downloads slow), and [filmStopped] ends it at once. Same Settings switch as the page rule.
+    @Volatile private var filmBusy = false
+    @Volatile private var filmRenewedAt = 0L
+    private val filmIdle = Runnable { filmBusy = false; applyLimit() }
+    const val FILM_KBPS = 250
+    const val FILM_LEASE_MS = 5_000L
 
-    private fun applyLimit() { limiter?.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages, pageKBps) * 1024L }
+    /** Kestrel's own player is playing (called about once a second by its tick). */
+    fun filmPlaying() {
+        if (!::handler.isInitialized) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (filmBusy && now - filmRenewedAt < 1000L) return            // renewed a moment ago
+        filmRenewedAt = now
+        handler.removeCallbacks(filmIdle); handler.postDelayed(filmIdle, FILM_LEASE_MS)
+        if (!filmBusy) { filmBusy = true; applyLimit() }
+    }
+
+    /** Kestrel's own player ended or went away: downloads go back to their own speed at once. */
+    fun filmStopped() {
+        if (!::handler.isInitialized) return
+        handler.removeCallbacks(filmIdle)
+        if (filmBusy) { filmBusy = false; applyLimit() }
+    }
+
+    /**
+     * What the limiter is set to right now, in KB/s (0 = no limit). Pure: the one place the rules meet. A loading page leaves downloads [pageKBps]; a playing film leaves them the larger of [pageKBps] and [FILM_KBPS]
+     * (250 KB/s = 2 Mbit/s: with the film's 2.5 Mbit/s that is most of a 5 Mbit/s hotspot, and behind the fast tunnel the profile's own page rate is already large); the owner's own lower limit always wins.
+     */
+    fun effectiveKBps(userKBps: Int, pageBusy: Boolean, yieldToPages: Boolean, pageKBps: Int = PAGE_KBPS, filmBusy: Boolean = false): Int {
+        var limit = userKBps.coerceAtLeast(0)
+        if (yieldToPages) {
+            if (pageBusy) limit = if (limit <= 0) pageKBps else minOf(limit, pageKBps)
+            if (filmBusy) { val cap = maxOf(pageKBps, FILM_KBPS); limit = if (limit <= 0) cap else minOf(limit, cap) }
+        }
+        return limit
+    }
+
+    private fun applyLimit() { limiter?.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages, pageKBps, filmBusy) * 1024L }
     /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
     private var streams: StreamEngine? = null
     private var streamStore: StreamStoreFiles? = null

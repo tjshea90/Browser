@@ -170,6 +170,24 @@ var KestrelEngine = (function () {
     var gramPair = new Uint8Array(8192);
     for (var gs = 0; gs < gramKey.length; gs++) if (gramLen[gs] !== 0) { var gk = gramKey[gs] >>> 16; gramPair[gk >> 3] |= 1 << (gk & 7); }
 
+    // RVW3 SP1: the rules without a token or gram (455 in the bundled list; 449 of them are options-only lines such as `$script,domain=a.com|b.com`) were ALL evaluated for EVERY request. A rule whose $domain= list
+    // names include entries can only act on a page that matches one of them (evalRule returns at domainOk otherwise, before it changes anything), so each such rule is filed under the hash of every include entry
+    // and a page host looks up its own candidates once (memoized per host): about 1 rule instead of 455 per request. A key collision only adds a candidate (evalRule still runs domainOk), never drops one. The
+    // candidates are evaluated in their ORIGINAL order (the first rule to name a stand-in or a category wins), so the verdicts are exactly the old ones (web-tests/engine.test.js parity + RVW3 SP1 tests).
+    var ntPlain = [], ntByDomain = new Map(), ntForHost = new Map();
+    for (var nz = 0; nz < noToken.length; nz++) {
+      var nd = dom[noToken[nz]];
+      var nInc = nd !== 0 ? domPool[2 * (nd - 1)] : 0;
+      if (nInc === 0) { ntPlain.push(nz); continue; }     // no include list (none at all, or exclusions only): applies to every page
+      for (var nk = 0; nk < nInc; nk++) {
+        var np = 2 * (nd - 1 + 2 + nk);
+        var nkey = domPool[np + 1] ^ Math.imul(domPool[np], 31);   // (hi, lo) of the entry, the same pair pageHas() compares
+        var nb = ntByDomain.get(nkey);
+        if (nb === undefined) { nb = []; ntByDomain.set(nkey, nb); }
+        if (nb[nb.length - 1] !== nz) nb.push(nz);
+      }
+    }
+
     // ---- Public Suffix List (Psl.kt)
     var siteCache = new Map();
     function siteOf(host) {
@@ -384,7 +402,33 @@ var KestrelEngine = (function () {
           if (cEvals - start > MAX_GRAM_EVALS) break;
         }
       }
-      for (var z = 0; z < noToken.length; z++) { evalRule(noToken[z]); if (cImportant) return; }
+      var nt = noTokenFor(cPageHost);   // RVW3 SP1: only the token-less rules this page can reach, in their original order
+      for (var z = 0; z < nt.length; z++) { evalRule(noToken[nt[z]]); if (cImportant) return; }
+    }
+
+    /** RVW3 SP1: the positions (in noToken, ascending) of the token-less rules that can act on [host]: those with no include list plus those filed under one of the page's own suffix / entity hashes. */
+    function noTokenFor(host) {
+      if (noToken.length === 0) return ntPlain;
+      var key = (host === null || host === undefined) ? '' : host;
+      var hit = ntForHost.get(key);
+      if (hit !== undefined) return hit;
+      var pos = ntPlain.slice();
+      if (key !== '') {
+        var ph = pageHashes();
+        for (var k = 0; k < ph.length; k += 2) {
+          var b = ntByDomain.get(ph[k] ^ Math.imul(ph[k + 1], 31));
+          if (b !== undefined) for (var m = 0; m < b.length; m++) pos.push(b[m]);
+        }
+        if (pos.length > ntPlain.length) {
+          pos.sort(function (x, y) { return x - y; });
+          var out = [];
+          for (var q = 0; q < pos.length; q++) if (q === 0 || pos[q] !== pos[q - 1]) out.push(pos[q]);   // (a rule with several include entries that all match is listed once)
+          pos = out;
+        }
+      }
+      if (ntForHost.size >= 64) ntForHost.clear();
+      ntForHost.set(key, pos);
+      return pos;
     }
 
     function domainOk(off) {
@@ -500,6 +544,7 @@ var KestrelEngine = (function () {
 
     return {
       check: check, siteOf: siteOf, isSameSite: isSameSite,
+      lastEvals: function () { return cEvals; },   // RVW3 SP1 / SP2a: how many rules the LAST check tried (deterministic, no clock): the regression guard of the token-less index
       generation: all[2], bytes: buf.byteLength, hostRules: nHost, hostExceptions: nExc, patternRules: nRules, tokenRules: ruleIds.length, gramRules: gramIds.length, tokenlessRules: noToken.length,
     };
   }
