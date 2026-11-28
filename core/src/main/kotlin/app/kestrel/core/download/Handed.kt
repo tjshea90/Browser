@@ -60,6 +60,8 @@ class HandedStreams(private val clock: Clock = Clock.System, private val maxHeld
     /** Closes and forgets the stream of [url]: the question was declined, the ordinary request worked, the phone took the download, nobody came for it. */
     @Synchronized fun drop(url: String) { held.remove(url)?.let { Handed.closeQuietly(it.body) } }
     @Synchronized fun size(): Int = held.size
+    /** Closes what is older than the limit (the lookups do it too; this is for a timer, so that a stream nobody asks about is still let go). */
+    @Synchronized fun sweep() = sweepLocked()
 
     private fun sweepLocked() {
         val now = clock.now()

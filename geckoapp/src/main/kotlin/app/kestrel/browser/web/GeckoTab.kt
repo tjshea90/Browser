@@ -28,6 +28,8 @@ class GeckoTabData {
     /** EM1k: the address of the page the engine last painted (first contentful paint); the "last look" of a page that is still loading is taken only when it matches the tab's address now. In memory only. */
     @JvmField var paintedFor = ""
     var pageStartUrl = ""
+    /** PDL1: when (uptime ms) this page handed a download over with its own stream (a service worker, a blob: file): while that download runs the tab is not put to sleep, or the file would be cut. */
+    var handedAt = 0L
     var pictureH = 0
     /** ANS54e: Kestrel's own player failed on a film of this page (before its first picture): until this uptime the page's own player plays its films (no second hand-over). */
     @Volatile var handOverOffUntil = 0L

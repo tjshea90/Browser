@@ -259,10 +259,13 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         val h = response.headers
         fun header(n: String): String? = h.entries.firstOrNull { it.key.equals(n, ignoreCase = true) }?.value
         val length = header("Content-Length")?.toLongOrNull() ?: -1L
-        // The channel starts suspended and resumes on the first read: closing without reading costs no data and frees the connection. The download manager makes its own
-        // (Range-capable, resumable) request through the same network stack, with the same cookies.
-        try { response.body?.close() } catch (e: Exception) { /* ignore */ }
-        a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length, redirected = response.redirected)
+        // The channel starts suspended and resumes on the first read: not reading costs no data. The download manager makes its own (Range-capable, resumable) request through the same
+        // network stack, with the same cookies. PDL1: the engine's own stream is KEPT for a few minutes for the files that request cannot get (Proton Drive's service worker stream, a
+        // blob: file: the second request gets the site's web page); the manager closes it unused when its own request works, and a declined question drops it.
+        val address = app.kestrel.browser.net.HandedOver.offer(response)
+        tab.gecko.handedAt = android.os.SystemClock.uptimeMillis()
+        app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.net.HandedOver.streams.sweep() } }, app.kestrel.core.download.Handed.MAX_AGE_MS + 5_000L)
+        a.download(tab, address, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length, redirected = response.redirected)
     }
 
     override fun onSlowScript(session: GeckoSession, scriptFileName: String): GeckoResult<SlowScriptResponse>? = a.askSlowScript(tab)
