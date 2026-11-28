@@ -179,6 +179,7 @@ object LastRun {
             }
             if (total > 0) out["rssSumMb"] = total / 1024
         } catch (e: Exception) { /* best effort */ }
+        for ((k, v) in ProcMem.numbers()) out.putIfAbsent(k, v)         // ND1e: the page process too (it is hidden from /proc on Android 10, so the lines above only ever saw the main process)
         return out
     }
 
@@ -206,7 +207,10 @@ object LastRun {
             }
             if (parts.isNotEmpty()) sb.append(" app{").append(parts.joinToString(" ")).append(" sum=").append(total / 1024).append("MB}")
         } catch (e: Exception) { /* best effort */ }
-        return sb.toString().take(400)
+        try {
+            if (ctx != null && System.currentTimeMillis() - startedAt in 0 until 90_000L) sb.append(" inst{").append(app.kestrel.browser.update.UpdateManager.sessionsLine(ctx)).append('}')      // ND4: was an install still running while this run lived (the first start after an update)?
+        } catch (e: Exception) { /* best effort */ }
+        return sb.toString().take(520)
     }
 
     /** The process ends on purpose (nothing left to do, [app.kestrel.browser.ProcessLife]): written at once, on the caller's thread, because the next line kills the process. */

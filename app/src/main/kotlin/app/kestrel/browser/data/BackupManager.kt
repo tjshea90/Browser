@@ -27,7 +27,7 @@ object BackupManager {
         Spec("https", T.STR, oneOf = HttpsPolicy.Mode.values().map { it.name }.toSet()),
         Spec("sh_ads", T.BOOL), Spec("sh_cos", T.BOOL), Spec("block_popups", T.BOOL), Spec("sh_cookies", T.BOOL), Spec("sh_fp", T.BOOL), Spec("sh_embeds", T.BOOL),
         Spec("data_saver", T.STR, oneOf = DataSaver.values().map { it.name }.toSet()),
-        Spec("web_dark", T.INT, 0, 2), Spec("text_zoom", T.INT, 50, 200), Spec("neon", T.INT, 0, 2), Spec("scroll_feel", T.INT, 0, 2), Spec("tabs_kept", T.INT, 0, 2),
+        Spec("web_dark", T.INT, 0, 2), Spec("text_zoom", T.INT, 50, 200), Spec("neon", T.INT, 0, 2), Spec("scroll_feel", T.INT, 0, 2), Spec("tabs_kept", T.INT, 0, 2), Spec("keep_ready", T.INT, 0, 3),
         Spec("net_doh", T.BOOL), Spec("net_h3", T.BOOL), Spec("net_preconnect", T.BOOL),
         Spec("dl_yield", T.BOOL), Spec("dl_limit_kbps", T.INT, 0, 1_000_000), Spec("dl_active", T.INT, 1, 3), Spec("dl_conns", T.INT, 0, 3),
         Spec("pull_refresh", T.BOOL), Spec("suggest", T.BOOL), Spec("clear_exit", T.BOOL), Spec("tap_zoom", T.BOOL), Spec("input_zoom", T.BOOL),

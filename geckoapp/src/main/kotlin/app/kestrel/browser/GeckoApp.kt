@@ -26,6 +26,7 @@ class GeckoApp : Application() {
         Flavor.hasLiveDiag = true
         Flavor.hasFullscreenTurn = true
         Flavor.hasVideoBar = true
+        Flavor.hasKeepReady = true    // KR1
         Flavor.hasNetworkLab = true
         Flavor.hasAutoTune = true    // OPT1: ON in alpha107 as an EXPERIMENT (the emulator lab proved the start, the first restart and the benchmark pages, but its own graphics froze at the later restarts, so a full run was only ever proved by unit tests; the real tablet is the test)
         Flavor.engineVersion = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) as? String ?: "" } catch (e: Throwable) { "" }

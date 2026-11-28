@@ -12,6 +12,7 @@ class InstallResultReceiver : BroadcastReceiver() {
     @Suppress("DEPRECATION")
     override fun onReceive(ctx: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        try { app.kestrel.browser.diag.Health.log("life", "install-result", "status=$status") } catch (e: Throwable) { /* a note, never a risk */ }       // ND4: when the install finished, in the run's own note (the next start reads it)
         // LAB6: the installer refused the dex-metadata file that rode along with the update (the start-up profile): install once more without it. Not for a cancel by the person, a success or the confirmation screen.
         if (status != PackageInstaller.STATUS_PENDING_USER_ACTION && status != PackageInstaller.STATUS_SUCCESS && status != PackageInstaller.STATUS_FAILURE_ABORTED &&
             DexMetadata.isRefusal(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)) && UpdateManager.installRetryWithoutDm(ctx)) return
@@ -21,7 +22,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (confirm != null) {
                     // On screen: open it at once. In the background (an automatic install attempt): a screen cannot be started from there on Android 10+, so the notification carries it.
-                    if (app.kestrel.browser.ProcessLife.uiVisible) try { ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
+                    if (app.kestrel.browser.ProcessLife.uiVisible) try { ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); UpdateManager.stepOutOfTheWayOfTheInstaller() } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
                     else UpdateNotifier.confirm(ctx, confirm)
                 }
             }

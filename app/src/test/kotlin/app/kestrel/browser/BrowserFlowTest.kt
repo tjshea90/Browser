@@ -207,7 +207,12 @@ class BrowserFlowTest {
         popupViews().filterIsInstance<TextView>().first { it.text.contains("Settings") }.performClick()
         org.robolectric.shadows.ShadowLooper.idleMainLooper()
         val t = texts(a.window.decorView)
-        assertTrue(t.toString(), t.any { it == "Settings" } && t.any { it.contains("SECURE DNS") } && t.any { it.contains("Strict: warn before plain HTTP") })
+        assertTrue(t.toString(), t.any { it == "Settings" } && t.any { it.contains("SECURE DNS") })
+        // ND1: Settings builds a section's rows only while it is open: the headers are there, and a tap on a header builds that section
+        assertTrue("a closed section builds none of its rows", t.none { it.contains("Strict: warn before plain HTTP") })
+        views(a.window.decorView).first { it.contentDescription?.toString()?.startsWith("Privacy & security") == true }.performClick()
+        val opened = texts(a.window.decorView)
+        assertTrue(opened.toString(), opened.any { it.contains("Strict: warn before plain HTTP") })
     }
 
     @Test

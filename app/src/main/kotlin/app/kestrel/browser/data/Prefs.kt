@@ -191,6 +191,8 @@ class Prefs private constructor(ctx: Context) {
     var lastLook: Boolean get() = bool("last_look", true); set(v) = put("last_look", v)
     /** PERF17b: after a break of 4 hours or more the page that was in front waits for a tap on the Home screen (Firefox for Android does the same); off = it loads at once at every start. */
     var lazyStart: Boolean get() = bool("lazy_start", true); set(v) = put("lazy_start", v)
+    /** KR1: how long Kestrel G keeps the page ready while the app is away (core KeepReady: 0 off, 1 15 minutes, 2 one hour, 3 three hours). */
+    var keepReady: Int get() = app.kestrel.core.mem.KeepReady.valid(sp.getInt("keep_ready", app.kestrel.core.mem.KeepReady.DEFAULT)); set(v) = put("keep_ready", app.kestrel.core.mem.KeepReady.valid(v))
     /** PERF21: a page's decorative clips (silent, looping, no controls) play only while on screen and at most two at a time (decoclips.js); off = the page plays them as it wants. */
     var limitClips: Boolean get() = bool("limit_clips", true); set(v) = put("limit_clips", v)
     /** PERF20: hold Android's "critical memory" signals while plenty of memory is free, so the engine keeps its warm caches and compiled script code (core TrimGate); off = every signal reaches the engine, as before. */

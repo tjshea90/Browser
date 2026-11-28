@@ -8,6 +8,8 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
 import android.os.storage.StorageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
@@ -117,6 +119,29 @@ object UpdateManager {
         }, "kestrel-update-hint").apply { isDaemon = true }.start()
     }
 
+    /**
+     * ND4 (owner 2026-11-27: "The app still crashes after update"): the FIRST start after an update died 13 to 34 s after the install in 27 of 27 updates since alpha75 (research/DG1_FIRST_RUN_AFTER_INSTALL.md section 4).
+     * The installer's screen (a dialog) sits on top of this app's screen while Android replaces the app; Android kills the old process, then starts the app AGAIN behind the dialog to keep its screen showing, and ends
+     * that new process when the install is done. The screen in front sets this hook so the app steps out of the way (moveTaskToBack) just before the installer's screen opens: nothing of it is behind the dialog, so
+     * nothing is restarted and killed again; the person opens the new version from the launcher or the installer's Open button, once.
+     */
+    @Volatile var beforeInstallScreen: (() -> Unit)? = null
+
+    /**
+     * Called by [InstallResultReceiver] right AFTER the installer's screen was started (never before: an app that has already stepped back may not be allowed to start a screen from the background on Android 10,
+     * and the update would wait for a confirmation that never appears). Half a second later the screen in front steps out of the way; by then the installer's dialog is on top and the person is looking at it.
+     */
+    fun stepOutOfTheWayOfTheInstaller() {
+        val hook = beforeInstallScreen ?: return
+        Handler(Looper.getMainLooper()).postDelayed({ try { hook() } catch (e: Throwable) { /* the installer screen is open and the update goes on */ } }, 500L)
+    }
+
+    /** What the system's installer says about this app's own install sessions (one short line; "none" when there is no session): a start while one is still active and committed is a start DURING the install. */
+    fun sessionsLine(ctx: Context): String = try {
+        val ss = ctx.applicationContext.packageManager.packageInstaller.mySessions
+        if (ss.isEmpty()) "none" else ss.joinToString(" ") { "id=" + it.sessionId + " active=" + it.isActive + " committed=" + it.isCommitted + " progress=" + (it.progress * 100).toInt() + "%" }.take(160)
+    } catch (e: Throwable) { "unknown" }
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     @Volatile private var appCtx: Context? = null
     private var ready = false
@@ -146,6 +171,7 @@ object UpdateManager {
     /** Restore what the last session knew (offer, last check) so the dot and the panel are right at once, without any network. */
     fun init(ctx: Context) {
         appCtx = ctx.applicationContext
+        sessionsLine(ctx).let { if (it != "none") Health.log("life", "install-sessions", it) }      // ND4: a session still active at the start of a process = the install is not finished yet
         hookEngine(ctx.applicationContext)
         val s = sp(ctx)
         val installed = installedCode(ctx)

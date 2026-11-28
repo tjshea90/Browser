@@ -65,6 +65,25 @@ test('LD4: one report per load: phases, paints, request counts by kind and the s
   await context.close();
 });
 
+test('ND2d: a <link> entry (Firefox says initiatorType link for a modulepreload too) is told apart by its file: script modules are js, not css (claude.ai: 982 of them were reported as css)', () => {
+  // Chromium (this test's engine) names a modulepreload 'other', so the real Firefox value is tested on the pure function itself
+  const src = /function kind\(t, name\) \{[\s\S]*?\n    \}\n/.exec(SRC);
+  assert.ok(src, 'kind() is in the script');
+  const kind = new Function(src[0] + '; return kind;')();
+  assert.equal(kind('link', 'https://assets-proxy.example/claude-ai/v2/assets/v1/c51102d83-B1n_hv55.js'), 'js');
+  assert.equal(kind('link', 'https://x.example/m.mjs?v=3#frag'), 'js');
+  assert.equal(kind('link', 'https://x.example/site.css'), 'css');
+  assert.equal(kind('link', 'https://fonts.googleapis.com/css2?family=Roboto&display=swap'), 'css', 'a stylesheet address with no extension stays css, as before');
+  assert.equal(kind('link', 'https://x.example/favicon.ico'), 'img');
+  assert.equal(kind('link', 'https://x.example/f.woff2'), 'oth');
+  assert.equal(kind('link', ''), 'css');
+  assert.equal(kind('script', 'https://x.example/a.js'), 'js');
+  assert.equal(kind('css', 'https://x.example/a'), 'css');
+  assert.equal(kind('img', 'https://x.example/a.png'), 'img');
+  assert.equal(kind('fetch', 'https://x.example/a'), 'xhr');
+  assert.equal(kind('other', 'https://x.example/a'), 'oth');
+});
+
 test('LD4: the requests are counted past the 250-entry buffer of the browser (claude.ai makes over a thousand)', async () => {
   const { page, got, context } = await open(async (u, r) => { if (u.pathname.startsWith('/q/')) { await r.fulfill({ contentType: 'text/plain', body: 'x' }); return true; } return false; },
     { grace: 4000 }, { body: '<script>for (var i = 0; i < 600; i++) fetch("/q/" + i);</script>' });   // (the report waits this long after the load event: the 600 fetches are still in flight then, and on a busy machine 600 ms was not enough: 450 counted, seen 2026-11-22)

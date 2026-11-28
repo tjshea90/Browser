@@ -540,6 +540,7 @@ open class BrowserActivity : Activity(), DockListener {
         DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
         UpdateManager.addListener(updateListener)
+        UpdateManager.beforeInstallScreen = { Health.log("update", "task-back", "before the installer screen"); try { moveTaskToBack(true) } catch (e: Exception) { /* the installer screen still opens */ } }   // ND4: nothing of this app stays behind the installer's dialog
         dock.setMenuDot(UpdateManager.pending())
         installBackHandling()
         NetworkMonitor.addListener(netListener)
@@ -608,6 +609,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStart() {
         super.onStart()
+        KeepReadyService.stop(this)                    // KR1: the app is back in front: the hold that kept the page ready is over
         Io.main.removeCallbacks(strayCheck)
         ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
         downloadPopup.attach(); downloadPopup.resumed()
@@ -620,7 +622,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onResume()
         onScreenNow = true
         fsTurner.resumed()
-        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
+        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName); app.kestrel.browser.diag.ProcMem.start(applicationContext)
         flushStateWanted = false
         warmFrontOrigin()
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
@@ -724,13 +726,31 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStop() {
         super.onStop()
-        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
+        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop(); app.kestrel.browser.diag.ProcMem.stop()
         if (drawTrialSteady != null) drawTrialSteadyNow("left after its first picture")      // PERF25
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         silenceStraysSoon() // SND1
         Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
         ProcessLife.uiVisible = false; DownloadController.uiVisibilityChanged()
+        keepReadyOnLeave()
+    }
+
+    /**
+     * KR1 (research/DIAG_2026-11-27.md 2.3): the engine's content process was killed 7 times in 17 hours, always while the app was away (Android's memory killer takes cached processes first), each return a
+     * 25 to 30 second reload. A quiet foreground service keeps the process out of the cached class for the time chosen in Settings > Appearance; [onStart] ends it. Not when the screen is closing for good,
+     * on the Home screen with nothing to keep, or while the system itself says memory is short.
+     */
+    private fun keepReadyOnLeave() {
+        try {
+            val choice = prefs.keepReady
+            if (choice == app.kestrel.core.mem.KeepReady.OFF) return
+            val finishing = isFinishing || isChangingConfigurations
+            val hasPage = tabs.any { it.session != null && !it.isNewTab && !it.showHome }
+            val low = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(it) }.lowMemory
+            if (app.kestrel.core.mem.KeepReady.applies(choice, hasPage, low, finishing)) KeepReadyService.start(this, app.kestrel.core.mem.KeepReady.minutes(choice))
+            else Health.log("life", "keep-ready-skip", app.kestrel.core.mem.KeepReady.whyNot(choice, hasPage, low, finishing))
+        } catch (e: Throwable) { Health.log("life", "keep-ready-refused", "leave " + e.javaClass.simpleName) }       // a hold is a courtesy: nothing in it may break leaving the app
     }
 
     private var lastTouchAt = 0L
@@ -888,6 +908,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(lookScrollTimer); Io.main.removeCallbacks(lookCheckTick); Io.main.removeCallbacks(lookNoteShow)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }; privateAnchor = null
+        UpdateManager.beforeInstallScreen = null
         super.onDestroy()
         Health.log("life", "destroy", "finishing=$isFinishing config=$isChangingConfigurations")      // ANS58/59: tells a swipe-away from the system taking the screen away (Diagnostics)
         // swiped away (finishing): leave after 2 s unless a download is still running. A screen the SYSTEM destroyed (not finishing, not a turn) is not a quit: the person may be on their way back, so the process stays two
@@ -1286,7 +1307,8 @@ open class BrowserActivity : Activity(), DockListener {
                 sel.showHome = true; sel.lazyStart = true
                 Health.count("lazy.start"); Health.log("tabs", "lazy-start", "tab=${sel.id} away=${LazyStart.describe(away)}")
             }
-            if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
+            // ND1: ThumbStore.load only returns a picture taken for this very page, so the tab owns it WITH its page: without it the live diagnostics counted the tab as a "WRONG preview" (must be 0) and the next address update threw the picture away
+            if (launch == null) { if (sel.thumb == null && selThumb != null) { sel.thumb = selThumb; sel.thumbPage = ThumbRule.pageOf(sel.url) }; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
         if (restoringTab == null) { restoreOverlay.hide(); clearLook() } // the early cover is only for a restore that really covers its page: nothing took over, so it must not stay
@@ -2746,6 +2768,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(EngineTrimGate.line(prefs))
         out.add("Decorative page clips (PERF21): " + (if (prefs.limitClips) "limited to 1 playing, on screen only, none while scrolling" else "off: the page plays them as it wants") + "; no bar on a tapped clip ${Health.counter("videoclips.deco.bar")}, parked for being too many ${Health.counter("videoclips.deco.cap")}, parked out of sight ${Health.counter("videoclips.deco.off")}, played again ${Health.counter("videoclips.deco.back")}")
+        out.add(KeepReadyService.line(applicationContext, prefs.keepReady))
+        out.add(app.kestrel.browser.diag.ProcMem.line())
         out.add("Lazy start after a long break (PERF17b): " + (if (prefs.lazyStart) "on" else "off") + ", rule 4 h; the app was last left " + LazyStart.describe(LazyStart.awayMs(prefs.lastLeftAt, System.currentTimeMillis())) + " ago; waited at start ${Health.counter("lazy.start")}, tapped Continue ${Health.counter("lazy.wake")}")
         out.add(backLab.stats.line())
         out.add(PrivateGuard.line() + (if (GeckoEngine.safeBrowsingPaused) "; the engine's malware / phishing address checks are paused while a private tab exists" else ""))   // PV1
@@ -2892,6 +2916,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     private val settingsListener = object : SettingsListener {
         override fun openAutoTune() { startActivity(Intent(this@BrowserActivity, app.kestrel.browser.optimizer.OptimizerActivity::class.java)) }
+        override fun keepReadyOff() { KeepReadyService.stop(applicationContext, "off") }   // KR1
+        override fun recordProfile(load: Boolean) { closeSettings(); PageProfiler.start(this@BrowserActivity, current, load) }   // ND1d: only these two Settings buttons start a recording
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
@@ -2933,7 +2959,7 @@ open class BrowserActivity : Activity(), DockListener {
             val fs = Engine.peek()
             val rules = fs?.meta?.let { it.totalNetwork } ?: 0
             return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" + (fs?.queryRuleCount?.takeIf { it > 0 }?.let { ", ${"%,d".format(it)} address-cleaning rules" } ?: "") +
-                (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(prefs.lastUpdateMs))}" else "") +
+                (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${app.kestrel.core.ui.LocalStamp.format(prefs.lastUpdateMs, java.util.TimeZone.getDefault().getOffset(prefs.lastUpdateMs))}" else "") +
                 (if (prefs.lastUpdateNote.isNotEmpty()) "\n${prefs.lastUpdateNote}" else "")
         }
         override fun dataUsed(): String = DataMeter.totalBytes(prefs).let { if (it < 0) "not available on this device" else NewTabPage.fmtBytes(it) }

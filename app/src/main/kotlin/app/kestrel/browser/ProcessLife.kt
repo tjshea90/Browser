@@ -21,6 +21,8 @@ object ProcessLife {
     @Volatile var uiVisible = false
     /** The first Activity of this process has been created (decides "clear browsing data when the app is closed": a cold start means it was closed). */
     @Volatile var coldStartHandled = false
+    /** KR1: the keep-the-page-ready service is running (the app is away on purpose and must not end itself); set and cleared by geckoapp KeepReadyService. */
+    @Volatile var keepReady = false
 
     private val main = Handler(Looper.getMainLooper())
     private val check = Runnable { exitIfIdle() }
@@ -37,6 +39,7 @@ object ProcessLife {
 
     private fun exitIfIdle() {
         if (uiAlive) return
+        if (keepReady) return                                         // KR1: the person has not closed the app, it only waits in the background
         if (DownloadController.needsService() || UpdateManager.busy()) return
         LastRun.markExit() // CR1: the next start must know this end was on purpose
         endSiblings()

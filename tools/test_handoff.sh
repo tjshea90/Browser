@@ -372,5 +372,37 @@ check "digest FOCUS REPORT has the five areas and counts the security lines (PER
 check "digest FILE PICKS says plainly when there are no picked-file lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .filepick picked. lines yet"'
 check "digest VIDEO PROBLEMS says plainly when there are no video lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .video gate|codec-no|error. lines yet"'
 
+# ---- ND1d: the profile reader (tools/profile_digest.py) reads synthetic Gecko profiles in both layouts the format has had; the digest has the SELF-CHECKS / KILLS sections and the newest-build advice
+check "profile_digest reads synthetic profiles (schema rows and columns, gzip and plain, nested processes) and says where the time went (ND1d)" 'python3 -B -I "$D/tools/test_profile_digest.py"'
+check "digest SELF-CHECKS fails on a line that says must be 0 with a number above 0, and KILLS separates away from in front (ND1)" 'mkdir -p "$T/nd1/diag/2026-11-27" && python3 -I - "$T/nd1/diag/2026-11-27/051742-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha109", "code": 210, "android": 29, "model": "x", "at": "2026-11-27T05:17:42Z", "dropped": 0, "thinned": 0,
+  "snapshot": ["Tab previews: 2 tabs, 1 with a preview, 1 for the WRONG page (must be 0); late pictures thrown away: 0"],
+  "events": ["+10.0s life stop", "+20.0s gecko onKill claude.ai", "+20.1s gecko recover-after-kill n=1 state=true current=true avail=900MB thr=144MB low=false trim=80@2s claude.ai", "+30.0s life resume", "+40.0s gecko onKill example.org", "+40.1s gecko recover-after-kill n=1 state=true current=true avail=600MB thr=144MB low=false trim=5@30s example.org"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd1/diag" > "$T/nd1/out.txt"; grep -q "FAILED .*Tab previews: 2 tabs, 1 with a preview, 1 for the WRONG page" "$T/nd1/out.txt" && grep -q "2 content-process kill(s): 1 while the app was away, 1 with the app in front" "$T/nd1/out.txt"'
+
+check "digest KILLS does not count the task being swiped away as a memory kill (ND3d)" 'mkdir -p "$T/nd3/diag/2026-11-27" && python3 -I - "$T/nd3/diag/2026-11-27/205115-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha112", "code": 213, "android": 29, "model": "x", "at": "2026-11-27T20:51:15Z", "dropped": 0, "thinned": 0,
+  "snapshot": [], "events": ["+10.0s life stop", "+20.0s gecko onKill h2.nexus", "+20.01s gecko kill-away held=true", "+20.02s gecko recover-after-kill n=1 state=true current=true avail=1300MB thr=144MB low=false trim=20@134s h2.nexus", "+20.05s gecko onKill claude.ai", "+20.06s gecko kill-away held=true", "+20.2s life destroy finishing=true",
+             "+0.5s run start utc=2026-11-27T21:00:00Z build=0.3.0-alpha112 code=213", "+30.0s life stop", "+900.0s gecko onKill claude.ai", "+900.01s gecko kill-away held=true", "+900.02s gecko recover-after-kill n=1 state=true current=true avail=1100MB thr=144MB low=false trim=20@870s claude.ai"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd3/diag" > "$T/nd3/out.txt"; grep -q "1 content-process kill(s): 1 while the app was away, 0 with the app in front; the newest builds said it themselves 1 time(s), 1 of them while keep-ready was holding" "$T/nd3/out.txt" && grep -q "2 more engine .kill(s). came with the app being swiped away" "$T/nd3/out.txt"'
+
+check "digest HEAVY PAGES BY BUILD splits warm from cold full loads per build (ND3e)" 'mkdir -p "$T/nd3e/diag/2026-11-27" && python3 -I - "$T/nd3e/diag/2026-11-27/205115-aaaaaaaaaaaa.json" <<PYEOF
+import json, sys
+open(sys.argv[1], "w").write(json.dumps({"v": 3, "install": "aaaaaaaaaaaa", "app": "0.3.0-alpha112", "code": 213, "android": 29, "model": "x", "at": "2026-11-27T20:51:15Z", "dropped": 0, "thinned": 0,
+  "snapshot": [], "events": ["+0.5s run start utc=2026-11-27T18:00:00Z build=0.3.0-alpha111 code=212",
+    "+30.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=12000 lcp=20000 dcl=9000 load=25000 rn=1200 rc=1100 kb=100 js=1000 css=2",
+    "+0.5s run start utc=2026-11-27T19:00:00Z build=0.3.0-alpha112 code=213",
+    "+40.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=17000 lcp=30000 dcl=9000 load=41000 rn=1300 rc=17 kb=13000 js=1000 css=2",
+    "+90.0s page timing host=claude.ai nt=2 fb=100 ttfb=50 fcp=300 lcp=300 dcl=100 load=500 rn=20 rc=10 kb=10 js=2 css=2"],
+  "settings": {}, "device": {}, "kinds": {}, "sites": [], "advice": []}))
+PYEOF
+python3 -B -I "$D/tools/diag_digest.py" --dir "$T/nd3e/diag" > "$T/nd3e/out.txt"; grep -q "alpha111 .*warm 1: first paint 12.0 s, load 25.0 s .*| cold none" "$T/nd3e/out.txt" && grep -q "alpha112 .*warm none .*| cold 1: first paint 17.0 s, load 41.0 s" "$T/nd3e/out.txt"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

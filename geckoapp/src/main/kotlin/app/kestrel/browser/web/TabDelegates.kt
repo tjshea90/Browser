@@ -198,6 +198,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.gecko.pageStartedAt = android.os.SystemClock.uptimeMillis(); tab.gecko.pageStartUrl = url // RX4-X2
         if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(true) // downloads step aside while this page loads
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
+        app.kestrel.browser.PageProfiler.pageStarted(tab)                       // ND1d
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
@@ -215,6 +216,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // (a redirect hop, a tap on a result, Stop): it is said as `ok=false cut=1` and is not counted as a failed load by the live diagnostics (which then no longer advise "turn Shields off" for a tracking redirect).
         val cut = !success && tab.error == null && tab.gecko.loadErrorAt < tab.gecko.pageStartedAt
         val tookMs = app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success, cut)
+        app.kestrel.browser.PageProfiler.pageStopped(a.applicationContext, tab)   // ND1d
         if (success && tookMs > 0L) tab.reloadMs = tookMs      // PERF24: what it costs to bring this tab back after it slept
         tab.loading = false
         tab.progress = 100
@@ -242,7 +244,13 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab); a.switchComposite(tab); a.drawTrialComposited() } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { tab.gecko.painted = true; app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
-    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false); scrubCrashReports() }
+    override fun onKill(session: GeckoSession) {
+        Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill")
+        // KR1: was the app away (the memory killer takes cached processes) and was the keep-ready service holding the process? The digest's KILLS section and the advisor read these.
+        val away = !app.kestrel.browser.ProcessLife.uiVisible; val held = app.kestrel.browser.ProcessLife.keepReady
+        Health.count(if (away) "gecko.kill.away" else "gecko.kill.front"); if (away && held) Health.count("gecko.kill.away.held")
+        Health.log("gecko", if (away) "kill-away" else "kill-front", "held=$held")      // two event names: the live-diagnostics histogram (and so the advisor) counts event kinds
+        a.sessionGone(tab, false); scrubCrashReports() }
 
     /** PV1: the engine writes its crash report a moment after the crash: a few seconds later its memory dump is deleted and its details are cut to the ones Diagnostics reads. */
     private fun scrubCrashReports() { val c = a.applicationContext; app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.diag.CrashNote.scrubEngineReports(c) } }, 15_000L) }

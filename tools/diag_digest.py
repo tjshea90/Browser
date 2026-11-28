@@ -131,7 +131,7 @@ def split(ev):
     return (m.group(1), m.group(2), m.group(3)) if m else ('?', '?', ev)
 
 
-def analyse(batches):
+def analyse(batches, advice_app=None):
     r = {'crash': Counter(), 'slow': Counter(), 'play': Counter(), 'compat': Counter(), 'hosts': Counter(), 'slowhost': defaultdict(list),
          'installs': set(), 'versions': Counter(), 'dropped': 0, 'events': 0,
          'advice': Counter(), 'advice_days': defaultdict(set), 'kinds': Counter(), 'sitetab': {}, 'device': {}, 'settings': {}}
@@ -141,7 +141,7 @@ def analyse(batches):
         r['dropped'] += int(b.get('dropped', 0) or 0)
         day = str(b.get('at', ''))[:10]
         for a in b.get('advice', []) if isinstance(b.get('advice', []), list) else []:
-            if isinstance(a, str):
+            if isinstance(a, str) and (advice_app is None or str(b.get('app', '?')) == advice_app):     # ND1: only the newest build's advice (retired rules of older builds said things like 'turn Shields off for a redirect hop')
                 key = re.sub(r'\d+(?:\.\d+)?', 'N', a)[:200]
                 r['advice'][key] += 1; r['advice_days'][key].add(day)
                 r.setdefault('advice_sample', {})[key] = a
@@ -499,6 +499,15 @@ def focus_report(batches):
     else:
         print('  info  the gate (alpha101+): no held / passed-on lines yet')
     print(verdict(dev_med('memAvailMb'), 450, 300, ' MB', lower_is_better=False, what='free memory (median of the uploads)'))
+    # ND1e: the memory of EACH process (alpha111+: ActivityManager.getProcessMemoryInfo; before it only the main process could be read on this tablet) and the system run queue at the busy moments
+    pss = sorted({k for d in devs for k in d if re.match(r'^pss[A-Z]\w*Mb$', k) and not k.endswith('PeakMb') and k != 'pssSumMb'})
+    if pss:
+        print('  info  memory by process, median of the uploads (PSS, peak of the run): ' + ', '.join('%s %s MB (peak %s)' % (k[3:-2], dev_med(k), dev_med(k[:-2] + 'PeakMb')) for k in pss) + '; together %s MB (peak %s)' % (dev_med('pssSumMb'), dev_med('pssSumPeakMb')))
+    else:
+        print('  info  memory by process: no readings yet (alpha111 and later send pssTabMb and friends; before that the page process was invisible)')
+    runq = [int(m.group(1)) for e in ev for m in [re.search(r' cpu busy .* \| sys load \S+ run (\d+)$', e)] if m]
+    if runq:
+        print('  info  tasks running on the whole tablet at the busy moments (/proc/loadavg, 4 cores): median %s, most %s, %d of %d with 5 or more (the processor is full)' % (med(runq), max(runq), sum(1 for x in runq if x >= 5), len(runq)))
     print(verdict(dev_med('cpuParentAvg'), 40, 70, ' %', what='parent process CPU, average (one core = 100)'))
     print(verdict(dev_med('jankFrames'), 60, 200, '', what='slow screen frames per upload (median)'))
 
@@ -688,6 +697,190 @@ def drawing_analysis(batches):
         print('  "Parts of the page are missing" taps by mode: ' + ', '.join('%s x%d' % (k, v) for k, v in reports.most_common()))
     else:
         print('  "Parts of the page are missing" taps: none yet (the menu tile exists from alpha109)')
+
+
+def self_checks(batches):
+    """ND1: the app checks itself and says so in its Diagnostics text: a line that ends a number with '(must be 0)' and has a non-zero number is a bug the app found in itself (the WRONG tab preview was one for days)."""
+    rows = []
+    for b in batches[-8:]:
+        for x in b.get('snapshot', []):
+            if not isinstance(x, str):
+                continue
+            for m in re.finditer(r'(\d+)([^,;]{0,60}?)\(must be 0\)', x):
+                if m.group(1) != '0':
+                    rows.append((b['_file'], b.get('app', '?'), x.strip()[:200]))
+                    break
+    print('\n== SELF-CHECKS (lines where the app says "must be 0"; newest 8 uploads) ==')
+    if not rows:
+        print('  OK: none of them is above 0')
+        return
+    for f, app, line in rows:
+        print('  FAILED  %-26s %-16s %s' % (f, app, line))
+
+
+def first_starts_analysis(batches):
+    """ND4 (owner 2026-11-27: "The app still crashes after update"): the FIRST START after an install that ended without a crash note or an engine report, from the `Last run ended` blocks the uploads carry. Each is
+    printed once with how long it ran and how long after the INSTALL time it ended; the spread against the install time (13 to 34 s in 27 of 27 updates, research/DG1_FIRST_RUN_AFTER_INSTALL.md section 4) is tighter than
+    against the process's own age, which points at a system timer that starts with the install and not at the app's own start-up. Newer builds add `inst{...}` (an install session still active while the run lived) and
+    `life install-result status=...` (when the installer said it was finished) to the same note."""
+    import datetime
+    seen = {}
+    for b in batches:
+        sn = b.get('snapshot')
+        lines = sn if isinstance(sn, list) else str(sn or '').split('\n')
+        for i, l in enumerate(lines):
+            m = re.search(r'build (\S+) \(code (\d+)\), started (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC, last note (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC \(ran about ([^)]*)\)', l)
+            if not m or not any('FIRST START' in x for x in lines[i + 1:i + 3]):
+                continue
+            key = (m.group(1), m.group(3))
+            if key in seen:
+                continue
+            inst = [x for x in lines[i + 1:i + 3] if 'FIRST START' in x][0]
+            im = re.search(r'install at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC', inst)
+            mem = next((x.strip() for x in lines[i + 1:i + 12] if 'memory at the last note' in x), '')
+            sess = re.search(r'inst\{[^}]*\}', mem)
+            fmt = '%Y-%m-%d %H:%M:%S'
+            try:
+                rel = (datetime.datetime.strptime(m.group(4), fmt) - datetime.datetime.strptime(im.group(1), fmt)).total_seconds() if im else None
+            except Exception:
+                rel = None
+            if not re.fullmatch(r'\d+ s', m.group(5).strip()):
+                continue                                  # a start that lived minutes and ended later (a crash, an update) is another story: only the ones that died within the first minute or two
+            seen[key] = (m.group(1).replace('0.3.0-', ''), m.group(5), rel, sess.group(0) if sess else '')
+    print('\n== FIRST START AFTER AN INSTALL (runs that ended on screen with no crash note: ND4, research/DG1_FIRST_RUN_AFTER_INSTALL.md) ==')
+    if not seen:
+        print('  none in these files')
+        return
+    rels = sorted(r[2] for r in seen.values() if r[2] is not None)
+    print('  %d first start(s) that ended by themselves; seconds from the INSTALL to the end: median %.0f, shortest %.0f, longest %.0f (builds %s to %s)' % (
+        len(seen), rels[len(rels) // 2] if rels else 0, rels[0] if rels else 0, rels[-1] if rels else 0, min((r[0] for r in seen.values()), key=lambda x: int(re.sub(r'\D', '', x) or 0)), max((r[0] for r in seen.values()), key=lambda x: int(re.sub(r'\D', '', x) or 0))))
+    for (b, st), (bn, ran, rel, sess) in sorted(seen.items(), key=lambda kv: kv[0][1])[-6:]:
+        print('   %-9s started %s, ran %-8s ended %s s after the install %s' % (bn, st, ran, ('%.0f' % rel) if rel is not None else '?', sess))
+    if not any(r[3] for r in seen.values()):
+        print('  (no run carries the `inst{...}` token yet: builds before alpha114 did not write it)')
+
+
+def heavy_by_build(batches, min_requests=900):
+    """ND3e: did a build make a HEAVY page faster? Full loads (at least [min_requests] requests, e.g. claude.ai's ~1,200 script modules) of one site, grouped by the build that made them, split into WARM loads (80 % or more of the
+    requests came from the cache, `rc` of `rn`) and cold ones (after a kill or a cache loss the same page fetches 13 MB over the hotspot: not the same experiment). A load's build is the newest `run start ... build=` line before it,
+    else the file's own app version. The medians are the numbers to compare; 3 loads or fewer prove nothing."""
+    by = {}
+    for b in batches:
+        build = str(b.get('app') or '?')
+        for e in b.get('events', []):
+            if not isinstance(e, str):
+                continue
+            m = re.search(r'run start .*build=(\S+)', e)
+            if m:
+                build = m.group(1)
+            if ' page timing host=' not in e:
+                continue
+            g = lambda k: (re.search(r'\b%s=(-?\d+)' % k, e) or [None, None])[1]
+            host = (re.search(r'host=(\S+)', e) or [None, '?'])[1]
+            rn, rc, fcp, load = g('rn'), g('rc'), g('fcp'), g('load')
+            if not rn or int(rn) < min_requests or not fcp or int(fcp) <= 0:
+                continue
+            warm = int(rc or 0) >= 0.8 * int(rn)
+            by.setdefault(host, {}).setdefault(build.replace('0.3.0-', ''), []).append((warm, int(fcp) / 1000.0, int(load) / 1000.0 if load and int(load) > 0 else None))
+    print('\n== HEAVY PAGES BY BUILD (full loads of %d+ requests; WARM = 80 %% of them from the cache; medians in seconds; 3 loads or fewer prove nothing) ==' % min_requests)
+    if not by:
+        print('  none in these files')
+        return
+    import statistics
+
+    def med(v):
+        return statistics.median(v) if v else None
+    for host, builds in sorted(by.items()):
+        print('  ' + host)
+        def key(x):
+            m = re.search(r'(\d+)', x[0])
+            return int(m.group(1)) if m else 0
+        for build, loads in sorted(builds.items(), key=key)[-8:]:
+            warm = [x for x in loads if x[0]]
+            cold = [x for x in loads if not x[0]]
+            def part(v):
+                if not v:
+                    return 'none'
+                loads_s = [x[2] for x in v if x[2] is not None]
+                return '%d: first paint %.1f s, load %s' % (len(v), med([x[1] for x in v]), ('%.1f s' % med(loads_s)) if loads_s else '?')
+            print('     %-10s warm %-34s | cold %s' % (build, part(warm), part(cold)))
+
+
+def kills_analysis(batches):
+    """ND1 (research/DIAG_2026-11-27.md): the engine's content process killed by Android, split into 'the app was away' and 'in front', with whether the KR1 keep-ready service was holding the process.
+    Newer builds say it themselves (`gecko kill-away held=..` / `gecko kill-front held=..`). For older ones: the line `recover-after-kill ... trim=80@1s` right after a kill names the last memory signal and its age: a level of 40 or
+    more within 2 minutes is the system's "cached process" signal (the app was away); else the life lines (`life pause` / `life stop` until `life resume` in the same run) say it, which the journal thinning can drop."""
+    total, away, front, held, said, swipes = 0, 0, 0, 0, 0, 0
+    gaps = []
+
+    def evtime(line):
+        m = re.match(r'^\+([\d.]+)s ', line)
+        return float(m.group(1)) if m else None
+    for b in batches:
+        run_away, stop_at = False, None
+        evs = [e for e in b.get('events', []) if isinstance(e, str)]
+        swiped = set()                       # ND3d: an engine "kill" with the activity destroyed (finishing) within 2 s is the TASK BEING SWIPED AWAY from the recent apps (the content process goes with it), not a memory kill
+        for idx, e in enumerate(evs):
+            if 'gecko onKill' in e:
+                t0 = evtime(e)
+                for j in range(idx + 1, min(len(evs), idx + 12)):
+                    if 'life destroy finishing=true' in evs[j]:
+                        t1 = evtime(evs[j])
+                        if t0 is not None and t1 is not None and 0 <= t1 - t0 <= 2.0:
+                            swiped.add(idx)
+                            for k in range(idx + 1, min(len(evs), idx + 4)):
+                                if 'gecko kill-away' in evs[k] or 'gecko kill-front' in evs[k]:
+                                    swiped.add(k)
+                        break
+        for idx, e in enumerate(evs):
+            if idx in swiped:
+                if 'gecko onKill' in e:
+                    swipes += 1
+                continue
+            layer, ev, detail = split(e)
+            tm = re.match(r'^\+([\d.]+)s ', e)
+            t = float(tm.group(1)) if tm else None
+            txt = (layer + ' ' + ev + ' ' + detail).strip() if layer != '?' else detail
+            if txt.startswith('run start') or txt.startswith('run recording-on'):
+                run_away, stop_at = False, None
+            elif txt == 'life pause' or txt == 'life stop':
+                if not run_away:
+                    run_away = True; stop_at = t
+            elif txt == 'life resume':
+                run_away, stop_at = False, None
+            elif txt.startswith('gecko onKill'):
+                total += 1
+                was_away = run_away
+                for nxt in evs[idx + 1:idx + 4]:                       # the line the app writes right after a kill
+                    m = re.search(r'recover-after-kill .*?trim=(\d+)@(\d+)s', nxt)
+                    if m:
+                        if int(m.group(1)) >= 40 and int(m.group(2)) <= 120:
+                            was_away = True
+                        break
+                if was_away:
+                    away += 1
+                    if run_away and stop_at is not None and t is not None:
+                        gaps.append((t - stop_at) / 60.0)
+                else:
+                    front += 1
+            elif txt.startswith('gecko kill-away') or txt.startswith('gecko kill-front'):
+                said += 1
+                if 'held=true' in txt:
+                    held += 1
+    print('\n== KILLS (the page engine ended by Android: a memory kill when the app was away is the cached-process rule; KR1 keep-ready holds the process) ==')
+    if swipes:
+        print('  (%d more engine "kill(s)" came with the app being swiped away from the recent apps within 2 s: not memory kills, not counted below)' % swipes)
+    if not total:
+        print('  none in these files')
+        return
+    gaps.sort()
+    print('  %d content-process kill(s): %d while the app was away, %d with the app in front; the newest builds said it themselves %d time(s), %d of them while keep-ready was holding' % (total, away, front, said, held))
+    if gaps:
+        print('  minutes between leaving the app and the kill (where the life lines survived the thinning): median %.0f, shortest %.0f, longest %.0f' % (gaps[len(gaps) // 2], gaps[0], gaps[-1]))
+    if said and held == 0:
+        print('  -> keep-ready was NOT holding for any kill the app described: check Settings > Appearance > Keep the page ready when I leave, and the Diagnostics line "Keep the page ready"')
+    elif held:
+        print('  -> %d kill(s) happened even while keep-ready held the process: the tablet was desperate for memory (close tabs), or the hold is not enough' % held)
 
 
 def tab_analysis(batches):
@@ -912,6 +1105,7 @@ def show(title, c, n=8):
 
 def main(argv):
     base, repo, days, short, verify, fetch = None, None, 14, False, False, True
+    all_advice = False
     i = 0
     while i < len(argv):
         if argv[i] == '--dir':
@@ -926,6 +1120,8 @@ def main(argv):
             verify = True
         elif argv[i] == '--no-fetch':
             fetch = False
+        elif argv[i] == '--all-advice':
+            all_advice = True
         i += 1
     batches, hist, source, note = [], None, '', ''
     if base is not None:
@@ -944,7 +1140,7 @@ def main(argv):
         else:
             source = 'no private clone found'
     dedupe(batches)
-    r = analyse(batches)
+    r = analyse(batches, None if all_advice or not batches else str(batches[-1].get('app', '?')))
     if short:
         line = brief(r, batches)
         if line:
@@ -993,7 +1189,11 @@ def main(argv):
         print('  FILE PROBLEM: ' + x)
     focus_report(batches)
     drawing_analysis(batches)
-    print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
+    self_checks(batches)
+    kills_analysis(batches)
+    first_starts_analysis(batches)
+    heavy_by_build(batches)
+    print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor, %s; judge the numbers before you relay them) ==' % ('every build in these files (--all-advice)' if all_advice else 'newest build only: ' + str(batches[-1].get('app', '?')) + ', older builds\' advice is retired: --all-advice shows it'))
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
     if not r['advice']:

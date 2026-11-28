@@ -986,4 +986,88 @@ class OwnerRulesTest {
         val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("Settings has ONE drawing choice, and says when Kestrel changed it by itself", set.contains("choice(\"How pages are drawn\"") && set.contains("info(\"Kestrel changed this by itself\"") && !set.contains("choice(\"Hardware drawing trial"))
     }
+
+    /** ND1 / KR1 (owner 2026-11-27: "Use the newest diagnostics and improve the browser as much as possible"; research/DIAG_2026-11-27.md): the page stays ready while the app is away, Settings builds only open sections, a restored preview keeps its page. */
+    @Test fun nd1KeepReadyIsQuietEndsWhenTheAppReturnsAndNeverKeepsAClosedAppAlive() {
+        val svc = source("geckoapp/src/main/kotlin/app/kestrel/browser/KeepReadyService.kt")
+        assertTrue("one quiet foreground service, answered with startForeground, never restarted by Android", svc.contains("startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)") && svc.contains("return START_NOT_STICKY") && svc.contains("NotificationManager.IMPORTANCE_MIN"))
+        assertTrue("a refusal to go foreground (or any failure on leaving) never takes the browser down", svc.contains("private fun promoteSafely(") && svc.contains("if (!promoteSafely(60)) return") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("keep-ready-refused\", \"leave \""))
+        assertTrue("it sends nothing and holds no wake lock, no Wi-Fi lock and no network", !svc.contains("WakeLock") && !svc.contains("WifiLock") && !svc.contains("HttpURLConnection") && !svc.contains("Socket("))
+        assertTrue("the notification says nothing about any page and is hidden on the lock screen; it has a Let go button", svc.contains("VISIBILITY_SECRET") && svc.contains("\"Let go\"") && !svc.contains("tab.url"))
+        assertTrue("it ends by itself after the chosen time and lets the process go when nothing is on screen", svc.contains("handler.postDelayed(timeout, minutes * 60_000L)") && svc.contains("if (!ProcessLife.uiAlive) ProcessLife.maybeExit()"))
+        val man = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("declared, not exported, special use with its subtype, and the swipe-away default (stopWithTask) is NOT switched off", man.contains(".KeepReadyService") && man.contains("android:foregroundServiceType=\"specialUse\"") && man.contains("PROPERTY_SPECIAL_USE_FGS_SUBTYPE") && man.contains("FOREGROUND_SERVICE_SPECIAL_USE") && !man.contains("android:stopWithTask"))
+        val life = source("app/src/main/kotlin/app/kestrel/browser/ProcessLife.kt")
+        assertTrue("a hold keeps the process while it runs, so the person's pause is not read as a quit, and ends with it", life.contains("if (keepReady) return"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the app ends the hold when it comes back and starts it only when leaving, not while it is closing", act.contains("KeepReadyService.stop(this)") && act.contains("keepReadyOnLeave()") && act.contains("isFinishing || isChangingConfigurations") && act.contains("KeepReady.applies(choice, hasPage, low, finishing)"))
+        val del = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("every engine kill says whether the app was away and whether the hold ran (the digest's KILLS section)", del.contains("gecko.kill.away") && del.contains("gecko.kill.front") && del.contains("\"kill-away\"") && del.contains("\"kill-front\""))
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("Settings has the choice (Kestrel G only) and turning it off ends a running hold", set.contains("Flavor.hasKeepReady") && set.contains("choice(\"Keep the page ready when I leave\"") && set.contains("l.keepReadyOff()"))
+        assertTrue("one hour is the default and the choice is in a backup", source("core/src/main/kotlin/app/kestrel/core/mem/KeepReady.kt").contains("const val DEFAULT = HOUR") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"keep_ready\", T.INT, 0, 3)"))
+    }
+
+    @Test fun nd3KeepReadyNeverStopsAServiceThatStillOwesItsStartForeground() {
+        // the alpha111 run of 2026-11-27 07:09 crashed with RemoteServiceException "Context.startForegroundService() did not then call Service.startForeground()": stopService() came before the system had created the service
+        val svc = source("geckoapp/src/main/kotlin/app/kestrel/browser/KeepReadyService.kt")
+        val stop = svc.substring(svc.indexOf("fun stop(ctx: Context"), svc.indexOf("fun line(ctx: Context"))
+        assertTrue("stop() asks the rule what to do and calls stopService only for a service that exists", stop.contains("KeepReady.stopStep(requested, ProcessLife.keepReady)") && Regex("STOP_SERVICE -> \\{[^\\n]*stopService\\(").containsMatchIn(stop))
+        assertEquals("stopService( is called once in the whole service file", 1, Regex("stopService\\(").findAll(svc).count())
+        val cmd = svc.substring(svc.indexOf("override fun onStartCommand"), svc.indexOf("/** Go foreground;"))
+        assertTrue("a start whose stop came first goes foreground (promoteSafely) and only then ends itself", cmd.indexOf("promoteSafely(minutes)") in 0 until cmd.indexOf("if (!requested)") && cmd.contains("stopSelf()"))
+        assertTrue("when the real notification cannot be built a plain one keeps the startForeground contract before stopping", svc.contains("plainest notification") && svc.indexOf("plainest notification") < svc.indexOf("try { stopSelf() } catch (x: Throwable)"))
+    }
+
+    @Test fun nd4TheAppStepsOutOfTheWayBeforeTheInstallerScreenSoNothingIsRestartedBehindItAndKilledAgain() {
+        // owner 2026-11-27 "The app still crashes after update": the first start after an update died 13 to 34 s after the install in 27 of 27 updates (research/DG1_FIRST_RUN_AFTER_INSTALL.md section 4)
+        val um = source("app/src/main/kotlin/app/kestrel/browser/update/UpdateManager.kt")
+        assertTrue("the hook exists and the sessions line exists", um.contains("@Volatile var beforeInstallScreen: (() -> Unit)? = null") && um.contains("fun sessionsLine(ctx: Context): String"))
+        val rx = source("app/src/main/kotlin/app/kestrel/browser/update/InstallResultReceiver.kt")
+        val i = rx.indexOf("UpdateManager.stepOutOfTheWayOfTheInstaller()")
+        assertTrue("the receiver starts the installer screen FIRST and only then steps out of the way (an app that has stepped back first may not be allowed to start the screen on Android 10), and logs every result", i > 0 && i > rx.indexOf("ctx.startActivity(confirm") && rx.contains("\"install-result\""))
+        assertTrue("the step out is delayed by half a second, after the dialog is up", um.contains("fun stepOutOfTheWayOfTheInstaller()") && um.contains("postDelayed({ try { hook() }") && um.contains("500L"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the screen in front sets the hook to moveTaskToBack and clears it when it is destroyed", act.contains("UpdateManager.beforeInstallScreen = {") && act.contains("moveTaskToBack(true)") && act.contains("UpdateManager.beforeInstallScreen = null"))
+        assertTrue("every note of the first 90 s says whether an install was still running", source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt").contains("inst{"))
+    }
+
+    @Test fun nd1SettingsBuildsOnlyTheSectionsThatAreOpenAndTheDateNeedsNoLocale() {
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("a section's rows run only while it is open", set.contains("private fun section(text: String, rows: () -> Unit)") && set.contains("if (isOpen) fill()") && set.contains("val nowOpen = text !in OPEN"))
+        assertTrue("no row is built outside a section (every section call carries its rows)", !Regex("""^\s+section\("[^"]+"\)\s*$""", RegexOption.MULTILINE).containsMatchIn(set))
+        for (path in listOf("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt", "app/src/webview/kotlin/app/kestrel/browser/BrowserActivity.kt")) {
+            val a = source(path)
+            assertTrue("$path: the filter status date is plain arithmetic, not the phone's locale patterns (830 ms the first time per run)", a.contains("LocalStamp.format(prefs.lastUpdateMs") && !a.contains("DateFormat.getDateTimeInstance"))
+        }
+        val gecko = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the restored preview of the selected tab owns its page (else the diagnostics count it as wrong and the next address update drops it)", gecko.contains("sel.thumb = selThumb; sel.thumbPage = ThumbRule.pageOf(sel.url)"))
+    }
+
+    /** ND1d / ND1e (owner 2026-11-27; research/DIAG_2026-11-27.md section 4): a page can be recorded with the engine's profiler, only by the two Settings buttons, never in or beside a private tab, only with the owner's switch and token; every process's memory is read. */
+    @Test fun nd1dTheProfileRecorderStartsOnlyFromTheTwoSettingsButtonsAndAsksTheRuleFirst() {
+        val pp = source("geckoapp/src/main/kotlin/app/kestrel/browser/PageProfiler.kt")
+        assertTrue("the rule is asked before the engine's profiler is started, and with the private-tab facts", pp.indexOf("ProfileRule.whyNot(") in 0 until pp.indexOf("ProfilerController.startProfiler(") && pp.contains("tab?.isPrivateTab == true, PrivateGuard.active()"))
+        assertTrue("it samples only the rule's threads and features (no native stack walking), never a wildcard", pp.contains("startProfiler(ProfileRule.THREADS, ProfileRule.FEATURES)") && !pp.contains("stackwalk"))
+        assertTrue("a private tab that appeared while it recorded throws the recording away BEFORE anything is written or sent", pp.indexOf("if (PrivateGuard.active()) { Health.count(\"profile.discarded\")") in 0 until pp.indexOf("profile-last.json.gz") && pp.indexOf("profile.discarded") in 0 until pp.indexOf("LiveDiag.sendProfile("))
+        assertTrue("the recording goes only through the live-diagnostics channel (switch, token, private repository, no private tab)", pp.contains("LiveDiag.sendProfile(") && !pp.contains("HttpURLConnection") && !pp.contains("api.github.com"))
+        val callers = listOf("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt", "geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").map { source(it) }
+        assertEquals("PageProfiler.start( appears once outside its own file: the Settings listener", 1, callers.sumOf { Regex("PageProfiler\\.start\\(").findAll(it).count() })
+        assertTrue("and that is the recordProfile button handler", callers[0].contains("override fun recordProfile(load: Boolean) { closeSettings(); PageProfiler.start(this@BrowserActivity, current, load) }"))
+        val ld = source("app/src/main/kotlin/app/kestrel/browser/diag/LiveDiag.kt")
+        val send = ld.substring(ld.indexOf("fun sendProfile("), ld.indexOf("private class Extras("))
+        assertTrue("sendProfile has the same gates as the diagnostics upload: switch, token, a private repository, no private tab (asked again before the bytes go)", send.contains("!enabled || token.isEmpty()") && send.contains("RepoState.PRIVATE -> {}") && send.contains("PrivateGuard.active()") && send.indexOf("PrivateGuard.active()", send.indexOf("RepoState.ERROR")) > 0)
+        val set = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("the two buttons are in the live-diagnostics section and only with a token", set.contains("button(\"Record a profile of this page\"") && set.contains("button(\"Record \${app.kestrel.core.livediag.ProfileRule.NOW_MS / 1000} seconds of what I do now\"") && set.indexOf("if (ld.hasToken()) {\n                button(\"Record a profile") > 0)
+        assertTrue("the reader for Claude exists and is tested by the handoff self-test", source("tools/profile_digest.py").contains("ProfilerController.stopProfiler()") && source("tools/test_handoff.sh").contains("test_profile_digest.py"))
+    }
+
+    @Test fun nd1ePerProcessMemoryAndTheRunQueueAreRead() {
+        val pm = source("app/src/main/kotlin/app/kestrel/browser/diag/ProcMem.kt")
+        assertTrue("the system's own memory service is asked (the page process is hidden from /proc on Android 10), on the IO lane, one reading a minute, only while the app is in front", pm.contains("getProcessMemoryInfo") && pm.contains("Io.exec") && pm.contains("EVERY_MS = 60_000L") && !pm.contains("/proc/"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("it runs with the CPU meter: started when the app comes to the front, stopped when it goes", act.contains("CpuMeter.start(packageName); app.kestrel.browser.diag.ProcMem.start(applicationContext)") && act.contains("CpuMeter.stop(); app.kestrel.browser.diag.ProcMem.stop()"))
+        assertTrue("its numbers join the live-diagnostics device facts", source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt").contains("ProcMem.numbers()"))
+        assertTrue("the busy moments carry the system run queue", source("app/src/main/kotlin/app/kestrel/browser/diag/CpuMeter.kt").contains("/proc/loadavg") && source("app/src/main/kotlin/app/kestrel/browser/diag/CpuMeter.kt").contains("+ sysLoad()"))
+    }
 }
