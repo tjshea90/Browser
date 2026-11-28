@@ -1,21 +1,22 @@
-# CHECKPOINT 3582 — read me first, then TASKS.md
+# CHECKPOINT 3586 — read me first, then TASKS.md
 
-**Written:** 2026-11-28T08:19:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `9e7fc88e` (this checkpoint is the commit after it)
+**Written:** 2026-11-28T08:32:05Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `898e94d4` (this checkpoint is the commit after it)
 
 ## Just done
-PDL1 CODED (not yet released): core Handed.kt (HandedStreams registry, HandedResponse one-shot with 2% cut guard, HandedFetcher kind 4 = site first + engine stream as fallback / kind 5 = engine stream only), Model.kt (FETCHER_HANDED 4, FETCHER_ONE_SHOT 5, FetchResponse.oneShot, Kind.HANDED_GONE, Reason.PAGE_FILE 20), Engine.kt (blob/data enqueue, probe marks the job one-shot, no limiter, longer stall, PAGE_FILE on a broken stream, wipe partial, Delete-only row, handedRunning), Planner text, PhoneBackend skips kind 5; Gecko: net/HandedOver.kt, TabDelegates.onExternalResponse keeps the body, BrowserActivity (drop on decline/refusal, kindFor + startNow/phone drop in startDownload, feedsDownload keeps the tab awake), GeckoApp registers kinds 4/5, counters download.handed.*; research/PDL1_PAGE_MADE_DOWNLOADS.md. HandedTest 17/17 green, :geckoapp and :app compile green (needed gradle WITHOUT --offline).
+pre-ship: alpha115: downloads that a page makes itself, like Proton Drive, now save. WHAT YOU SAW: a zip from Proton Drive failed in Kestrel G with The site sent a web page instead of the file, and the same file downloaded fine in Brave. WHY: Proton Drive does not keep your file on a web address. Its page decrypts the file inside the browser and hands it out of a small background program (a service worker) that exists only inside the engine. Kestrel's download manager used to throw away what the engine offered and ask the website for the same address again, and the website answers that with its start page, not your file. Brave saves what its engine hands over, so it worked there. WHAT CHANGED: Kestrel now keeps the engine's own stream for up to three minutes. When the address cannot be asked for again (a Proton Drive stream, a blob address), or the website's answer is an error or a web page, the file is saved straight from the engine's stream. Ordinary links work as before, with several connections and pause and resume; the engine's copy is simply closed unused. A file a page makes itself cannot be paused or resumed: its row offers Cancel only while it runs, it starts at once ahead of other waiting downloads, it is never sent to the phone, it ignores the speed limit, and its tab is not put to sleep while it runs. If it is cut (the page was closed, the app stopped) the row says the page made this file itself and to go back to the page and download it again, and the half file is removed. Downloads from blob: addresses now work too (they used to fail with This address cannot be downloaded). New counters download.handed.offered, ordinary, used and gone show in the next diagnostics. NOT RUN: there is no Proton Drive account and no Firefox engine in the build sandbox, so the proof here is 17 new tests of the download engine (with a stand-in for the service worker stream, a cut stream, a blob file, an ordinary link and a one-time link) plus the full unit test suites. Please try the same zip again in Kestrel G on the tablet. The Kestrel WebView build is not changed and cannot save such files.
 
 ## Do this next
-PDL1 remaining: (1) the full suites were started with ./gradlew -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest (run it again in the background and poll its log for EXIT if the result is not in a ckpt line below), then :app:lintDebug; (2) OwnerRulesTest-style source tests may read TabDelegates/BrowserActivity text: fix any red test, never skip one; (3) bump geckoapp/build.gradle.kts to versionCode 216 / 0.3.0-alpha115, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA115_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes), bash ship.sh gecko with that note, ONE android.yml dispatch (app=gecko full_build=true), verify tag + jobs + release, bash tools/record-release.sh with the identical note, tick PDL1a-d with evidence (HandedTest, run id), answer the owner in plain words incl. what was NOT run (no Proton account, tablet untested, WebView build unchanged); (4) then ND6a (claim it first).
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
 
 ## Last ten checkpoints
 ```
+  f47e6119 ckpt 3582: PDL1 CODED (not yet released): core Handed.kt (HandedStreams registry, Hande
   3261ff02 ckpt 3569: Second owner message (ND6: after PDL1, look for improvements from sent diagn
   59778a61 ckpt 3567: Owner message (Proton Drive zip download fails in Kestrel with 'The site sen
   a50908c2 ckpt 3539: alpha114 SHIPPED and recorded (Release kestrel-g-v0.3.0-alpha114, run 460786
@@ -25,8 +26,7 @@ PDL1 remaining: (1) the full suites were started with ./gradlew -q :core:test :a
   9acfa854 ckpt 3534: alpha114 (code 215) gated green by ship.sh and DISPATCHED (android.yml gecko
   62e73b2d ckpt 3533: gated kestrel-g-v0.3.0-alpha114 (gecko code 215) and pushed it: handoff self
   8c29adfa ckpt 3532: owner sent a screenshot: my.nobullnetworks.com/login says Captcha verificati
-  202c2cbe ckpt 3531: pre-ship: alpha114: Kestrel steps out of the way when you update, and the pa
 ```
 
-(12 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
