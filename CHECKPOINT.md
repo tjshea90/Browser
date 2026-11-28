@@ -1,15 +1,13 @@
-# CHECKPOINT 2644 — read me first, then TASKS.md
+# CHECKPOINT 2687 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T22:16:06Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-5531c47b-hl1gzo` · **builds on:** `3b88d8d1` (this checkpoint is the commit after it)
+**Written:** 2026-11-18T06:50:02Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-587430ac-royssd` · **builds on:** `30a0825b` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha68 (gecko code 169) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, versionCode 171 > 170) and pushed (ckpt 2686) but NOT dispatched. Lab run 44254127252 (suite tb, head caf37927) is running: it must finish FIRST (a release dispatch would cancel it).
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-5531c47b-hl1gzo, inputs {"app":"gecko","full_build":"true","note":"alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha68), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha68 "alpha68: Kestrel now always types through your Swoop keyboard when it is installed, so there is one keyboard and one memory for both apps. Words you type or glide in Kestrel (the address bar, the home search box, the boxes of a web page) teach Swoop, and everything Swoop learned elsewhere is used in Kestrel. The address bar and the home box tell Swoop they are the browser address box, so Swoop shows its browser keys (slash, full stop, Go) and does not add capitals or spaces. In a private tab Swoop learns nothing from the page boxes either. If Swoop is installed but not chosen yet, the small panel's keyboard button opens Android's keyboard picker. Settings has Always use the Swoop keyboard (recommended) and a button that sends what Kestrel's own small keyboard learned to Swoop (Swoop asks before it adds anything). Kestrel's own small keyboard stays as the fallback when Swoop is not installed, and it got the new word list. Install Swoop 0.5.0-alpha4 or newer first. Checked on a simulated Android 10 tablet with the real Firefox engine: typing and gliding into page boxes and the address bar, private tabs, pages loading. NOT proven on the tablet or the phone: opening Swoop floating from the panel, the keyboard picker, the hand-over button."
-NEVER ship kestrel-g-v0.3.0-alpha68 twice (check BUILDLOG.md and the Releases first).
+1) WAIT for lab 44254127252 (list_workflow_run_artifacts; ~20 min, ffmpeg step 12 min); read report.md; expect 0 issues for TP1 / UC1 / MT1 / PV1; fix any app fault (then re-run ship.sh); 2) THEN ONE dispatch: mcp__github__actions_run_trigger run_workflow android.yml ref ccr-587430ac-royssd inputs app=gecko full_build=true note=<contents of docs/handoff/ALPHA70_RELEASE_NOTE.txt, identical>; 3) verify tag kestrel-g-v0.3.0-alpha70 (git ls-remote --tags origin), all jobs green, mcp__github__get_release_by_tag; 4) bash tools/record-release.sh kestrel-g-v0.3.0-alpha70 <same note>; 5) answer owner in plain words (TP1 previews, UC1 copy, MT1 tabs in the panel, PV1 private flash, VS2 capture, crash evidence CR1f/g, VS1e) with what is NOT proven on the tablet; release link on its own line
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,17 +16,14 @@ NEVER ship kestrel-g-v0.3.0-alpha68 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
-  e38fb0d8 ckpt 2643: alpha67 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha67 code 168, run
-  765d1c8a ckpt 2642: alpha67 DISPATCHED ONCE (android.yml app=gecko full_build=true, ref ccr-e89b
-  d8340975 ckpt 2641: gated kestrel-g-v0.3.0-alpha67 (gecko code 168) and pushed it: handoff self-
-  fd0ea0b5 ckpt 2640: Diagnostics line 'start oat' added (BrowserActivity.oatSizes: sizes of oat/<
-  63fdb931 ckpt 2639: LAB7 CONFIRMATION lab run DISPATCHED ONCE: android.yml run 44137227924 (run_
-  ebd3854a ckpt 2638: LAB7 first lab run 44126148207 READ (research/LAB7_RESULTS.md next): (1) the
-  5b6a24c8 ckpt 2637: LAB7 CORRECTED lab run DISPATCHED ONCE: android.yml run 44126148207 (run_num
-  e40a5b70 ckpt 2636: LAB7 lab run 44125632537 CANCELLED ON PURPOSE and replaced by a corrected on
-  3206d5dd ckpt 2635: LAB7 lab run DISPATCHED ONCE (android.yml app=lab lab_suite=aot lab_profile=
-  eaa4e46d ckpt 2634: LAB7a+b lab code written and dry-run against a fake adb (aotlab.py breadth_c
+  30a0825b ckpt 2686: gated kestrel-g-v0.3.0-alpha70 (gecko code 171) and pushed it: handoff self-
+  caf37927 ckpt 2685: Lab run 44252661300 (new2) READ: the app behaved right on every check (UC1 v
+  e5fc78d7 ckpt 2684: Lab run 44252661300 (suite new2 = tb + lastrun_round, head d0e7d41d) DISPATC
+  d0e7d41d ckpt 2683: Lab run 44248671431 READ: freeze scene proves CR1f on a real Android 10 (SCR
+  6617fbe2 ckpt 2682: Full JVM suite 9 GREEN (rc=0) + web 616/616 with TP1, UC1 (dock), MT1, PV1 c
+  3dda7232 ckpt 2681: PV1 coded: CurtainRule (core, 3 tests) + curtain view over the shared page v
+  51f3e413 ckpt 2680: Owner message PV1 written into TASKS (new private tab flashed an old regular
+  92b293d1 ckpt 2679: MT1 coded (mini panel Tabs button + tab tray, TabTrayModel, host wiring, 9 R
+  bd1bb9e4 ckpt 2678: UC1 coded + tested: Copy button inside the address pill (Toolbar.copyButton)
+  133164bc ckpt 2677: TP1 coded + tested: Tab.url setter drops the old page's preview, ThumbStore 
 ```
-
-(15 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)

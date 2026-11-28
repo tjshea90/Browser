@@ -43,4 +43,19 @@ object MediaHeaders {
         add(emptyMap())
         return out
     }
+
+    /**
+     * VS1e (owner 2026-11-18, doraby + vidfast: the finder's own request for a text/plain answer got 404 on its FIRST header set and gave up, the owner's other downloader finds it): a server that dislikes the
+     * headers it got often answers 404 (not 403) so that nobody can tell the address is real. 401 / 403 / no answer try the next set as before; 404 and 406 try at most [MAX_NOT_FOUND_TRIES] more sets (a dead address
+     * is the common 404, so the cost stays at two more tiny requests); everything else (200s, 5xx, 416 ...) is final.
+     */
+    const val MAX_NOT_FOUND_TRIES = 2
+    fun tryNextSet(status: Int, notFoundTries: Int): Boolean = when (status) {
+        401, 403, -1 -> true
+        404, 406 -> notFoundTries < MAX_NOT_FOUND_TRIES
+        else -> false
+    }
+
+    /** A request that a page made with another method than GET (an API call that returns a text/plain answer) cannot be asked again as a GET: it is not a stream. */
+    fun replayable(method: String): Boolean = method.isEmpty() || method.equals("GET", true)
 }

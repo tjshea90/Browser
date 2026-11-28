@@ -3,6 +3,7 @@ package app.kestrel.core.input.glide
 import app.kestrel.core.input.Key
 import app.kestrel.core.input.editor.FieldKind
 import app.kestrel.core.input.editor.InputController
+import app.kestrel.core.input.editor.ShiftState
 
 /**
  * What TAP typing teaches the keyboard (N6, owner: "the learning is the most important part. it must work well and learn at all times regardless of the app i'm in"). It listens to the keys the person
@@ -52,6 +53,10 @@ class TypingLearner(
         val fix = controller.revertedCorrection ?: return
         val g = engine() ?: return
         if (!active()) return
+        if (fix.typed.equals(fix.word, ignoreCase = true)) {                                                    // only a capital was put in (a name, a day): the person writes it small
+            g.learnCase(fix.typed.lowercase(), 2f); g.stats.onAutoCorrectUndone(); last = null; erased = null; return
+        }
+        g.learnFix(true)                                                                                        // (R18d: this person takes fixes back: the keyboard gets stricter)
         val l = last
         if (l != null && l.word == fix.word.lowercase()) g.unlearnWord(l.prev, l.word, l.weight + 1f, l.prev2)   // the fix and what it earned go
         g.learnWord(l?.prev, fix.typed, 2f, l?.prev2)                                                           // what was typed is the person's word: twice, so it is never "fixed" again
@@ -64,14 +69,34 @@ class TypingLearner(
         val g = engine()
         val typed = controller.wordBeforeCursor()
         val (p2, p1) = if (typed != null) controller.contextBefore(typed) else controller.previousTwo()
+        val atStart = typed == null && InputController.startsSentence(controller.before, controller.selStart)
+        val mine = typed != null && controller.typedWord() == typed                                                // (R23b: asked before the pick, which ends the typed text)
         if (!controller.pickWord(word)) return false
         if (g == null || !active()) return true
+        if (atStart) g.learnStart(word)
         g.stats.onSuggestionPicked()
         val w = word.lowercase()
-        val fixed = typed != null && !w.startsWith(typed.lowercase())                                              // it replaced a typo, it did not finish the word
+        val fixed = typed != null && mine && !w.startsWith(typed.lowercase())          // it replaced a typo the person typed (R23b: not letters that were pasted), it did not finish the word
         g.learnWord(p1, w, 2f, p2, if (fixed) typed!!.lowercase() else null, 2f)
         last = Done(w, p1, p2, 2f); erased = null
         return true
+    }
+
+    /**
+     * R18a: a word that was already in the text ([old]) was replaced by [new] from the strip, after the person tapped it. [old] was learned when it was typed: if it is a slip of [new] (a few letters differ) it is taken
+     * back and remembered as a correction (the next time it is typed, [new] comes first); a different word the person simply preferred leaves [old] alone. [new] counts double: the person chose it. [prev2] / [prev] are the
+     * words before the replaced word.
+     */
+    fun replaced(old: String, new: String, prev2: String?, prev: String?) {
+        val g = engine() ?: return
+        if (!active()) return
+        val o = old.lowercase(); val n = new.lowercase()
+        if (o == n) return
+        g.stats.onSuggestionPicked()
+        val slip = similar(o, n)
+        if (slip) g.unlearnWord(prev, o, 1f, prev2)
+        g.learnWord(prev, n, 2f, prev2, if (slip) o else null, 2f)
+        last = null; erased = null
     }
 
     /** The cursor moved, the field changed or the keyboard closed: nothing here may still refer to the old text. */
@@ -79,6 +104,8 @@ class TypingLearner(
 
     private fun finishWord(g: GlideTyping, fix: String?) {
         val typed = controller.wordBeforeCursor() ?: run { return }
+        // R23b (owner: "never at any time allow the keyboard to learn and save anything from the clipboard"): only a word typed here, key by key, is ever learned - not one that was pasted, put in by an app, or only stands before the cursor
+        if (controller.typedWord() != typed) return
         val (p2, p1) = controller.contextBefore(typed)
         val realFix = fix?.takeIf { !it.equals(typed, ignoreCase = true) }      // ("i" -> "I" only changes the capital: not a correction)
         var word = (realFix ?: typed).lowercase()
@@ -88,10 +115,27 @@ class TypingLearner(
         if (e != null && now() - erasedAt <= RETYPE_MS && retypeLetters >= 1 && word.length >= 2 && word != e.word) {
             if (similar(e.word, word)) { weight = 3f; guessed = e.word; g.stats.onRetyped() }   // erased, retyped: the new word is what was meant
         }
-        if (realFix != null) { guessed = typed.lowercase(); g.stats.onAutoCorrected() }              // the keyboard fixed a typo and it was not taken back (yet)
+        if (realFix != null) { guessed = typed.lowercase(); g.stats.onAutoCorrected(); g.learnFix(false) }   // the keyboard fixed a typo and it was not taken back (yet)
         erased = null
         g.learnWord(p1, word, weight, p2, guessed, if (weight > 1f) 2f else 1f)
         last = Done(word, p1, p2, weight)
+        val head = controller.before.takeIf { it.endsWith(typed) }?.dropLast(typed.length)
+        if (head != null && InputController.startsSentence(head, controller.selStart - typed.length)) g.learnStart(word)      // (R18d: what this person begins sentences with)
+        learnCaseOf(g, typed, fix)
+    }
+
+    /**
+     * R18b: how the person writes this word INSIDE a sentence: with a capital (a name, a place, iPhone) or small. A capital at the start of a sentence says nothing, the keyboard's own capital ([fix] set) says nothing,
+     * and a word shouted in capitals is not a habit.
+     */
+    private fun learnCaseOf(g: GlideTyping, typed: String, fix: String?) {
+        if (fix != null || controller.shift == ShiftState.LOCK) return
+        if (typed.length > 4 && typed == typed.uppercase()) return
+        val b = controller.before
+        if (!b.endsWith(typed)) return
+        val head = b.dropLast(typed.length)
+        if (InputController.startsSentence(head, controller.selStart - typed.length)) return
+        g.learnCase(typed)
     }
 
     /** A Backspace that reaches into the word just finished: the person is taking it back. */

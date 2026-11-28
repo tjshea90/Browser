@@ -67,7 +67,7 @@ class InlineReportsTest {
 
     @Test fun aChangeNoEditExplainsInsideACallIsNoticedAtTheNextKey() {
         // a text watcher in the app appends "!" the moment "c" has been typed and the editor reports both states inside the call: the keyboard explains the first with its own edit, and the second one repairs its picture at the next key
-        val r = rig(caps = 0); r.typeAll("ab")
+        val r = rig(caps = 0); r.c.sentenceCaps = true; r.typeAll("ab")
         val sink = r.ed.inlineSink!!; var once = true
         r.ed.inlineSink = { u -> sink(u); if (once && r.text.endsWith("c")) { once = false; r.ed.userInsert("!") } }
         r.c.type("c"); r.c.type("d"); r.sync(); r.check()

@@ -152,6 +152,30 @@ window.KestrelVP = window.KestrelVP || (function () {
       return { k: 'vst', t: r2(v.currentTime || 0), d: dd, b: r2(b), p: v.paused ? 1 : 0, e: v.ended ? 1 : 0, m: (v.muted || v.volume === 0) ? 1 : 0, v: Math.round((v.volume || 0) * 100),
                r: r2(v.playbackRate || 1), rs: v.readyState | 0, ms: isMse(v) ? 1 : 0, l: live, w: v.videoWidth | 0, h: v.videoHeight | 0, ak: S ? S.ack | 0 : 0, aw: S ? S.gone.length : 0, er: v.error ? 1 : 0, tf: tf, df: df, sh: sh };   // ak = the last command of the app carried out
     }
+    // QL1 (owner message 2026-11-18: "When i put YouTube video in full screen, it doesn't let me choose the video quality ..."): the page's OWN quality list for this film (quality.js finds the family: YouTube, JW,
+    // Video.js, hls.js, dash.js, Shaka, <source> lists). The list goes to the app on the first reports, again when it changes and every 20th report; the current pick goes with every report (a few characters).
+    function qualityInfo(s) {
+      var Q = window.KestrelQ;
+      if (!Q) return null;
+      var now = mono();
+      if (!s.qa) {
+        if (now - (s.qTried || -100000) < 2000) return null;           // looked for again every 2 s: a player that is not built yet
+        s.qTried = now; s.qa = Q.find(s.v); s.qSig = ''; s.qSent = 0; s.qLevAt = 0;
+        if (!s.qa) return null;
+      }
+      var out = { c: String(s.qa.cur() || ''), f: s.qa.fam, q: null };
+      if (now - (s.qLevAt || 0) >= 1500 || s.qSent === 0) {
+        var lv = s.qa.levels(); s.qLevAt = now;
+        if (!lv || lv.length < 2) { s.qa = null; s.qTried = now; return null; }
+        var sig = ''; for (var i = 0; i < lv.length; i++) sig += lv[i].i + '=' + lv[i].l + ';';
+        if (sig !== s.qSig) { s.qSig = sig; s.qList = lv; s.qSent = 0; }
+      }
+      if (s.qList && (s.qSent < 2 || s.reports % 20 === 0)) {
+        var arr = []; for (var j = 0; j < s.qList.length; j++) arr.push([s.qList[j].i, s.qList[j].l]);
+        out.q = arr; s.qSent++;
+      }
+      return out;
+    }
     function send(m) {
       var s = S;
       try { browser.runtime.sendMessage(m).then(function (r) { if (S === s) answer(r); }, noop); } catch (e) { /* nobody listens */ }
@@ -170,6 +194,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (!s.fit && s.reports < 8) fit(s.v);                                  // (the picture's size may be known only after the first reports)
       if (Date.now() - s.awayAt >= 900) putAway(s);                           // (a page that makes its controls late, or again)
       var m = sample(s.v);
+      try { var qi = qualityInfo(s); if (qi) { if (qi.q) m.q = qi.q; m.qc = qi.c; m.qf = qi.f; } } catch (eq) { /* a player that throws offers no list */ }   // QL1: the film's own quality list (quality.js), for the Quality button
       m.lt = Math.round(s.late); s.late = 0;                                  // ANS51e: the longest lateness of this script's timers since the last report, and what this report itself cost (fit, put away, sample), in ms
       m.pc = Math.round(mono() - t0);
       send(m);
@@ -216,6 +241,7 @@ window.KestrelVP = window.KestrelVP || (function () {
           }
           case 'mute': v.muted = !!c.on; if (!c.on && v.volume === 0) v.volume = 1; break;
           case 'rate': { var rate = +c.r; if (rate >= 0.25 && rate <= 4) v.playbackRate = rate; break; }
+          case 'ql': { if (s.qa && typeof c.q === 'string' && c.q.length <= 24) { s.qa.set(c.q); s.qLevAt = 0; s.qSent = 0; } break; }                       // QL1: a pick from the Quality list: the site's own player switches
           default: break;
         }
       } catch (e) { /* the page decides */ }

@@ -101,6 +101,8 @@ import app.kestrel.browser.ui.BackPictures
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.media.MediaNames
+import app.kestrel.core.ui.CurtainRule
+import app.kestrel.core.ui.ThumbRule
 import app.kestrel.core.url.UrlParts
 import app.kestrel.browser.web.ShieldsBridge
 import app.kestrel.browser.web.TabDelegates
@@ -199,6 +201,14 @@ open class BrowserActivity : Activity(), DockListener {
         // where the person put the panel and how big the keyboard is (AV1)
         override fun navKeyHaptics(): Boolean = prefs.keyHaptics
         override fun navGeometry(): IntArray? = prefs.miniGeom
+        // MT1: the tab tray of the panel: the tabs of the kind in front (regular with regular, private with private), in the tab grid's order
+        override fun navTabs(): List<app.kestrel.browser.ui.NavTab> {
+            val priv = current?.isPrivateTab == true
+            return tabs.filter { it.isPrivateTab == priv }.map { t -> app.kestrel.browser.ui.NavTab(t.id, t.title, (UrlParts.hostOf(t.url) ?: "").removePrefix("www."), if (t.homeOverPage) null else t.thumb, t === current, t.isPrivateTab) }
+        }
+        override fun navSwitchTab(id: Long) { tabs.firstOrNull { it.id == id }?.let { if (it !== current) show(it) } }
+        override fun navCloseTab(id: Long) { tabs.firstOrNull { it.id == id }?.let { doCloseTab(it) } }
+        override fun navNewTab() { show(newTabInternal(null, isPrivate)) }      // (no system keyboard: the panel opens its own keys on the new tab's address)
         override fun navGeometryChanged(g: IntArray?) { prefs.miniGeom = g }
         override fun navGlideTitles(done: (List<String>) -> Unit) {
             val d = db ?: return
@@ -547,7 +557,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
                 val burst3 = SystemClock.uptimeMillis()
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }, nameClues = { m -> video.nameClues(m) }))
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
@@ -560,7 +570,7 @@ open class BrowserActivity : Activity(), DockListener {
         val launch = urlFromIntent(intent)
         if (prefs.preconnect && launch != null) GeckoEngine.warmOrigin(launch)?.let { GeckoEngine.warmAtStart(it) } // the link that launched the app: its handshakes overlap with the engine starting (EX-2 B)
         if (launch == null) earlyCover() // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
-        if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
+        if (openDownloadsAsked(intent, savedInstanceState != null)) Io.main.post { showDownloads() }
         handleUpdateIntent(intent)
         Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
@@ -571,7 +581,7 @@ open class BrowserActivity : Activity(), DockListener {
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
             if (session != null && TabStateStore.useEngine(applicationContext, Flavor.engineVersion)) for (r in session.tabs) TabStateStore.read(applicationContext, r.id)?.let { states[r.id] = it }
-            val selThumb = if (launch == null && session != null) ThumbStore.load(applicationContext, session.selectedId) else null // the preview that covers the page area while the saved page loads
+            val selThumb = if (launch == null && session != null) ThumbStore.load(applicationContext, session.selectedId, session.tabs.firstOrNull { it.id == session.selectedId }?.url ?: "") else null   // (TP1: only when it was taken for the page the tab is on) // the preview that covers the page area while the saved page loads
             Io.ui { restore(session, savedInstanceState, launch, states, selThumb) }
         }
         Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
@@ -899,10 +909,25 @@ open class BrowserActivity : Activity(), DockListener {
         if (hasFocus && fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true); checkBarsSoon() } // FSB1: a system dialog, the volume panel or Recents may have brought the bars back (only when the person chose Hide): take them away again
     }
 
+    /**
+     * DM1 (owner: "the download manager pops up on browser restart or other times"): the tap on a download notification starts the app with "open Downloads" in its intent, and Android keeps that intent
+     * on the task and plays it AGAIN when it restarts the activity (after a crash, after the process was taken for memory, from Recents). Only the first delivery is a tap: the flag is taken out of the
+     * intent once it has been read, and a replay (saved state, or launched from history) is ignored (core ManagerIntent).
+     */
+    private fun openDownloadsAsked(i: Intent?, restoredState: Boolean): Boolean {
+        if (i == null) return false
+        val extra = i.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)
+        if (extra) i.removeExtra(Notifier.EXTRA_OPEN_DOWNLOADS)
+        val fromHistory = (i.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        val open = app.kestrel.core.download.ManagerIntent.shouldOpen(extra, restoredState, fromHistory)
+        if (extra) Health.log("downloads", if (open) "open-by-tap" else "open-ignored", "restored=$restoredState history=$fromHistory")   // DM1: a replay after a restart is told, not acted on
+        return open
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)) showDownloads()
+        if (openDownloadsAsked(intent, false)) showDownloads()
         handleUpdateIntent(intent)
         labIntent(intent)
         urlFromIntent(intent)?.let { openInNewTabOrCurrent(it) }
@@ -935,6 +960,24 @@ open class BrowserActivity : Activity(), DockListener {
                 for (h in hosts) Shields.setOverride(h, if (mode == "off") app.kestrel.core.shield.SiteShields(0, 0).with(app.kestrel.core.shield.ShieldFlag.SHIELDS, false) else app.kestrel.core.shield.SiteShields(0, 0))
                 Io.main.post { for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }; Health.log("lab", "shields", "$mode ${hosts.size} sites") }
             }
+            "minipanel" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { miniNav.setOpen(arg != "0", animate = false); Health.log("lab", "minipanel", "open=${miniNav.isOpen}") } }   // MT1 lab: the one-hand panel on / off
+            "minitabs" -> { i.removeExtra("kestrel_arg"); Io.main.post { miniNav.toggleTray(); Health.log("lab", "minitabs", "tray=${miniNav.trayOpen} tabs=${tabs.size}") } }   // MT1 lab: the panel's tab tray
+            "previews" -> { i.removeExtra("kestrel_arg"); Io.main.post { Health.log("lab", "previews", previewLine()); for (t in tabs) Health.log("lab", "preview", "tab=${t.id} host=${UrlParts.hostOf(t.url) ?: "-"} has=${t.thumb != null} forPage=${if (t.thumbPage.isEmpty()) "-" else t.thumbPage.substringBefore('/')} ok=${t.thumb == null || t.thumbPage == ThumbRule.pageOf(t.url)}") } }   // TP1 lab
+            "trayact" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post {          // MT1 lab: "switch:N" / "close:N" / "new" on the open tab tray
+                val ok = miniNav.labTrayAct(arg.substringBefore(':'), arg.substringAfter(':', "0").toIntOrNull() ?: 0)
+                Health.log("lab", "trayact", "ok=$ok kind=${arg.substringBefore(':')} tabs=${tabs.size} current=${tabs.indexOf(current)} tray=${miniNav.trayOpen} keys=${miniNav.keyboardShowing}") } }
+            "copyurl" -> { i.removeExtra("kestrel_arg"); Io.main.post {                                                          // UC1 lab: press the address bar, tap Copy, compare the clipboard with the tab's address
+                val t = current
+                dock.urlField.requestFocus()
+                Io.main.postDelayed({
+                    val vis = dock.copyChip.visibility == View.VISIBLE
+                    dock.copyChip.performClick()
+                    val clip = getSystemService(ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                    Health.log("lab", "copyurl", "visible=$vis exact=${clip == (t?.url ?: "-")} chars=${clip.length}")
+                    dock.urlField.clearFocus()
+                }, 600) } }
+            "opengrid" -> { i.removeExtra("kestrel_arg"); Io.main.post { onTabs() } }   // TP1 lab: the tab grid
+            "switchtab" -> { val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); Io.main.post { tabs.getOrNull(n)?.let { hideTabGrid(); show(it) } } }   // TP1 lab: the n-th tab to the front
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
             "answer" -> { // SOAK1: press a button of the question on screen (debug builds only)
                 val yes = i.getStringExtra("kestrel_arg") == "yes"; i.removeExtra("kestrel_arg")
@@ -953,6 +996,7 @@ open class BrowserActivity : Activity(), DockListener {
             "webinline" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.webInline = arg != "0"; Health.log("lab", "webinline", "inside the page: ${prefs.webInline}") }   // ANS55f lab: Settings > Play web videos inside the page
             "handreset" -> { i.removeExtra("kestrel_arg"); NativePlayerActivity.lastUrl = ""; NativePlayerActivity.lastPositionMs = 0L; NativePlayerActivity.lastDurationMs = 0L; NativePlayerActivity.lastStoppedAt = 0L; Health.log("lab", "handreset", "Kestrel's player forgets the clip it played to its end (alpha62's loop breaker: a short clip pressed again within 10 minutes goes to the page; the lab replays the same clips scene after scene)") }
             "fsturn" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 1; i.removeExtra("kestrel_arg"); prefs.fullscreenTurn = arg; Health.log("lab", "fsturn", "mode $arg (0 automatic, 1 follow the tablet = the default, 2 off)") }   // ANS54e.1 lab: the full-screen turn mode
+            "freeze" -> { val ms = ((i.getStringExtra("kestrel_arg") ?: "").toLongOrNull() ?: 6000L).coerceIn(500L, 30000L); i.removeExtra("kestrel_arg"); Health.log("lab", "freeze", "the screen thread will sleep $ms ms on purpose, once the activity is back in front (CR1f: the Last run note must say a freeze, not a crash)"); Io.main.post { try { Thread.sleep(ms) } catch (e: InterruptedException) { /* done */ } } }   // lab only; posted, so the pause / onNewIntent / resume of the `am start` that carries the command are over and the watchdog (which runs only in front) is awake
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
             "vcap" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoCap = arg.toIntOrNull() ?: 0; Health.log("lab", "vcap", "mode ${prefs.videoCap} -> ${app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs)} px") } // ANS52h: the lab plays the picture size cap setting (0 Automatic, 1 off, 2 480p, 3 720p, 4 1080p)
             "nativeplay" -> Io.main.post { current?.let { video.labPlayBest(it) } } // ANS52i: the best row of the sheet in Kestrel's own player
@@ -1026,6 +1070,8 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         restoreOverlay = RestoreOverlay(this, pal)
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
+        curtain = View(this).apply { setBackgroundColor(pal.windowBg); visibility = View.GONE; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        content.addView(curtain, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // PV1: above the page view, below the restore overlay, Home and the error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         inline = app.kestrel.browser.web.InlineHost(this, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
@@ -1074,7 +1120,7 @@ open class BrowserActivity : Activity(), DockListener {
         player = app.kestrel.browser.web.PlayerController(playerView,
             { exitFullscreenFromControls() },
             { shown -> fsTurner.controlledShow(shown) },
-            { fullscreenTab?.let { video.pageFilm(it) } != null },
+            { player.hasPageLevels() || fullscreenTab?.let { video.pageFilm(it) } != null },   // QL1: the page's own quality list first, else the pictures the app knows from a playlist
             { timeS, lengthS -> openPageQuality(timeS, lengthS) },
             { qualitySheet.isOpen })
         fsTurner.ownedByPlayer = { player.active }
@@ -1099,8 +1145,10 @@ open class BrowserActivity : Activity(), DockListener {
         downloadPopup = DownloadPopup(this, pal, object : DownloadPopup.Listener {
             override fun openManager() { showDownloads() }
             override fun confirm(title: String, message: String, yes: String, then: () -> Unit) { askYesNo(title, message, yes, "Keep", { ok -> if (ok) then() }) }
+            override fun geometry(): IntArray? = prefs.dlGeom                                   // FD1: the window floats; where it was left and how big
+            override fun geometryChanged(g: IntArray?) { prefs.dlGeom = g }
         })
-        root.addView(downloadPopup.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        root.addView(downloadPopup.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         tabGrid = TabGrid(this, pal, { it.isPrivateTab }, object : TabGrid.Listener {
             override fun select(tab: Tab) { hideTabGrid(); show(tab) }
             override fun close(tab: Tab) {
@@ -1248,7 +1296,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
-    internal fun pageStarted(tab: Tab) { if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page changed"); video.clearTab(tab); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
+    internal fun pageStarted(tab: Tab, url: String? = null) { if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page changed"); video.clearTab(tab, url); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
 
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
@@ -1279,6 +1327,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun show(tab: Tab) {
         if (fullscreenOn && fullscreenTab !== tab) endFullScreenOf(null, "another tab came to the front")
         val prev = current
+        if (curtainTab != null && curtainTab !== tab) curtainDown("other-tab")
         if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
         if (restoringTab != null && restoringTab !== tab) hideRestoring("other-tab") // another tab came to the front: the overlay belonged to the one that died
@@ -1345,7 +1394,11 @@ open class BrowserActivity : Activity(), DockListener {
         if (::inline.isInitialized && inline.active && (inline.tabOrNull !== tab || homeShown(tab) || tab.error != null)) inline.stop("another page is in front")   // ANS55f
         if (!tab.isNewTab && !(tab.showHome && tab.session == null)) { // AQ1: a tab restored on Home has no engine session yet and gets none until Back: nothing loads behind the Home screen at start
             val s = ensureSession(tab)
-            if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
+            if (geckoView.session !== s) {
+                val prevPrivate = geckoView.session?.let { ps -> tabs.firstOrNull { it.session === ps }?.isPrivateTab }   // PV1: whose last frame is still on the page view
+                geckoView.releaseSession(); geckoView.setSession(s)
+                CurtainRule.needed(tab.gecko.painted, prevPrivate, tab.isPrivateTab)?.let { curtainUp(tab, it) }
+            }
         }
         val homeNow = homeShown(tab)
         if (homeNow) { if (home.visibility != View.VISIBLE) { home.visibility = View.VISIBLE; home.field.setText("") }; refreshNtp() } // Home always starts with an empty field
@@ -1407,6 +1460,7 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
+        tab.gecko.painted = false                                       // PV1: a session that has not painted yet needs the curtain when it is shown
         if (tab === current) StartTimeline.mark("open")
         var state = tab.gecko.state
         if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
@@ -1804,6 +1858,7 @@ open class BrowserActivity : Activity(), DockListener {
         tabs.removeAt(idx)
         syncPrivateAnchor()                                                      // ANS58c: the last private tab is gone: the anchor goes too
         if (tab === restoringTab) hideRestoring("closed")
+        if (tab === curtainTab) curtainDown("closed")
         tab.thumb = null
         val appCtx = applicationContext
         BackPictures.dropTab(tab.id)
@@ -1871,7 +1926,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.topHost = host
         tab.shields = Shields.effective(prefs, host)
         tab.resetPageCounters()
-        video.clearTab(tab)
+        video.clearTab(tab, url)
         val s = ensureSession(tab, cover = false) // the address typed now replaces whatever the tab held: no preview of the old page
         syncEngineProtection(tab)
         if (current === tab) attachContent(tab)
@@ -2002,7 +2057,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (cur != null && cur.homeOverPage) tabGrid.homePreview(cur, homeSnapshot()) // the tab is on the Home screen: its card shows Home, not the page behind it
         val appCtx = applicationContext
         val missing = tabs.filter { it.thumb == null && !it.isPrivateTab && !it.isNewTab }
-        if (missing.isNotEmpty()) Io.fast { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
+        if (missing.isNotEmpty()) Io.fast { for (t in missing) { val shownFor = t.url; val b = ThumbStore.load(appCtx, t.id, shownFor); if (b != null) Io.ui { if (t.thumb == null && t.url == shownFor) { t.thumb = b; t.thumbPage = ThumbRule.pageOf(shownFor); t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
     }
 
     private fun hideTabGrid() { tabGrid.visibility = View.GONE; applyPrivacyFlags() }
@@ -2045,6 +2100,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab !== current || homeShown(tab) || tab.error != null || tab.session == null || geckoView.session !== tab.session) return
         val appCtx = applicationContext
         val leftUrl = tab.url // the address the picture belongs to (the tab may already show another one when the capture arrives)
+        val takenFor = ThumbRule.pageOf(leftUrl)         // TP1: the page this picture is for, and which load it was asked in
+        val loadThen = tab.gecko.pageStartedAt
         try {
             (readBack("thumb", force = tabGrid.visibility == View.VISIBLE) ?: return).accept({ full ->
                 val lane: (() -> Unit) -> Unit = if (tabGrid.visibility == View.VISIBLE) Io::fast else Io::exec // the grid is open: the user is waiting for this preview
@@ -2054,9 +2111,13 @@ open class BrowserActivity : Activity(), DockListener {
                     val picture = both?.second
                     if (picture != null) BackPictures.put(tab.id, leftUrl, picture)
                     if (forBack) Health.log("tabs", "leave-shot-done", "picture=${picture != null}")
-                    if (small != null) {
-                        if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
-                        Io.ui { tab.thumb = small; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab); if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab) }
+                    if (small != null) Io.ui {
+                        // TP1: kept only if the tab is STILL on the page it was asked for, no new load started meanwhile and the page has settled; otherwise it is another page's picture
+                        if (ThumbRule.accept(takenFor, tab.url, loadThen, tab.gecko.pageStartedAt, tab.loading)) {
+                            tab.thumb = small; tab.thumbPage = takenFor; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab)
+                            if (!tab.isPrivateTab) Io.exec { ThumbStore.save(appCtx, tab.id, small, takenFor) }
+                            if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab)
+                        } else { Health.count("tabs.thumb.dropped"); Health.log("tabs", "thumb-dropped", "tab=${tab.id} moved=${ThumbRule.pageOf(tab.url) != takenFor} loading=${tab.loading}") }
                     }
                 }
             }, { _ -> /* the surface was not ready: keep the previous preview */ })
@@ -2469,12 +2530,20 @@ open class BrowserActivity : Activity(), DockListener {
     // ------------------------------------------------------------------ freeze evidence + manual recovery (research/FREEZE.md 5)
     private var diagView: DiagnosticsView? = null
 
+    /** TP1: how the tab previews stand. A preview belongs to the page it was taken for; a tab whose preview is for another page than its own is the owner's "wrong preview" (must be 0 here). */
+    private fun previewLine(): String {
+        val withPic = tabs.filter { it.thumb != null }
+        val wrong = withPic.count { it.thumbPage != ThumbRule.pageOf(it.url) }
+        return "Tab previews: ${tabs.size} tabs, ${withPic.size} with a preview, $wrong for the WRONG page (must be 0); late pictures thrown away because the tab had moved on: ${Health.counter("tabs.thumb.dropped")}"
+    }
+
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
+        out.add(previewLine())
         out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
@@ -2489,6 +2558,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(app.kestrel.browser.web.WebHandStats.line(prefs.webVideoMode))   // ANS54e
         out.add(strayLine())
         out.add(videoBarLine())
+        if (::player.isInitialized) out.add(player.pageQualityLine())      // QL1
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
         out.add(app.kestrel.browser.web.NativePlayerStats.line())   // ANS52i
         out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))
@@ -2605,6 +2675,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (::miniNav.isInitialized) miniNav.forgetLearned() else Io.exec { try { java.io.File(applicationContext.filesDir, "glide_personal.txt").delete() } catch (e: Exception) { } }
             toast("The keyboard forgot what it learned")
         }
+        override fun resetDownloadWindow() { prefs.dlGeom = null; if (::downloadPopup.isInitialized) downloadPopup.resetGeometry(); toast("The downloads window is back at the top right") }
         override fun resetMiniGeometry() { prefs.miniGeom = null; if (::miniNav.isInitialized) miniNav.resetGeometry(); toast("The mini keyboard is back under the top right corner") }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
@@ -2752,6 +2823,7 @@ open class BrowserActivity : Activity(), DockListener {
         val priv = t?.isPrivateTab == true
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
         miniNav.sync(canBack || (t != null && (!t.isNewTab || t.showHome)), t?.canGoForward == true, homeShown(t), if (t == null || homeShown(t) || !t.url.startsWith("http")) "" else t.url)
+        miniNav.tabsChanged()                                         // MT1: the Tabs button's number and, when the tray is open, its rows
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
         updateNeonBusy()
@@ -2774,6 +2846,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** ANS53d.2: the Quality button was pressed: the pictures the page's film offers, Automatic first; the position is kept for the hand-over. */
     private fun openPageQuality(timeS: Double, lengthS: Double) {
+        if (player.hasPageLevels()) { openPageLevels(); return }
         val t = fullscreenTab ?: return
         val film = video.pageFilm(t) ?: return
         pageQualityStartMs = app.kestrel.core.media.PageQuality.startMs(timeS, lengthS, film.cand.durationMs)
@@ -2786,8 +2859,24 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("video", "quality-open", "${rows.size} row(s) for the page's film")
     }
 
+    /** QL1: the Quality button for a film whose own player offers a list (YouTube, JW Player, Video.js, hls.js, dash.js, Shaka, <source> lists): the rows are the page's, a pick is passed on to its player and the film goes on. */
+    private fun openPageLevels() {
+        val sel = player.pageSelectedId()
+        val rows = player.pageLevelList().map { lv -> app.kestrel.browser.web.QualitySheet.Row(lv.label, if (lv.id == app.kestrel.core.player.PageLevels.AUTO) "The site's player chooses as the line allows" else "", lv.id == sel, true, lv) }
+        player.pinControls(true)
+        pageQualityRows = rows
+        qualitySheet.show("Quality", rows, "The site's own player switches and the film goes on. A smaller picture is lighter for this tablet and for the hotspot. It can take a few seconds to change.")
+        Health.log("video", "quality-open", "${rows.size} row(s) from the page's own player (${player.pageFamily()})")
+    }
+
     /** ANS53d.2: a row was picked: the page's film stops, Kestrel's own player takes it from the same second. */
     private fun pagePicked(row: app.kestrel.browser.web.QualitySheet.Row) {
+        val level = row.tag as? app.kestrel.core.player.PageLevels.Level
+        if (level != null) {                                                  // QL1: a row of the page's own list: its player switches, nothing else happens
+            qualitySheet.dismiss()
+            if (player.setPageQuality(level.id)) toast("Quality: ${level.label}")
+            return
+        }
         val t = fullscreenTab
         val film = t?.let { video.pageFilm(it) }
         qualitySheet.dismiss()
@@ -2929,6 +3018,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (real && tab === restoringTab) {
             // the load ended (a page that never reported its first paint must not keep the preview up). The back cover (RX3-BK2) counts the end of the load as the paint and then still waits for the place: it never goes at the end of the load alone
             if (tab === backCover?.tab) backPainted("stop") else hideRestoring("page-stop")
+            if (tab === curtainTab) curtainDown("page-stop")
         }
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
@@ -3003,6 +3093,29 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(restoreTimeout)
         Io.main.postDelayed(restoreTimeout, timeoutMs) // never stay up for ever (a page that never paints, a dead connection)
     }
+
+    // ---- PV1: the curtain over the page view while it is handed to another session (see core CurtainRule)
+    private lateinit var curtain: View
+    private var curtainTab: Tab? = null
+    private var curtainWhy: CurtainRule.Why? = null
+    private val curtainTimeout = Runnable { curtainDown("timeout") }
+    private fun curtainUp(tab: Tab, why: CurtainRule.Why) {
+        if (!::curtain.isInitialized) return
+        curtain.setBackgroundColor(pal.windowBg)
+        curtainTab = tab; curtainWhy = why
+        curtain.visibility = View.VISIBLE
+        Io.main.removeCallbacks(curtainTimeout); Io.main.postDelayed(curtainTimeout, CurtainRule.timeoutMs(why))
+        Health.count("tabs.curtain"); Health.log("tabs", "curtain-up", "tab=${tab.id} why=$why private=${tab.isPrivateTab}")     // (no address)
+    }
+    internal fun curtainDown(why: String) {
+        if (curtainTab == null) return
+        Io.main.removeCallbacks(curtainTimeout)
+        Health.log("tabs", "curtain-down", "tab=${curtainTab?.id} why=$why")
+        curtainTab = null; curtainWhy = null
+        curtain.visibility = View.GONE
+    }
+    /** The view drew a frame of this tab's session: the old tab's picture is gone from it (enough for a live tab; a new one waits for its first paint). */
+    internal fun curtainComposite(tab: Tab) { if (tab === curtainTab && curtainWhy?.let { !CurtainRule.untilPaint(it) } == true) curtainDown("first-composite") }
 
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
@@ -3096,6 +3209,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
+        if (tab === curtainTab) curtainDown("first-paint")
         if (tab === current) StartTimeline.mark("paint")
         if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
         if (tab === restoringTab) { if (tab === lookTab) lookPainted() else if (tab === backCover?.tab) backPainted() else hideRestoring("first-paint") }
@@ -3577,7 +3691,7 @@ open class BrowserActivity : Activity(), DockListener {
             else UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
             // a video named like a release, or one whose own name says nothing on a page that names the episode, is saved as "Ozark S02E05.mp4" (owner message 26, AL6); every other file keeps the server's name
             val raw = nameOverride ?: Downloads.fileName(url, cd, mime)
-            val named = if (nameOverride == null) MediaNames.friendlyFileName(raw, mime, tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "") else raw
+            val named = if (nameOverride == null) MediaNames.friendlyFileName(raw, mime, tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "", tab.nameClues) else raw
             DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, named, mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null || named != raw))
             askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup); no toast any more
         }

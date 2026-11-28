@@ -23,8 +23,14 @@ class SimNoise(
     val name: String,
     /** How far this thumb habitually lands from where it aims, in dp: the same way every time (direction drawn once per simulated person). */
     val userBiasDp: Float = 0f,
+    /**
+     * R20d: a thumb does not land the same way everywhere: the left thumb of a two-thumb typist lands one way, the right thumb another, and a one-handed thumb falls short at the far side. (dx, dy) in dp at the LEFT edge of the
+     * letter keys, then at the RIGHT edge, blended in between; added on top of [userBiasDp]. Null = the same everywhere.
+     */
+    val zoneDp: FloatArray? = null,
 ) {
-    fun withUserBias(dp: Float) = SimNoise(aimDp, cut, biasDp, jitterDp, wobbleDp, "$name + habit $dp dp", dp)
+    fun withUserBias(dp: Float) = SimNoise(aimDp, cut, biasDp, jitterDp, wobbleDp, "$name + habit $dp dp", dp, zoneDp)
+    fun withZone(leftDx: Float, leftDy: Float, rightDx: Float, rightDy: Float) = SimNoise(aimDp, cut, biasDp, jitterDp, wobbleDp, "$name + zones (${leftDx.toInt()},${leftDy.toInt()}|${rightDx.toInt()},${rightDy.toInt()}) dp", userBiasDp, floatArrayOf(leftDx, leftDy, rightDx, rightDy))
 
     companion object {
         val CALM = SimNoise(5f, 8f, 2f, 0.8f, 2f, "calm (aim 5 dp)")
@@ -52,10 +58,14 @@ class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
         if (habitX.isNaN()) { val a = rnd.nextDouble() * 2 * Math.PI; habitX = (Math.cos(a) * noise.userBiasDp).toFloat(); habitY = (Math.sin(a) * noise.userBiasDp).toFloat() }
         val bx = rnd.nextGaussian().toFloat() * noise.biasDp + habitX; val by = rnd.nextGaussian().toFloat() * noise.biasDp + habitY
         val px = FloatArray(ls.size); val py = FloatArray(ls.size)
+        val z = noise.zoneDp
+        val x0 = keys.cx.min(); val x1 = keys.cx.max()
         for (j in ls.indices) {
             val sh = shift?.getOrNull(j)
-            px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx + (sh?.get(0) ?: 0f)
-            py[j] = keys.cy[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + by + (sh?.get(1) ?: 0f)
+            val t = if (z == null || x1 <= x0) 0f else ((keys.cx[ls[j]] - x0) / (x1 - x0)).coerceIn(0f, 1f)
+            val zx = if (z == null) 0f else z[0] + (z[2] - z[0]) * t; val zy = if (z == null) 0f else z[1] + (z[3] - z[1]) * t
+            px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx + (sh?.get(0) ?: 0f) + zx
+            py[j] = keys.cy[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + by + (sh?.get(1) ?: 0f) + zy
         }
         // a dense curve: straight between the aim points, with every corner rounded by a quadratic curve that starts and ends [cut] dp from the corner
         val dense = ArrayList<FloatArray>()
