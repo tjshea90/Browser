@@ -26,7 +26,11 @@ class Engine(
     /** One limit for every download of the app (shared with the stream engine); 0 = none. */
     val limiter: RateLimiter = RateLimiter(clock),
 ) {
-    interface Listener { fun onChanged(id: Long) }
+    interface Listener {
+        fun onChanged(id: Long)
+        /** ND6: a download ended FAILED (once per failure, after its row was saved): the snapshot says why. For Diagnostics; the Android layer leaves private downloads out. */
+        fun onFailed(v: DownloadView) {}
+    }
 
     private class Stopped : RuntimeException(null, null, false, false)   // the job was paused / canceled / lost the network
     private class Exit : RuntimeException(null, null, false, false)      // this worker is done; the job's state was already set
@@ -849,9 +853,16 @@ class Engine(
             job.restartAfterStop = false
         }
         checkpoint(job)
+        if (st == DlState.FAILED && !again) reportFailed(job)
         if (again) synchronized(lock) { rec.state = DlState.QUEUED; rec.reason = Reason.NONE; rec.detail = 0 }
         changed(rec.id)
         startQueued()
+    }
+
+    private fun reportFailed(job: Job) {
+        if (listeners.isEmpty()) return
+        val v = synchronized(lock) { view(job, -1, 0) }
+        for (l in listeners) try { l.onFailed(v) } catch (e: Exception) { /* a listener must not break the engine */ }
     }
 
     /**

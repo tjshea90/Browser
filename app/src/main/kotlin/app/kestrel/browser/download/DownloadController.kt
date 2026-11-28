@@ -196,7 +196,10 @@ object DownloadController {
             },
             limiter = lim,
         )
-        e.addListener(object : Engine.Listener { override fun onChanged(id: Long) { uiChanged() } })
+        e.addListener(object : Engine.Listener {
+            override fun onChanged(id: Long) { uiChanged() }
+            override fun onFailed(v: DownloadView) { noteFailed(v) }
+        })
         engine = e
         val store = StreamStoreFiles(File(app.filesDir, "streams"), File(app.cacheDir, "streams-private")).also { streamStore = it; it.wipePrivate() }
         val streamSinks = AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates")))
@@ -237,6 +240,17 @@ object DownloadController {
     }
 
     // ---- commands (all asynchronous; the engine serialises them on its control thread)
+
+    /**
+     * ND6 (the owner's failed Proton Drive download left no line in the diagnostics): every failed download counts `download.failed.<reason>` and writes one line with the reason, the HTTP status,
+     * the site, how far it got. A private download leaves nothing (the owner's rule: nothing from a private tab is saved or sent); the site name goes through [Health.log], which masks it while a private tab exists.
+     */
+    private fun noteFailed(v: DownloadView) {
+        if (v.priv) return
+        val why = v.reason.name.lowercase()
+        Health.count("download.failed.$why")
+        Health.log("download", "failed", "$why http=${v.detail} host=${v.host ?: ""} done=${v.done} total=${v.total}")
+    }
 
     /** Queue a download and make sure the foreground service is running. Called from the UI thread; nothing here touches disk or network on it. */
     fun enqueue(ctx: Context, src: Source, onId: ((Long) -> Unit)? = null) {
