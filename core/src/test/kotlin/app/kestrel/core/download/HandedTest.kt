@@ -175,7 +175,7 @@ class HandedTest {
         assertEquals(Reason.PAGE_FILE, f.reason)
         assertEquals(listOf(Action.DELETE), f.actions)
         h.await(id, "the partial file is gone") { h.sinks.sinks.values.all { it.discarded } }
-        assertEquals("said in plain words", "The page made this file itself and its stream stopped, so it cannot be continued. Go back to the page and download it again.", Planner.failure(f))
+        assertEquals("said in plain words", "The page made this file itself and its stream stopped, so it cannot be continued. Go back to the page and download it again.", Format.failure(f))
     }
 
     @Test(timeout = 60_000) fun aStreamThatEndsClearlyShortOfItsStatedLengthIsACutNotAFinishedFile() {
@@ -287,6 +287,6 @@ class HandedTest {
     @Test fun theNewReasonIsStoredAsItsCodeAndHasPlainWords() {
         assertEquals(Reason.PAGE_FILE, Reason.of(20))
         val v = DownloadView(1, DlState.FAILED, Reason.PAGE_FILE, 0, "a.zip", null, null, -1, 0, 0, -1, 0, false, null, 0, 0, emptyList())
-        assertTrue(Planner.failure(v).contains("download it again"))
+        assertTrue(Format.failure(v).contains("download it again"))
     }
 }
