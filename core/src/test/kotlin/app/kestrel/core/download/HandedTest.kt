@@ -269,31 +269,28 @@ class HandedTest {
         assertFalse(failed.any { it.priv })
     }
 
-    @Test(timeout = 60_000) fun aPrivateDownloadLeavesNoCountAndAnOrdinaryOneIsCounted() {
+    @Test(timeout = 60_000) fun aPrivateDownloadLeavesNoCountAndARegularOneIsCounted() {
         val told = java.util.concurrent.CopyOnWriteArrayList<String>()
-        fun harness(): H {
-            val server = FakeServer(page).also { it.contentType = "text/html" }
-            val h = H(server)
-            // the same engine, but with a fetcher that reports to the test
-            return h
-        }
         val data = testBytes(MiB, 31)
         val reg = HandedStreams()
-        val server = FakeServer(page).also { it.contentType = "text/html" }
-        val fetcher = HandedFetcher(server, reg, note = { told.add(it) })
-        // a private source: the engine's stream is used, nothing is told
+        val only = HandedFetcher(FakeServer(page).also { it.contentType = "text/html" }, reg, onlyHanded = true, note = { told.add(it) })
+        fun req(priv: Boolean) = FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = priv)
+        // a private download: the engine's stream is served and a missing one is refused, and nothing is told
         reg.offer(swUrl, 200, swHeaders(data.size.toLong()), Tracked(data))
-        val r1 = fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = true))
-        assertTrue(r1.oneShot); r1.close()
+        val r1 = only.open(req(true)); assertTrue(r1.oneShot); r1.close()
+        try { only.open(req(true)); throw AssertionError("expected HANDED_GONE") } catch (e: FetchException) { assertEquals(FetchException.Kind.HANDED_GONE, e.kind) }
         assertTrue("nothing is counted for a private download: $told", told.isEmpty())
-        // the same for a download with nothing left to claim
-        try { fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = true)); throw AssertionError("expected HANDED_GONE") } catch (e: FetchException) { assertEquals(FetchException.Kind.HANDED_GONE, e.kind) }
-        assertTrue(told.isEmpty())
-        // a regular one is counted
+        // the same two for a regular download are counted
         reg.offer(swUrl, 200, swHeaders(data.size.toLong()), Tracked(data))
-        fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = false)).close()
-        assertEquals(listOf("used"), told.toList())
-        harness().stop()
+        only.open(req(false)).close()
+        try { only.open(req(false)); throw AssertionError("expected HANDED_GONE") } catch (e: FetchException) { assertEquals(FetchException.Kind.HANDED_GONE, e.kind) }
+        // the site's own answer being the file: counted for a regular download only
+        val kind4 = HandedFetcher(FakeServer(data), reg, note = { told.add(it) })
+        for (priv in listOf(true, false)) {
+            reg.offer("https://files.test/pub/a.bin", 200, mapOf("Date" to "Sat, 28 Nov 2026 08:00:00 GMT"), Tracked(testBytes(1000)))
+            kind4.open(FetchRequest("https://files.test/pub/a.bin", -1, -1, null, emptyMap(), priv = priv)).close()
+        }
+        assertEquals(listOf("used", "gone", "ordinary"), told.toList())
     }
 
     // ---------------------------------------------------------------------------------------------------------------- the registry
