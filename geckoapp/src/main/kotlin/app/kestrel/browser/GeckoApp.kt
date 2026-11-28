@@ -27,6 +27,7 @@ class GeckoApp : Application() {
         Flavor.hasFullscreenTurn = true
         Flavor.hasVideoBar = true
         Flavor.hasNetworkLab = true
+        Flavor.hasAutoTune = true    // OPT1: ON in alpha107 as an EXPERIMENT (the emulator lab proved the start, the first restart and the benchmark pages, but its own graphics froze at the later restarts, so a full run was only ever proved by unit tests; the real tablet is the test)
         Flavor.engineVersion = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) as? String ?: "" } catch (e: Throwable) { "" }
         Flavor.engineMetaUrl = "https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview-armeabi-v7a/maven-metadata.xml"
         // Every Firefox child process (content, GPU, socket...) creates this Application too: only the UI process may load the 4 MB filter set.

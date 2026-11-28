@@ -100,4 +100,13 @@ class AdvisorTest {
         assertTrue(a.why, a.why.contains("lag in typing, scrolling and video"))
         assertTrue("off: no advice", adv(f = mapOf("powerSave" to 0L, "ramAvailMb" to 600L, "storageFreeMb" to 4000L)).isEmpty())
     }
+
+    /** PERF16: repeated certificate refusals point at the tablet's clock or the hotspot's sign-in page, say so, and stay silent for one or two. */
+    @Test fun repeatedCertificateErrorsPointAtTheClockAndTheHotspotSignIn() {
+        val a = adv(k = mapOf("sec cert-error" to 3L)).single()
+        assertNull(a.key)
+        assertTrue(a.text(), a.text().startsWith("Android Settings > Date & time > Date and time: check that the date and time are right"))
+        assertTrue(a.why, a.why.contains("3 insecure connections") && a.why.contains("did not go on"))
+        assertTrue("one or two is no pattern", adv(k = mapOf("sec cert-error" to 2L)).isEmpty())
+    }
 }

@@ -96,6 +96,10 @@ class ShieldsBridge(
     private val videoError: (JSONObject) -> Unit = {},
     /** PERF3c: how long typed characters waited before the page saw them (`typ`: n keys, a mean ms, m worst ms, o waits of 150 ms or more, p the page of its tab). Numbers only. Worker thread. */
     private val typingWait: (JSONObject) -> Unit = {},
+    /** PERF10c: what a PAGE received when a file input changed (pagetime.js, top frame, checked by background.js): `n` files, up to 3 of `a` = { t type, kb, mg first bytes, dec, w, h, px, enc, ek, ms } and the page of its tab (p). Numbers and fixed words only. Worker thread. */
+    private val fileCheck: (JSONObject) -> Unit = {},
+    /** PERF13: the engine's own verdict when a page was left (content.js `pagehide`): the page's address, whether the back/forward cache took it, how far it had loaded (0 loading, 1 interactive, 2 complete), whether the page's unfinished loads were stopped by the person's link tap (PERF14). Worker thread. */
+    private val pageLeft: (String, Boolean, Int, Boolean) -> Unit = { _, _, _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -164,6 +168,8 @@ class ShieldsBridge(
                     "vch" -> { videoCodec(m); "" }
                     "verr" -> { videoError(m); "" }
                     "typ" -> { typingWait(m); "" }
+                    "fc" -> { fileCheck(m); "" }
+                    "ph" -> { pageLeft(m.optString("p"), m.optInt("ps") == 1, m.optInt("rs"), m.optInt("st") == 1); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
@@ -263,11 +269,12 @@ class ShieldsBridge(
         // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
         // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
+        // 4096 = a page's decorative clips (silent, looping, no controls) play only on screen and two at a time (PERF21, decoclips.js; follows ONLY the Settings row "Limit looping page clips"; not a Shields feature),
         // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows the Settings switch "Videos start only when I press play" and, per site, the Shields panel row "Videos may start by themselves" (VD1); it is not a Shields feature),
         // 2048 = the page's gate may ASK the app whether Kestrel's own player takes the film the person pressed (ANS54e, gate-main.js; needs the press-to-play rule and a Settings row "Web videos play in" other than "The page's own player"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
         val pressToPlay = prefs().videoPressToPlay && !s.autostartVideo   // VD1: the owner's rule, except on a site where the person allowed videos to start by themselves (Shields panel)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (pressToPlay) 1024 else 0) or (if (pressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().limitClips) 4096 else 0) or (if (pressToPlay) 1024 else 0) or (if (pressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap() + ":" + (if (prefs().instantBack) 1 else 0)
     }
@@ -448,6 +455,8 @@ class ShieldsBridge(
             else -> RequestType.OTHER
         }
 
+        @Volatile private var extVersionLogged = false
+
         /** Installs the built-in extension (idempotent) and (re)attaches [bridge]; call from every Activity instance. */
         fun install(ctx: Context, bridge: ShieldsBridge) {
             bridge.salt = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode } catch (e: Exception) { 0L }
@@ -455,6 +464,8 @@ class ShieldsBridge(
             controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
                 { ext ->
                     ext?.setMessageDelegate(bridge, "kestrel")
+                    // PERF12: which extension code the engine really runs (a stale copy would make every new page script silently absent: the alpha95 attach test never answered); once per run
+                    if (ext != null && !extVersionLogged) { extVersionLogged = true; app.kestrel.browser.diag.Health.log("shields", "ext-version", "installed=${ext.metaData.version} wanted=1.0.${bridge.salt}") }
                     // Blocking must cover private tabs too. Built-in extensions are allowed there already; asking again RELOADS the running extension (a full shutdown and start of its background page,
                     // measured in the engine's own code), which this used to do at every launch and every Activity re-creation, right while the first page loaded. Ask only if it is really off.
                     if (ext != null && !ext.metaData.allowedInPrivateBrowsing) controller.setAllowedInPrivateBrowsing(ext, true)

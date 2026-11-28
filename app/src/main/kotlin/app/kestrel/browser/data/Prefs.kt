@@ -93,6 +93,42 @@ class Prefs private constructor(ctx: Context) {
     var labFontDelay: Boolean get() = bool("lab_font", true); set(v) = put("lab_font", v)
     /** PERF7c: "Safe drawing" (default ON): engine start-up preferences that turn off the graphics shortcuts that can leave bands of a page undrawn (GeckoPrefs.drawLines); read when the engine starts. */
     var labDraw: Boolean get() = bool("lab_draw", true); set(v) = put("lab_draw", v)
+    /** PERF10b (owner 2026-11-22: still bands of text undrawn with Safe drawing on): "Software drawing" (default OFF): the engine draws the page with the processor instead of the graphics chip (gfx.webrender.software); no graphics driver can corrupt it, it costs speed on four slow cores. Read when the engine starts. */
+    var labSoft: Boolean get() = bool("lab_soft", false); set(v) = put("lab_soft", v)
+    /**
+     * PERF25 (research/BRAVE_SMOOTH.md): "Hardware drawing trial" of the Network lab. 0 = off (what runs now: the processor draws, or the engine's own default when Software drawing is off), 1 = the graphics chip draws
+     * with the Mali fixes (core DrawTrial), 2 = the same without the renderer's helper process. Applies at the next start. [drawTrialStart] is the time a trial start began and is taken away once the engine has drawn
+     * for 15 seconds (or the app is left after its first picture): if it is still there at the next start, that start never steadied and the trial switches itself off ([drawTrialWhy] keeps the reason for the Diagnostics).
+     */
+    var drawTrial: Int get() = sp.getInt("draw_trial", 0).coerceIn(0, 1); set(v) = put("draw_trial", v.coerceIn(0, 1))   // trial 2 was measured on the tablet (3.5x the processor time, WebGL broken) and is gone; a saved 2 reads as 1
+    var drawTrialStart: Long get() = sp.getLong("draw_trial_start", 0L); set(v) = put("draw_trial_start", v)
+    var drawTrialWhy: String get() = sp.getString("draw_trial_why", "") ?: ""; set(v) = put("draw_trial_why", v)
+    /**
+     * OPT1 (research/OPTIMIZER.md, Auto-tune): the engine preferences a run asked for, `name=value` per line (only names of core Catalog; written into the engine's start-up config by GeckoPrefs.labOverrides),
+     * and typed access to the app settings the catalog can change, by key. Nothing outside the catalog's keys can be read or written through [optGet] / [optSet].
+     */
+    var optPrefs: String get() = sp.getString("opt_prefs", "") ?: ""; set(v) = put("opt_prefs", v)
+    fun optGet(key: String): Int? = when (key) {
+        "draw_trial" -> drawTrial; "scroll_feel" -> scrollFeel
+        "lab_fps30" -> if (labFps30) 1 else 0; "lab_dither" -> if (labDither) 1 else 0; "lab_bytecode" -> if (labBytecode) 1 else 0; "lab_gcpar" -> if (labGcPar) 1 else 0
+        "limit_clips" -> if (limitClips) 1 else 0
+        else -> null
+    }
+    fun optSet(key: String, v: Int): Boolean {
+        when (key) {
+            "draw_trial" -> drawTrial = v; "scroll_feel" -> scrollFeel = v
+            "lab_fps30" -> labFps30 = v != 0; "lab_dither" -> labDither = v != 0; "lab_bytecode" -> labBytecode = v != 0; "lab_gcpar" -> labGcPar = v != 0
+            "limit_clips" -> limitClips = v != 0
+            else -> return false
+        }
+        return true
+    }
+    /** PERF14 (owner 2026-11-23: "is there a way to speed up page loading"): "Calmer redrawing" (default OFF): the engine redraws a page at most 30 times a second (layout.frame_rate) instead of 60, which halves the drawing work of pages that animate while they load; read when the engine starts. */
+    var labFps30: Boolean get() = bool("lab_fps30", false); set(v) = put("lab_fps30", v)
+    /** PERF22 (research/LOW_END_PLAYBOOK.md): three engine experiments, all OFF; applied at the next start; every upload carries them, the digest's SETTING A/B compares page loads with and without. */
+    var labDither: Boolean get() = bool("lab_dither", false); set(v) = put("lab_dither", v)
+    var labBytecode: Boolean get() = bool("lab_bytecode", false); set(v) = put("lab_bytecode", v)
+    var labGcPar: Boolean get() = bool("lab_gcpar", false); set(v) = put("lab_gcpar", v)
     /** EX-12: speculation rules (a site's own "fetch the next page early" hints): 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on. A pre-release engine feature. */
     var labSpec: Int get() = sp.getInt("lab_spec", 0); set(v) = put("lab_spec", v.coerceIn(0, 2))
     /** EX-14: while LinkMeter's Fast Wi-Fi is on, ask websites for WebP / JPEG / PNG instead of AVIF (cheaper to decode on this CPU when bytes are cheap; image.http.accept on the USER branch, cleared when the profile ends). OFF: the owner's Decode lab numbers (AVIF 108 ms vs WebP 50 ms vs JPEG 27 ms per picture, research/EX_RESULTS.md) say AVIF still wins on the 5 Mbit/s hotspot; the lab page was removed afterwards (research/DIAG_TOOLS.md). */
@@ -149,6 +185,16 @@ class Prefs private constructor(ctx: Context) {
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
     /** EY-1: the browser opens showing a sharp picture of the page that was left, while the live page loads under it. Pictures stay on the tablet; switching this off deletes them. */
     var lastLook: Boolean get() = bool("last_look", true); set(v) = put("last_look", v)
+    /** PERF17b: after a break of 4 hours or more the page that was in front waits for a tap on the Home screen (Firefox for Android does the same); off = it loads at once at every start. */
+    var lazyStart: Boolean get() = bool("lazy_start", true); set(v) = put("lazy_start", v)
+    /** PERF21: a page's decorative clips (silent, looping, no controls) play only while on screen and at most two at a time (decoclips.js); off = the page plays them as it wants. */
+    var limitClips: Boolean get() = bool("limit_clips", true); set(v) = put("limit_clips", v)
+    /** PERF20: hold Android's "critical memory" signals while plenty of memory is free, so the engine keeps its warm caches and compiled script code (core TrimGate); off = every signal reaches the engine, as before. */
+    var holdFalseTrims: Boolean get() = bool("hold_false_trims", true); set(v) = put("hold_false_trims", v)
+    /** PERF20: when the page engine was last killed or crashed (wall clock, ms; 0 = never): for 6 hours after it every memory signal is passed on. */
+    var lastEngineKillAt: Long get() = sp.getLong("last_engine_kill_at", 0L); set(v) = put("last_engine_kill_at", v)
+    /** PERF17b: when the app was last left (wall clock, ms; 0 = never). A time only, no page, no address; written whenever the app goes to the background. */
+    var lastLeftAt: Long get() = sp.getLong("last_left_at", 0L); set(v) = put("last_left_at", v)
     /** AR2: the one-hand mini navigation panel at the top right is shown (its toggle remembers the choice). */
     var miniNavOpen: Boolean get() = bool("mini_nav_open", false); set(v) = put("mini_nav_open", v)
     /** AR2: the small toggle for that panel is on screen at all (Settings can remove it from the page's top right corner). */

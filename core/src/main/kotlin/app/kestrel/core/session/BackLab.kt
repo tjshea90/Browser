@@ -69,6 +69,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
         var showAt = 0L
         var paintAt = 0L
         var sampleY = -1
+        var left = "?"                       // PERF13: what the engine said when this page was left last (see [pageHide])
     }
 
     /** A small least-recently-used map of page key -> why the engine cannot keep that page. */
@@ -95,6 +96,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
     private var cur: Open? = null
     private val notKeptKeys = KeyMap(KNOWN_PAGES)
     private val noStoreKeys = KeySet(KNOWN_PAGES)
+    private val leftVerdict = KeyMap(KNOWN_PAGES)
 
     // ---------------------------------------------------------------- one press
 
@@ -102,7 +104,17 @@ class BackLab(private val log: (String) -> Unit = {}) {
     fun press(now: Long, url: String, forward: Boolean, savedY: Int) {
         finish(now)
         stats.presses++
-        cur = Open(BackScrollRules.keyOf(url), UrlParts.hostOf(url) ?: "?", forward, now, savedY)
+        cur = Open(BackScrollRules.keyOf(url), UrlParts.hostOf(url) ?: "?", forward, now, savedY).also { o -> o.left = leftVerdict.get(o.key) ?: "?" }
+    }
+
+    /**
+     * PERF13: the engine's OWN verdict at the moment [url] was left (the page's `pagehide`): [persisted] = the back/forward cache took it, [readyState] 0 loading / 1 interactive / 2 complete. Kept per page and said in the line of the next
+     * Back press to it as `left=kept`, `left=refused-loaded` (the engine refused a finished page: open requests, a stream, no-store, an opener ...) or `left=refused-loading` (it was still loading: slow hotspot), so the real reason for
+     * "Back is not instant" is read from the tablet instead of guessed.
+     */
+    fun pageHide(url: String, persisted: Boolean, readyState: Int, stopped: Boolean = false) {
+        val k = BackScrollRules.keyOf(url); if (k.isEmpty()) return
+        leftVerdict.put(k, (if (persisted) "kept" else if (readyState >= 2) "refused-loaded" else "refused-loading") + (if (stopped) "+stop" else ""))   // "+stop": the person's link tap cancelled the page's unfinished loads first (PERF14)
     }
 
     /** The tab's address became the target's (the engine committed it): the first sighting after the press counts. */
@@ -154,7 +166,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
             if (ok) stats.scrollOk++
             place = "${o.sampleY}/${o.savedY}" + if (ok) "" else " MISSED"
         }
-        log("kind=${kind.label} dir=${if (o.forward) "fwd" else "back"} loc=${if (o.locAt == 0L) -1 else o.locAt - o.at} show=${if (o.kind == null) -1 else o.showAt - o.at} paint=$paintMs y=$place to=${o.host}")
+        log("kind=${kind.label} dir=${if (o.forward) "fwd" else "back"} loc=${if (o.locAt == 0L) -1 else o.locAt - o.at} show=${if (o.kind == null) -1 else o.showAt - o.at} paint=$paintMs y=$place to=${o.host} left=${o.left}")
     }
 
     // ---------------------------------------------------------------- what is known about the pages that were left
@@ -183,7 +195,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
     /** Why Back to [url] will have to load it again ("loading", "stream", "no-store", "pending N"), or "" when nothing says so. */
     fun notKeptWhy(url: String): String { val k = BackScrollRules.keyOf(url); return notKeptKeys.get(k) ?: if (noStoreKeys.contains(k)) "no-store" else "" }
 
-    fun reset() { cur = null; stats.reset(); notKeptKeys.clear(); noStoreKeys.clear() }
+    fun reset() { cur = null; stats.reset(); notKeptKeys.clear(); noStoreKeys.clear(); leftVerdict.clear() }
 
     companion object {
         /** Pages whose "cannot be kept" state is remembered. */

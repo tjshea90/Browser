@@ -1992,6 +1992,60 @@ test('LD4: a page-timing report is checked in the background page, carries the p
   assert.equal(h.of('pt').length, 2, 'only the top frame of a tab may report');
 });
 
+test('PERF17: the page-timing report passes the frame cadence and the bot-check marker on only as checked numbers', async () => {
+  const h = await onPage();
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: [150, 4, 1, 220], ch: 1, chs: 12000, lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: [1, 2, 3], ch: 7, chs: 'x', lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  h.message({ k: 'pt', h: 'a.example', load: 4000, fm: ['a', -5, 1e12, 5e12], ch: 2, chs: -3, lm: [1, 2, 3], sl: [] }, 1, undefined, 0);
+  await tick(10);
+  const pt = h.of('pt');
+  assert.equal(pt.length, 3);
+  eq(pt[0].fm, [150, 4, 1, 220]); assert.equal(pt[0].ch, 1); assert.equal(pt[0].chs, 12000);
+  assert.equal(pt[1].fm, null, 'a cadence that is not four numbers is dropped'); assert.equal(pt[1].ch, 0, 'an unknown marker is nothing'); assert.equal(pt[1].chs, -1);
+  eq(pt[2].fm, [0, 0, 0, -1]); assert.equal(pt[2].ch, 2); assert.equal(pt[2].chs, -1);
+});
+
+test('PERF10c: a file-pick report is checked in the background page: fixed words and clamped numbers only, three files at most, the page of its tab, top frame only', async () => {
+  const h = await onPage();
+  const good = { k: 'fc', n: 2, a: [
+    { t: 'image/png', kb: 119, mg: 'png', dec: 1, w: 600, h: 1024, px: 1, enc: 1, ek: 40, ms: 55, name: 'Holiday.png', path: '/storage/x' },
+    { t: 'image/png; name=/storage/emulated/0/Secret.png', kb: 5, mg: 'Secret', dec: 9, w: -4, h: 'x', px: 7, enc: 1e9, ek: 'a', ms: 1e12 },
+    { t: '', kb: 0, mg: 'none', dec: 0, w: 0, h: 0, px: 0, enc: 0, ek: 0, ms: 3 }, { t: 'image/png', kb: 1, mg: 'png' }, null, 'x'] };
+  h.message(good, 1, undefined, 0);
+  await tick(10);
+  const fc = h.of('fc');
+  assert.equal(fc.length, 1);
+  assert.equal(fc[0].p, PAGE, 'the page of the tab, from the background page, not from the page script');
+  assert.equal(fc[0].n, 2); assert.equal(fc[0].a.length, 3, 'three files at most');
+  assert.equal(fc[0].a[0].t, 'image/png'); assert.equal(fc[0].a[0].mg, 'png'); assert.equal(fc[0].a[0].dec, 1); assert.equal(fc[0].a[0].w, 600);
+  assert.equal(fc[0].a[1].t, 'odd', 'a type with a path in it is never passed on'); assert.equal(fc[0].a[1].mg, 'other', 'unknown first-bytes word'); assert.equal(fc[0].a[1].dec, -1); assert.equal(fc[0].a[1].w, -1); assert.equal(fc[0].a[1].h, -1); assert.equal(fc[0].a[1].px, -1); assert.equal(fc[0].a[1].ms, -1);
+  assert.equal(fc[0].a[2].t, 'none');
+  assert.ok(JSON.stringify(fc[0]).indexOf('Holiday') < 0 && JSON.stringify(fc[0]).indexOf('Secret') < 0 && JSON.stringify(fc[0]).indexOf('/storage') < 0, 'no name or path');
+  h.message(good, 1, undefined, 5);                                         // a sub-frame
+  h.message(good, -1);                                                      // no tab at all
+  h.message({ k: 'fc', n: 1, a: [] }, 1, undefined, 0);                     // the beacon: a file arrived, the test is still running
+  await tick(10);
+  assert.equal(h.of('fc').length, 2, 'only the top frame of a real tab: the good report and the beacon');
+  assert.equal(h.of('fc')[1].a.length, 0); assert.equal(h.of('fc')[1].n, 1); assert.equal(h.of('fc')[1].p, PAGE);
+});
+
+test('PERF13: the engine verdict at the moment a page is left is forwarded from the top frame only, with clamped numbers', async () => {
+  const h = await onPage();
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, 1, undefined, 0);
+  h.message({ k: 'ph', p: PAGE + '/' + 'x'.repeat(900), ps: 0, rs: 77 }, 1, undefined, 0);
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, 1, undefined, 5);          // a sub-frame
+  h.message({ k: 'ph', p: PAGE, ps: 1, rs: 2 }, -1);                       // no tab
+  await tick(10);
+  const ph = h.of('ph');
+  assert.equal(ph.length, 2, 'only the top frame of a real tab');
+  assert.equal(ph[0].ps, 1); assert.equal(ph[0].rs, 2);
+  assert.equal(ph[1].ps, 0); assert.equal(ph[1].rs, 2, 'rs is clamped to 0..2'); assert.ok(ph[1].p.length <= 600);
+  assert.equal(ph[0].st, 0); assert.equal(ph[1].st, 0);
+  h.message({ k: 'ph', p: PAGE, ps: 0, rs: 2, st: 1 }, 1, undefined, 0);
+  await tick(10);
+  assert.equal(h.of('ph')[2].st, 1, 'the page says its link tap stopped the unfinished loads');
+});
+
 test('VD1: what the gate held, what the format policy refused and what failed are told WITH the page, checked, and rationed per tab and page', async () => {
   const h = await onPage();
   h.message({ k: 'vgt', n: [0, 0, 0, 0, 0, 0, 0] }, 1, undefined, 0);                 // nothing held or refused: nothing to tell about a page

@@ -121,3 +121,101 @@ test('LD4: a frame sends nothing, and nothing runs for a page without the extens
   assert.equal(await p.evaluate(() => typeof window.KestrelPT), 'undefined');
   await ctx.close();
 });
+
+// ---- PERF10c (owner 2026-11-22: "I can't attach photos to claude.ai"): what the PAGE receives when a file input changes
+const fcs = (got) => got.filter((g) => g.frame === 'top' && g.m.k === 'fc' && g.m.a.length > 0).map((g) => g.m);          // the finished tests
+const beacons = (got) => got.filter((g) => g.frame === 'top' && g.m.k === 'fc' && g.m.a.length === 0).map((g) => g.m);   // PERF12: told at once, before the test
+async function png(page) { return Buffer.from((await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 64; c.height = 48; const g = c.getContext('2d'); for (let x = 0; x < 64; x++) { g.fillStyle = 'rgb(' + (x * 4) + ',' + (255 - x * 4) + ',90)'; g.fillRect(x, 0, 1, 48); } g.fillStyle = '#000'; g.fillRect(10, 10, 20, 12); return c.toDataURL('image/png'); })).split(',')[1], 'base64'); }
+
+test('PERF10c: a picked picture is read by the page: type, size, first bytes, decode, canvas draw and re-encode; no file name leaves the page', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 9000 }, { body: '<input type="file" id="f" multiple>' });
+  await page.goto('https://site.example/');
+  const buf = await png(page);
+  await page.setInputFiles('#f', { name: 'My Private Holiday.png', mimeType: 'image/png', buffer: buf });
+  await until(() => fcs(got).length >= 1, 'the file report');
+  const m = fcs(got)[0];
+  assert.equal(m.n, 1); assert.equal(m.a.length, 1);
+  assert.equal(beacons(got).length, 1, 'the page says at once that a file arrived (the beacon), then the test follows'); assert.equal(beacons(got)[0].n, 1);
+  const a = m.a[0];
+  assert.equal(a.t, 'image/png'); assert.equal(a.mg, 'png'); assert.equal(a.dec, 1); assert.equal(a.w, 64); assert.equal(a.h, 48);
+  assert.equal(a.px, 1, 'drawn, not blank'); assert.equal(a.enc, 1, 're-encoded'); assert.ok(a.ek >= 0 && a.ms >= 0 && a.kb >= 0);
+  assert.ok(JSON.stringify(m).indexOf('Holiday') < 0 && JSON.stringify(m).indexOf('.png') < 0, 'no file name');
+  await page.waitForTimeout(1800);
+  assert.equal(fcs(got).length, 1, 'the change and the input event of one pick count once');
+  await context.close();
+});
+
+test('PERF10c: a file that is no picture is not decoded; a damaged picture is reported as failed to decode; a change with no files is ignored', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 9000 }, { body: '<input type="file" id="f">' });
+  await page.goto('https://site.example/');
+  await page.setInputFiles('#f', { name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('hello world, not a picture') });
+  await until(() => fcs(got).length >= 1, 'the text report');
+  assert.equal(fcs(got)[0].a[0].mg, 'other'); assert.equal(fcs(got)[0].a[0].dec, 0, 'no decode attempt for text'); assert.equal(fcs(got)[0].a[0].px, 0);
+  await page.waitForTimeout(1700);
+  const bad = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('this is not a png body at all'.repeat(4))]);
+  await page.setInputFiles('#f', { name: 'b.png', mimeType: 'image/png', buffer: bad });
+  await until(() => fcs(got).length >= 2, 'the damaged picture report');
+  assert.equal(fcs(got)[1].a[0].mg, 'png'); assert.equal(fcs(got)[1].a[0].dec, 2, 'the engine cannot decode it'); assert.equal(fcs(got)[1].a[0].enc, 0);
+  await page.waitForTimeout(1700);
+  await page.setInputFiles('#f', []);                                                                          // the person cleared the choice: nothing to look at
+  await page.waitForTimeout(500);
+  assert.equal(fcs(got).length, 2, 'a change with no files is not a pick');
+  await context.close();
+});
+
+test('PERF10c: only files of an input count, at most 3 files per report, and an empty file is reported as 0 KB', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 9000 }, { body: '<input type="file" id="f" multiple><input type="text" id="t">' });
+  await page.goto('https://site.example/');
+  await page.fill('#t', 'typing is not a pick');
+  await page.waitForTimeout(300);
+  assert.equal(fcs(got).length, 0, 'typing in a text field is not a file pick');
+  const buf = await png(page);
+  await page.setInputFiles('#f', [{ name: '1.png', mimeType: 'image/png', buffer: buf }, { name: '2.png', mimeType: 'image/png', buffer: buf }, { name: '3.png', mimeType: 'image/png', buffer: buf }, { name: '4.png', mimeType: 'image/png', buffer: buf }]);
+  await until(() => fcs(got).length >= 1, 'the multi report');
+  assert.equal(fcs(got)[0].n, 4); assert.equal(fcs(got)[0].a.length, 3, 'three files at most are examined');
+  await page.waitForTimeout(1700);
+  await page.setInputFiles('#f', { name: 'e.png', mimeType: 'image/png', buffer: Buffer.alloc(0) });
+  await until(() => fcs(got).length >= 2, 'the empty report');
+  assert.equal(fcs(got)[1].a[0].kb, 0); assert.equal(fcs(got)[1].a[0].mg, 'none');
+  await context.close();
+});
+
+
+test('PERF17c: the page reports its own frame cadence for 2.5 s after the load: frames, gaps over 50 and 100 ms, the longest gap', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 3600, cap: 9000 });
+  await page.goto('https://site.example/');
+  await until(() => reports(got).length === 1, 'the report', 9000);
+  const m = reports(got)[0];
+  assert.ok(Array.isArray(m.fm) && m.fm.length === 4, JSON.stringify(m.fm));
+  assert.ok(m.fm[0] >= 15 && m.fm[0] <= 400, 'frames in 2.5 s: ' + m.fm[0]);
+  assert.ok(m.fm[1] <= m.fm[0] && m.fm[2] <= m.fm[1] && m.fm[3] >= 0, JSON.stringify(m.fm));
+  assert.equal(m.ch, 0, 'an ordinary page is no bot check');
+  await context.close();
+});
+
+test('PERF17c: a report that comes before the window is over carries no cadence (nothing half-measured is sent)', async () => {
+  const { page, got, context } = await open(async () => false, { grace: 250 });
+  await page.goto('https://site.example/');
+  await until(() => reports(got).length === 1, 'the report');
+  assert.equal(reports(got)[0].fm, null);
+  await context.close();
+});
+
+test('PERF17d: a full-page bot check ("Just a moment") is marked ch=1 with the time since it was first seen; a check widget in a normal page is ch=2; the jsd script alone is nothing', async () => {
+  const doc = (title, body) => async (u, r) => { if (u.pathname === '/') { await r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>' + title + '</title><body>' + body + '</body>' }); return true; } if (u.pathname.endsWith('.js')) { await r.fulfill({ contentType: 'application/javascript', body: 'window.j=1' }); return true; } return false; };
+  const run = async (title, body) => {
+    const { page, got, context } = await open(doc(title, body), { tick: 20, grace: 1200, cap: 9000 });
+    await page.goto('https://site.example/');
+    await until(() => reports(got).length === 1, 'the report', 9000);
+    const m = reports(got)[0]; await context.close(); return m;
+  };
+  const a = await run('Just a moment...', '<div id="challenge-stage"></div>');
+  assert.equal(a.ch, 1); assert.ok(a.chs >= 0 && a.chs < 5000, 'chs ' + a.chs);
+  const b = await run('Login', '<form><div class="cf-turnstile" data-sitekey="x"></div></form>');
+  assert.equal(b.ch, 2);
+  const c = await run('Shop', '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script><p>hello</p>');
+  assert.equal(c.ch, 0, 'the detection script every protected site loads is not a check');
+  assert.equal(c.chs, -1);
+  const d = await run('Attention Required! | Cloudflare', '<p>blocked</p>');
+  assert.equal(d.ch, 1);
+});

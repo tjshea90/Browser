@@ -343,3 +343,19 @@ test('VP2: the opening lasts 90 s from the word (a page can only make it shorter
   assert.equal(await mk(), 'none', 'after it a new player is closed again');
   await context.close();
 });
+
+test('a page on this machine (127.0.0.1: Auto-tune benchmark pages) is not gated, a page on the web still is', async () => {
+  const context = await browser.newContext({ hasTouch: false });
+  await context.route('http://127.0.0.1:**/*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>t</title></head><body><video id="v" muted loop style="display:block;width:160px;height:90px"></video><script>setTimeout(function () { var v = document.getElementById("v"), done = false; v.play().then(function () { done = true; window.__r = "ok"; }, function (e) { done = true; window.__r = e.name + ": " + e.message.slice(0, 60); }); setTimeout(function () { if (!done) window.__r = "pending"; }, 500); }, 300);</script></body></html>' }));
+  const page = await context.newPage();
+  await page.addInitScript({ content: GATE });
+  await page.addInitScript(() => { document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '1' })); });   // the app says: rule ON
+  await page.goto('http://127.0.0.1:8123/');
+  await page.waitForTimeout(1300);
+  const local = await page.evaluate(() => window.__r);
+  assert.ok(local !== undefined && !/^NotAllowedError/.test(local), 'play() was not refused by the gate on the local page: ' + local);
+  await context.close();
+  const web = await open(VID + LATE_PLAY, '1');                                       // the same rule on a site of the web: refused
+  await settle(web, 1300);
+  assert.match(String(await web.evaluate(() => window.__r)), /^NotAllowedError/);
+});

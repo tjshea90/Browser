@@ -88,7 +88,7 @@ class PhoneBackendTest {
         fun bytesOf(v: DownloadView): ByteArray = sinks.sinks[v.destUri]!!.bytes
     }
 
-    private fun await(what: String, ms: Long = 40_000, p: () -> Boolean) {
+    private fun await(what: String, ms: Long = 120_000, p: () -> Boolean) {   // FLK1: three times what a quiet machine needs (the GitHub runner shares two weak cores with the other test tasks)
         val end = System.currentTimeMillis() + ms
         while (System.currentTimeMillis() < end) { if (p()) return; Thread.sleep(10) }
         throw AssertionError("timeout waiting for $what")
@@ -98,7 +98,7 @@ class PhoneBackendTest {
     private fun src(url: String = "https://files.test/pub/data.bin", name: String? = "Movie.mp4") = Source(url, "https://site.test/page", name, "video/mp4", mapOf("Referer" to "https://site.test/", "Authorization" to "secret"), 1, nameFixed = name != null)
 
     // ------------------------------------------------------------------------------------------------------------------ the happy path
-    @Test(timeout = 120_000) fun aDownloadGoesThroughThePhoneAndTheTabletCollectsIt() {
+    @Test(timeout = 360_000) fun aDownloadGoesThroughThePhoneAndTheTabletCollectsIt() {
         val data = testBytes(3 * MiB + 7)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(100)))
@@ -129,7 +129,7 @@ class PhoneBackendTest {
 
     private val DEST_PUBLIC_KIND = app.kestrel.core.download.DEST_PUBLIC
 
-    @Test(timeout = 120_000) fun aSlowTabletEngineDoesNotMakeThePhoneDeleteTheFileBeforeItIsCopied() {
+    @Test(timeout = 360_000) fun aSlowTabletEngineDoesNotMakeThePhoneDeleteTheFileBeforeItIsCopied() {
         val data = testBytes(2 * MiB + 3)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(10)), rowLagMs = 3500)                       // the row shows up 3.5 s after the hand-over: more than three rounds of the backend
@@ -139,14 +139,14 @@ class PhoneBackendTest {
         val bridge = t.backend.view(lid)!!
         assertEquals("one row at the hand-over, not none", DlState.RUNNING, bridge.state); assertEquals("Movie.mp4", bridge.name)
         assertEquals("and never two at once", 1, (t.backend.views().size + (if (t.engine.views().isNotEmpty() && t.local.view(t.engine.views()[0].id) != null) 1 else 0)))
-        await("copied", 60_000) { t.row()?.state == DlState.COMPLETED }
+        await("copied", 180_000) { t.row()?.state == DlState.COMPLETED }
         assertArrayEquals("the file arrived whole (the phone kept it until then)", data, t.bytesOf(t.row()!!))
         await("then the phone's copy is deleted") { phone.host.jobCount == 0 }
         assertEquals("Copied from your phone", t.backend.noteFor(t.row()!!.id))
     }
 
     // ------------------------------------------------------------------------------------------------------------------ falling back to the tablet
-    @Test(timeout = 90_000) fun aPhoneThatIsNotThereMeansTheTabletDownloadsByItself() {
+    @Test(timeout = 270_000) fun aPhoneThatIsNotThereMeansTheTabletDownloadsByItself() {
         val data = testBytes(MiB + 5)
         val t = Tablet(FakeServer(data))
         val dead = ServerSocket(0).use { it.localPort }
@@ -162,7 +162,7 @@ class PhoneBackendTest {
         assertNull("known to be away: the next one goes straight to the tablet, no row that would fall back", t.backend.offload(src("https://files.test/pub/two.bin")))
     }
 
-    @Test(timeout = 90_000) fun noteEligibility() {
+    @Test(timeout = 270_000) fun noteEligibility() {
         val t = Tablet(FakeServer(testBytes(10)))
         t.to(slowPhone(testBytes(10)))
         t.mode = PhoneMode.OFF
@@ -176,7 +176,7 @@ class PhoneBackendTest {
         assertTrue(t.backend.views().isEmpty())
     }
 
-    @Test(timeout = 90_000) fun aPhoneThatRefusesMeansTheTabletDownloadsByItself() {
+    @Test(timeout = 270_000) fun aPhoneThatRefusesMeansTheTabletDownloadsByItself() {
         val data = testBytes(MiB)
         val phone = slowPhone(testBytes(10)); phone.dns = listOf(byteArrayOf(192.toByte(), 168.toByte(), 1, 1))
         val t = Tablet(FakeServer(data))
@@ -188,7 +188,7 @@ class PhoneBackendTest {
         assertEquals("the phone never fetched anything", 0, phone.origin.seen.size)
     }
 
-    @Test(timeout = 90_000) fun aFailureOnThePhoneMeansTheTabletTriesItself() {
+    @Test(timeout = 270_000) fun aFailureOnThePhoneMeansTheTabletTriesItself() {
         val data = testBytes(MiB)
         val phoneOrigin = FakeServer(testBytes(10)).also { o -> repeat(20) { o.statusNext.add(404) } }
         val phone = Phone(phoneOrigin, root, cleanups)
@@ -203,7 +203,7 @@ class PhoneBackendTest {
     }
 
     // ------------------------------------------------------------------------------------------------------------------ the buttons
-    @Test(timeout = 120_000) fun pauseResumeAndCancelReachThePhone() {
+    @Test(timeout = 360_000) fun pauseResumeAndCancelReachThePhone() {
         val data = testBytes(4 * MiB)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(10)))
@@ -231,7 +231,7 @@ class PhoneBackendTest {
     }
 
     // ------------------------------------------------------------------------------------------------------------------ the phone comes and goes
-    @Test(timeout = 120_000) fun alwaysModeWaitsForThePhoneInsteadOfUsingTheTabletsConnection() {
+    @Test(timeout = 360_000) fun alwaysModeWaitsForThePhoneInsteadOfUsingTheTabletsConnection() {
         val data = testBytes(2 * MiB)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(10)), PhoneMode.ALWAYS)
@@ -250,7 +250,7 @@ class PhoneBackendTest {
         assertArrayEquals(data, t.bytesOf(t.row()!!)); assertEquals(0, t.origin.seen.size)
     }
 
-    @Test(timeout = 120_000) fun aPhoneThatDropsOutMidwayIsWaitedFor() {
+    @Test(timeout = 360_000) fun aPhoneThatDropsOutMidwayIsWaitedFor() {
         val data = testBytes(3 * MiB)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(10)))
@@ -267,7 +267,7 @@ class PhoneBackendTest {
         assertArrayEquals(data, t.bytesOf(t.row()!!)); assertEquals(0, t.origin.seen.size)
     }
 
-    @Test(timeout = 120_000) fun aRestartedAppPicksUpWhereItLeftOff() {
+    @Test(timeout = 360_000) fun aRestartedAppPicksUpWhereItLeftOff() {
         val data = testBytes(3 * MiB)
         val phone = slowPhone(data)
         val t = Tablet(FakeServer(testBytes(10)))
@@ -296,7 +296,7 @@ class PhoneBackendTest {
     private fun clip(playlist: String, fetcher: Int = 1) = StreamSource("https://cdn.test/v/index.m3u8", playlist, "https://site.test/watch", "My clip", mapOf("Referer" to "https://site.test/"), fetcher, meteredOk = true)
     private fun sampleSizes(file: ByteArray): List<Any> { val r = Mp4Reader(file); val v = r.track("vide")!!; val a = r.track("soun")!!; return listOf(v.samples.map { it.size }, a.samples.map { it.size }, v.width, v.height) }
 
-    @Test(timeout = 120_000) fun aVideoStreamIsDownloadedAndWrittenAsAnMp4OnThePhoneAndCopiedToTheTablet() {
+    @Test(timeout = 360_000) fun aVideoStreamIsDownloadedAndWrittenAsAnMp4OnThePhoneAndCopiedToTheTablet() {
         val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
         val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn)
         val playlist = tsPlaylist(pcdn)
@@ -317,7 +317,7 @@ class PhoneBackendTest {
         await("the phone's copy is gone") { phone.host.jobCount == 0 }
     }
 
-    @Test(timeout = 120_000) fun aPhoneWithoutTheSegmentDownloaderLeavesTheVideoToTheTablet() {
+    @Test(timeout = 360_000) fun aPhoneWithoutTheSegmentDownloaderLeavesTheVideoToTheTablet() {
         val phone = Phone(FakeServer(testBytes(10)), root, cleanups)                       // no stream engine: kind "stream" is refused with 501
         val tcdn = FakeCdn()
         val playlist = tsPlaylist(tcdn)
@@ -356,7 +356,7 @@ class PhoneBackendTest {
         return StreamSource("https://cdn.test/a/index.m3u8", sb.append("#EXT-X-ENDLIST\n").toString(), "https://site.test/watch", "My clip", mapOf("Referer" to "https://site.test/"), 1, meteredOk = true, ext = "m4a")
     }
 
-    @Test(timeout = 120_000) fun pictureAndSoundKeptApartAreBothDownloadedAndMergedOnThePhoneAndCopiedToTheTablet() {
+    @Test(timeout = 360_000) fun pictureAndSoundKeptApartAreBothDownloadedAndMergedOnThePhoneAndCopiedToTheTablet() {
         val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
         var fin: MergeFake? = null
         val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn, finisherOf = { s -> MergeFake(s).also { fin = it } })
@@ -377,7 +377,7 @@ class PhoneBackendTest {
         assertEquals("Copied from your phone", t.backend.noteFor(row.id))
     }
 
-    @Test(timeout = 120_000) fun pictureAndSoundThatThePhoneCannotMergeAreDownloadedByTheTabletAndLeaveNothingOnThePhone() {
+    @Test(timeout = 360_000) fun pictureAndSoundThatThePhoneCannotMergeAreDownloadedByTheTabletAndLeaveNothingOnThePhone() {
         val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
         var fin: MergeFake? = null
         val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn, finisherOf = { s -> MergeFake(s).also { it.fails = true; fin = it } })

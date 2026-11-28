@@ -156,6 +156,7 @@ window.KestrelVB = window.KestrelVB || (function () {
         if (late && (v.paused || ownFor === v)) return;           // the second look is for a video that started after the tap (an ad that follows the play button); RW10: not for a film that had controls of its own at the first look
         var r = VF.rect(v);
         if (!r) return;
+        if (VF.decorative && VF.decorative(v)) { if (!late) report('deco', 'bar'); return; }      // PERF21: a looping, silent clip with no controls is the page's animation: no play / seek / mute bar over it, whatever the Settings row says
         if (!(cfg && cfg.always) && ownControls(v, r)) { if (!late) { ownFor = v; report('own'); } return; }
         ownFor = null;
         show(v);

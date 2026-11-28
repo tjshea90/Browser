@@ -124,7 +124,7 @@ object SensitiveSites {
 object DiagPolicy {
     private val LAYERS = setOf(
         "page", "gecko", "mem", "life", "engine", "media", "video", "fullscreen", "inline", "player", "back", "cpu", "start", "update", "sitefixes", "guard", "storage", "scroll", "shields", "cosmetic",
-        "tabs", "ui", "filepick", "seekbar", "ads", "sound", "win",
+        "tabs", "ui", "filepick", "seekbar", "ads", "sound", "win", "sec",
     )
     /** layer + event pairs that carry titles, show names or the like: never kept. */
     private val NEVER = setOf("media name-clues", "media name", "video name", "page title", "tabs title")

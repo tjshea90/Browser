@@ -195,6 +195,35 @@ object LiveDiag {
         } catch (e: Throwable) { uploading.set(false); done?.invoke("Could not start the send.") }
     }
 
+    /**
+     * OPT1: sends ONE file to the private repository under [path] (a new name each time: GitHub refuses to replace one). Same rules as the diagnostics upload: the owner's switch must be on, the token
+     * set, the repository private, and nothing while a private tab exists. [done] gets a sentence for the person.
+     */
+    fun sendFile(path: String, json: String, done: (String) -> Unit) {
+        Io.exec {
+            val p = sp
+            val token = p?.getString("token", "") ?: ""
+            if (p == null || !enabled || token.isEmpty()) { done("Not sent: diagnostics sending is off or has no token (Settings > Diagnostics)."); return@exec }
+            if (PrivateGuard.active()) { done("A private tab is open: nothing was sent."); return@exec }
+            try {
+                when (repoState(token)) {
+                    RepoState.PRIVATE -> {}
+                    RepoState.PUBLIC -> { done("The repository is public: nothing was sent."); return@exec }
+                    RepoState.NO_ACCESS -> { done("GitHub says the token cannot see the repository."); return@exec }
+                    RepoState.ERROR -> { done("Could not reach GitHub: the results stay on this tablet, tap Send again later."); return@exec }
+                }
+                var code: Int; var attempt = 0
+                while (true) {
+                    val name = if (attempt == 0) path else path.removeSuffix(".json") + "-" + attempt + ".json"
+                    code = put(name, json, token)
+                    if (code == 422 && attempt < 2) { attempt++; continue }
+                    break
+                }
+                done(if (code in 200..299) "Sent the Auto-tune results to the private repository." else "GitHub answered $code: not sent.")
+            } catch (e: Exception) { done("Could not send (no connection?). The results stay on this tablet.") }
+        }
+    }
+
     private class Extras(val settings: Map<String, String>, val device: Map<String, Long>, val kinds: Map<String, Long>, val sites: List<app.kestrel.core.livediag.SiteStat>)
 
     private fun upload(snapshotText: String, x: Extras, advice: List<String>, now: Long, manual: Boolean, done: ((String) -> Unit)?) {
