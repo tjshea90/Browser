@@ -188,7 +188,11 @@ object EpisodeNames {
     private fun firstSegmentTitle(text: String, host: String, last: Boolean = false, dropYear: Boolean, join: Boolean = false): String {
         var t = COUNTER.replace(SERIES_NOTE.replace(text, " "), "")
         if (dropYear) t = PAREN_WITH_YEAR.replace(t, " ")
-        val segments = t.split(SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }.filterNot { isSite(it, host) }
+        val labels = registrableLabel(host)
+        // RVW5: measured on real pages (research/REVIEW_2026-11-23_RVW5.md): "Latest Videos | CNN", "Tiny Desk : NPR", "... | TED Talk", "... - Video Dailymotion", "... - Wikimedia Commons", "Vimeo Staff Picks on Vimeo"
+        // kept the site in the file name because the host's label is under four letters or the site's name is one word of a longer tail. Only pieces AFTER the first are judged that way: the first is the title.
+        val segments = t.split(SEPARATOR).map { dropOnSite(it.trim(), labels) }.filter { it.isNotEmpty() }
+            .filterIndexed { i, s -> !isSite(s, host) && !(i > 0 && isSiteTail(s, labels)) }
         if (join && !last) {
             val parts = ArrayList<String>()
             for (seg in segments) {
@@ -204,7 +208,8 @@ object EpisodeNames {
 
     /** One piece of a title without the words around a title that are not part of it (a leading "Watch", "online free" at the end, an "HD" tag); "" when nothing is left. */
     private fun tidySegment(piece: String): String {
-        var s = LEADING_NOISE.replace(piece, "")
+        var s = FILE_NAMESPACE.replace(LEADING_NOISE.replace(piece, ""), "")
+        s = FILE_EXT_TAIL.replace(s, "")   // RVW5: a file page's title ends in the file's own extension ("Big Buck Bunny 4K.webm")
         var changed = true
         while (changed) {
             changed = false
@@ -229,6 +234,42 @@ object EpisodeNames {
         }
         return false
     }
+
+    /** RVW5: MediaWiki's "File:" in front of a file page's title (commons.wikimedia.org), and a media file extension at the end of a title. */
+    private val FILE_NAMESPACE = Regex("""^File:\s*""")
+    private val FILE_EXT_TAIL = Regex("""(?<=.{3})\.(?:mp4|m4v|webm|mkv|ogv|ogg|mov|avi|m3u8|mpd)$""", OPTS)
+
+    /** Words that sit next to a site's own name in a title tail: "TED Talk", "CNN Video", "BBC News", "Wikimedia Commons", "Video Dailymotion". */
+    private val SITE_FILLER = setOf("video", "videos", "talk", "talks", "news", "official", "channel", "the", "tv", "app", "network", "home", "online", "site", "plus", "commons", "archive", "library", "watch", "player")
+    private val SECOND_LEVEL = setOf("co", "com", "org", "net", "gov", "edu", "ac")
+
+    /** The site's own name from its host: the label in front of the top-level domain ("www.ted.com" -> "ted", "commons.wikimedia.org" -> "wikimedia", "news.bbc.co.uk" -> "bbc"); "" when there is none. */
+    private fun registrableLabel(host: String): String {
+        val parts = host.lowercase(Locale.ROOT).substringBefore(':').split('.').filter { it.isNotEmpty() }
+        if (parts.size < 2) return ""
+        var i = parts.size - 2
+        if (parts[i] in SECOND_LEVEL && i >= 1) i--
+        return parts[i].filter { it.isLetterOrDigit() }
+    }
+
+    /**
+     * A piece AFTER the first that is the site's own name with at most two words around it: "TED Talk", "Wikimedia Commons", "Video Dailymotion", "CNN". The site's label (at least four letters) may stand with any two words
+     * ("Internet Archive"); a SHORT label (two or three letters: ted, cnn, npr, ign, bbc) only with the filler words of [SITE_FILLER], so "Ted Lasso" on ted.com is not cut.
+     */
+    private fun isSiteTail(segment: String, label: String): Boolean {
+        if (label.length < 2) return false
+        val words = segment.lowercase(Locale.ROOT).split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        if (words.isEmpty() || words.size > 3 || label !in words) return false
+        return label.length >= 4 || words.all { it == label || it in SITE_FILLER }
+    }
+
+    /** "Vimeo Staff Picks on Vimeo" -> "Vimeo Staff Picks": a trailing " on <the site>" is the site's own tag line. Only when the last word IS the site's label. */
+    private fun dropOnSite(segment: String, label: String): String {
+        if (label.length < 3) return segment
+        val m = ON_SITE.find(segment) ?: return segment
+        return if (m.groupValues[1].lowercase(Locale.ROOT).filter { it.isLetterOrDigit() } == label) segment.substring(0, m.range.first).trim() else segment
+    }
+    private val ON_SITE = Regex("""\s+on\s+([A-Za-z0-9][A-Za-z0-9.]*)$""", OPTS)
 
     private fun titleCaseIfLower(s: String): String =
         if (s.isNotEmpty() && s == s.lowercase(Locale.ROOT)) s.split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.titlecase(Locale.ROOT) } } else s

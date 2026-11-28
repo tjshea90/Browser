@@ -19,7 +19,7 @@ object MediaSniff {
     fun classify(url: String, contentType: String?, status: Int = 200): MediaKind? {
         if (status != 0 && status != 200 && status != 206) return null
         if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return null
-        if (isVideoPlaybackSlice(url)) return null   // RVW1 F14
+        if (isVideoPlaybackSlice(url) || isGoogleAdVideo(url)) return null   // RVW1 F14, RVW5 (a Google ad video)
         val ct = baseType(contentType)
         val ext = effectiveExtension(url)
         if (ct.startsWith("text/html") || ct.startsWith("image/") || ct.startsWith("font/") || ct == "application/json" || ct.contains("javascript") || ct == "text/css") return null
@@ -42,6 +42,18 @@ object MediaSniff {
         val rest = url.substringAfter("://", "")
         val host = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
         return (host == "googlevideo.com" || host.endsWith(".googlevideo.com")) && rest.substringAfter('/', "").substringBefore('?').startsWith("videoplayback")
+    }
+
+    /**
+     * RVW5: Google's ad servers hand a video ad out of their own CDN names, `https://rr1---sn-x.gvt1.com/videoplayback/.../source/dclk_video_ads/...` (measured on ted.com with tools/sitelab/realfinder.js: a 15 s mp4 of
+     * 899 KB reported as `media` next to the real HLS film). The marker `dclk_video_ads` ("DoubleClick video ads") on a Google video host is never what a person wants to save. Narrow on purpose: the host must be
+     * Google's and the marker must be there, so no film host and no other path is touched.
+     */
+    fun isGoogleAdVideo(url: String): Boolean {
+        val rest = url.substringAfter("://", "")
+        val host = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
+        val google = host == "gvt1.com" || host.endsWith(".gvt1.com") || host == "gvt2.com" || host.endsWith(".gvt2.com") || host == "googlevideo.com" || host.endsWith(".googlevideo.com")
+        return google && url.contains("dclk_video_ads", ignoreCase = true)
     }
 
     /**

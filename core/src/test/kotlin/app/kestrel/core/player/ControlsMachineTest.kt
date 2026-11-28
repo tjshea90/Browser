@@ -132,4 +132,19 @@ class ControlsMachineTest {
         c.stop(); assertFalse(h.shown); assertFalse(h.lastAnimate); assertNull(h.scheduled)
         c.tap(); assertFalse("not active: a tap does nothing", h.shown)
     }
+    @Test fun controlsThatGoAwayWithinASecondAndAHalfAreCountedWithTheReason() {
+        // RVW6: the owner saw "the player controls pop up very fast then disappear": Diagnostics must say how often and by what
+        val h = Host(); val c = m(h)
+        assertEquals("they showed once when full screen began", 1, c.shows)
+        h.clock += 400; c.tap()                                                  // a tap 400 ms later hides them: a short life, by a tap
+        assertEquals(1, c.shortLives); assertEquals("tap after 400 ms", c.lastShort)
+        h.clock += 5000; c.tap(); assertEquals(2, c.shows)                       // shown again by a tap
+        h.wait(c, PlayerRules.HIDE_AFTER_MS)                                      // and the clock hides them after the usual time: NOT short
+        assertEquals("a normal life is not counted", 1, c.shortLives)
+        h.clock += 5000; c.tap(); h.clock += 100; c.seekGesture()                // the first tap of a double tap and the seek that follows: by design, not counted
+        assertEquals("a double tap's own hide is not a fault", 1, c.shortLives)
+        h.clock += 5000; c.tap(); h.clock += 200; c.restore(false)               // the page said that tap was on its own button
+        assertEquals(2, c.shortLives); assertEquals("put-back after 200 ms", c.lastShort)
+        assertTrue(c.lifeLine().contains("2 of them hid again within 1.5 s"))
+    }
 }

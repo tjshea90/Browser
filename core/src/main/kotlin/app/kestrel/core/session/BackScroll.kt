@@ -42,6 +42,17 @@ object BackScrollRules {
     fun keyOf(url: String): String = url.substringBefore('#')
 
     /**
+     * BK10 (owner: "One time it glitched"): the app's copy of the engine's history (`SessionState`) arrives a moment AFTER a page commits, so a quick Back can meet a copy that is one page behind. The picture of the page
+     * "before" would then be the wrong one (two steps back instead of one) and sit over the page the engine really goes to. The copy is only believed when the entry it calls current IS the page on screen:
+     * the same address apart from the scheme, a #fragment and a trailing slash (an http page that was upgraded to https, a page that moved its fragment). False for no entry or no address.
+     */
+    fun sameAddress(stateUri: String?, tabUrl: String): Boolean {
+        if (stateUri.isNullOrEmpty() || tabUrl.isEmpty()) return false
+        fun norm(u: String) = u.substringBefore('#').substringAfter("://").trimEnd('/').lowercase()
+        return norm(stateUri) == norm(tabUrl)
+    }
+
+    /**
      * The saved picture goes when the live page has painted AND shows what the picture shows: the same rule as the cold-start picture ([LastLookRules.hideNow]) with `stopped = false` on purpose.
      * The end of the load alone must not uncover a page that still sits at the top, so the exits are: the place is reached (within 4 px), the page was at the top, or 1.5 s after the first paint.
      * The caller's 20 s timeout is the last resort. Before the first paint it never goes.

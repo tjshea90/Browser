@@ -35,6 +35,9 @@
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="sms" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="geo" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="market" /></intent>
+        <!-- ATT1: so that the check "is there an app that can choose a file for a page's attach button?" sees the pickers on Android 11 and later -->
+        <intent><action android:name="android.intent.action.GET_CONTENT" /><data android:mimeType="*/*" /></intent>
+        <intent><action android:name="android.intent.action.OPEN_DOCUMENT" /><data android:mimeType="*/*" /></intent>
     </queries>
 
     <application

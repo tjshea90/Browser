@@ -89,4 +89,16 @@ class BackScrollTest {
         assertEquals(150L, BackScrollRules.pictureDelayMs(notKept = false))
         assertEquals(0L, BackScrollRules.pictureDelayMs(notKept = true))
     }
+    @Test fun theHistoryCopyIsBelievedOnlyWhenItsCurrentEntryIsThePageOnScreen() {
+        // BK10: a copy one page behind would give the picture of the wrong page
+        assertTrue(BackScrollRules.sameAddress("https://news.example/story/5", "https://news.example/story/5"))
+        assertTrue("a #fragment and a trailing slash do not matter", BackScrollRules.sameAddress("https://news.example/story/5/", "https://news.example/story/5#comments"))
+        assertTrue("http upgraded to https", BackScrollRules.sameAddress("http://news.example/a", "https://news.example/a"))
+        assertTrue("case of the host", BackScrollRules.sameAddress("https://News.Example/a", "https://news.example/a"))
+        assertFalse("one page behind", BackScrollRules.sameAddress("https://news.example/story/4", "https://news.example/story/5"))
+        assertFalse("another query is another page", BackScrollRules.sameAddress("https://news.example/s?p=1", "https://news.example/s?p=2"))
+        assertFalse(BackScrollRules.sameAddress(null, "https://news.example/a"))
+        assertFalse(BackScrollRules.sameAddress("", "https://news.example/a"))
+        assertFalse(BackScrollRules.sameAddress("https://news.example/a", ""))
+    }
 }
