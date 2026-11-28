@@ -9,6 +9,8 @@ class PageReport(
     val failed: List<String>,
     val errors: List<String>,
     val at: Long,
+    /** GL1: the site's element-hiding rules that matched elements on the page, as `selector xN` (public list text, a count; `(style)` = changes the look, hides nothing). */
+    val hidden: List<String> = emptyList(),
 )
 
 /**
@@ -46,6 +48,7 @@ class PageReports(private val max: Int = 6) {
             if (r.blocked.isNotEmpty()) sb.append("\n    blocked: ").append(r.blocked.take(10).joinToString("; ")).append(if (r.blockedCount > 10) "; ... ${r.blockedCount - 10} more" else "")
             if (r.failed.isNotEmpty()) sb.append("\n    FAILED: ").append(r.failed.take(20).joinToString("; "))
             if (r.errors.isNotEmpty()) sb.append("\n    script errors: ").append(r.errors.take(8).joinToString("; "))
+            if (r.hidden.isNotEmpty()) sb.append("\n    hidden by Shields' element-hiding rules on this page: ").append(r.hidden.take(12).joinToString("; "))
         }
         return sb.toString()
     }

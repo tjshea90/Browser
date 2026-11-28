@@ -43,6 +43,9 @@ class CpuSeries(private val keep: Int = 60) {
 
     val size: Int get() = at.size
 
+    /** The newest reading, or null when empty. */
+    fun last(): Double? = pct.lastOrNull()
+
     /** The mean of the readings taken in the last [windowMs] before [nowMs]; 0 when there are none. */
     fun mean(nowMs: Long, windowMs: Long): Double {
         var sum = 0.0; var n = 0

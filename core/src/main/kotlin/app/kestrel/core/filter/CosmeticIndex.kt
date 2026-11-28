@@ -29,7 +29,7 @@ internal class CosmeticIndex(
         val sb = StringBuilder()
         val site = group(host, siteHash, siteOff, sitePool)
         if (tokenMode && includeGeneric && genericCount > 0 && tokens().byKey.isNotEmpty()) sb.append(TOKEN_MARKER)
-        val siteRules = if (domainExc.isEmpty()) site else site.filter { it !in domainExc }
+        val siteRules = CosmeticFixes.filter(host, if (domainExc.isEmpty()) site else site.filter { it !in domainExc })   // PERF2a: a few list rules that break a site's own layout are dropped for that site
         if (tokenMode && siteRules.any { ProceduralRules.isStored(it) }) sb.append(ProceduralRules.MARKER) // the page script asks for the procedural rules of this host (AD1b-4)
         if (tokenMode && scriptlets) { // AW1b: the calls for the page-world library ride in a comment right after the markers (the page script cuts it out before injecting the CSS)
             val payload = ScriptletRules.payload(scriptletsOf(siteRules, domainExc))

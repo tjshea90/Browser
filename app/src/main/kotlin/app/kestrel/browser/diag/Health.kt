@@ -70,7 +70,7 @@ object Health {
         val sb = StringBuilder(48 + detail.length).append('+').append(ms / 1000).append('.')
         val frac = (ms % 1000).toInt(); if (frac < 100) sb.append('0'); if (frac < 10) sb.append('0'); sb.append(frac)
         sb.append("s ").append(layer).append(' ').append(event)
-        if (detail.isNotEmpty()) sb.append(' ').append(detail)
+        if (detail.isNotEmpty()) sb.append(' ').append(PrivateGuard.text(detail))   // PV1: while a private tab exists no site name goes into the ring (two volatile reads when none does)
         val line = sb.toString()
         ring.add(line)
         LiveDiag.observe(layer, event, line)   // LD1: one volatile read when the owner's master switch is off

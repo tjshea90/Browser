@@ -479,7 +479,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pendingWord = null
         val g = glide ?: return
         g.stats.onKept()
-        g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
+        if (learnAllowed()) g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }   // PV1: not even where the thumb lands is learned in a private tab
         if (learnAllowed()) {
             // kept: the keyboard hears it (a word the person chose, or one that replaced a deleted one, counts more); a correction remembers what it was picked over (a pick) or put in the place of (a deletion)
             val guessed = pendingGuessed ?: if (afterUndo) lastDeleted else null
@@ -580,7 +580,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pendingGuessed = topGuess?.takeIf { it != word } // ... and the keyboard remembers it guessed the other one
         afterUndo = false
         g?.stats?.onPicked()
-        g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
+        if (learnAllowed()) g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }   // PV1
         glideNextShown = emptySet(); glideSeq++
         keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word && it.isNotEmpty() } }.take(3))
         bar.invalidate()

@@ -88,6 +88,14 @@ class ShieldsBridge(
     private val handOver: (JSONObject) -> Boolean = { false },
     /** NM1: what the page says about WHICH video is on (names.js: show, season, episode, episode title) and the page of its tab (p). Text only, cut by the app. Worker thread. */
     private val nameClues: (JSONObject) -> Unit = {},
+    /** LD4: where one page load's time went (pagetime.js, top frame, checked by background.js): milliseconds, counts, three slow [host, kind, ms] and the page of its tab (p). Numbers and host names only. Worker thread. */
+    private val pageTiming: (JSONObject) -> Unit = {},
+    /** VD1: what the press-to-play gate did on one page (`vgh`: n = held, opened, by play(), by a tap, by Kestrel's controls, script players kept, plays refused), the format answers that said no (`vch`: s, m, f, w) and a media element's failure (`verr`: c, ns, rs, s, f, e), each with the page of its tab (p). Numbers and kinds only. Worker thread. */
+    private val videoGate: (JSONObject) -> Unit = {},
+    private val videoCodec: (JSONObject) -> Unit = {},
+    private val videoError: (JSONObject) -> Unit = {},
+    /** PERF3c: how long typed characters waited before the page saw them (`typ`: n keys, a mean ms, m worst ms, o waits of 150 ms or more, p the page of its tab). Numbers only. Worker thread. */
+    private val typingWait: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -151,6 +159,11 @@ class ShieldsBridge(
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { if (m.optInt("rx") == 1) noStoreRelaxed(m.optString("p")) else noStore(m.optString("p")); "" }
                     "nm" -> { nameClues(m); "" }
+                    "pt" -> { pageTiming(m); "" }
+                    "vgh" -> { videoGate(m); "" }
+                    "vch" -> { videoCodec(m); "" }
+                    "verr" -> { videoError(m); "" }
+                    "typ" -> { typingWait(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
@@ -250,10 +263,11 @@ class ShieldsBridge(
         // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
         // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
-        // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows ONLY the Settings switch "Videos start only when I press play": it is not a Shields feature, every site has it),
+        // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows the Settings switch "Videos start only when I press play" and, per site, the Shields panel row "Videos may start by themselves" (VD1); it is not a Shields feature),
         // 2048 = the page's gate may ASK the app whether Kestrel's own player takes the film the person pressed (ANS54e, gate-main.js; needs the press-to-play rule and a Settings row "Web videos play in" other than "The page's own player"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0) or (if (prefs().videoPressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
+        val pressToPlay = prefs().videoPressToPlay && !s.autostartVideo   // VD1: the owner's rule, except on a site where the person allowed videos to start by themselves (Shields panel)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (pressToPlay) 1024 else 0) or (if (pressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap() + ":" + (if (prefs().instantBack) 1 else 0)
     }
@@ -391,7 +405,7 @@ class ShieldsBridge(
         val page = m.optString("p")
         if (page.isEmpty() || tabForPage(page) == null || pageIsPrivate(page)) return
         fun list(k: String): List<String> { val a = m.optJSONArray(k) ?: return emptyList(); val out = ArrayList<String>(a.length()); for (i in 0 until minOf(a.length(), 40)) out.add(a.optString(i).take(200)); return out }
-        pageReports.add(app.kestrel.core.diag.PageReport(page.take(200), m.optInt("n"), m.optInt("nb"), list("b"), list("f"), list("e"), System.currentTimeMillis()))
+        pageReports.add(app.kestrel.core.diag.PageReport(page.take(200), m.optInt("n"), m.optInt("nb"), list("b"), list("f"), list("e"), System.currentTimeMillis(), list("h")))
     }
 
     companion object {

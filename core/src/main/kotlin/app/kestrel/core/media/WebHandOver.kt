@@ -121,6 +121,15 @@ object WebHandOver {
         return if (hls.size == 1 && why != Why.LATE) hls[0] else null
     }
 
+    /** PERF6b: how long after a refused press a film-length playlist may still be handed over (a player that asks for its manifest only after the click, over a slow hotspot and a busy tablet, needs more than the old 10 s). */
+    const val LATE_WINDOW_MS = 20_000L
+
+    /**
+     * PERF6b (owner 2026-11-22: pornhub plays in Kestrel's player only after the quality was changed once): a press that had to be refused because no stream was known yet is remembered for the late hand-over when the
+     * element is a script player's (a blob: source) OR has no source at all yet (the player builds its MediaSource only after the click and asks for its manifest then). Not for a full-screen turn, not unless the setting is "whenever it can".
+     */
+    fun keepForLate(el: Element, why: Why, mode: Int): Boolean = (el.blob || el.src.isEmpty()) && why != Why.FULLSCREEN && why != Why.LATE && mode == ALWAYS
+
     /** The address of a playlist that has not been read yet says master ("master.m3u8", "/master/"): a hint for the moment before the early look, never against a list that was read. */
     fun looksLikeMaster(url: String): Boolean = Regex("(^|[/_.-])master", RegexOption.IGNORE_CASE).containsMatchIn(url.substringBefore('?').substringAfter("://").substringAfter('/', ""))
 

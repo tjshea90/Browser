@@ -16,6 +16,12 @@ data class ShieldSettings(
     val blockScripts: Boolean = false,
     /** Kestrel G (EX-10): video and social players embedded in the page (YouTube, Vimeo, Facebook...) wait until they are tapped, so their scripts never run for a page you only read. */
     val waitEmbeds: Boolean = true,
+    /**
+     * VD1 (owner 2026-11-21: "diagnose why Instagram reels don't load and some videos don't load on websites"): videos on THIS site may start by themselves. The global rule "Videos start only when I press play"
+     * (owner message 53) stays as it is for every other site; for a site with this on, the page-side gate lets its videos load, buffer and start (muted: sound still needs a tap) - what a feed of script-written
+     * players such as Instagram Reels needs. Default OFF. Not a Shields feature: it is kept when Shields are down for the site ([effective]).
+     */
+    val autostartVideo: Boolean = false,
 )
 
 /** Individual switches a user can override per site. */
@@ -28,6 +34,7 @@ object ShieldFlag {
     const val FINGERPRINT = 32
     const val SCRIPTS = 64
     const val EMBEDS = 128
+    const val AUTOSTART = 256 // VD1: videos on this site may start by themselves (a per-site exception to the press-to-play rule; value true = may)
 }
 
 /** A site's explicit choices: bit set in [mask] = overridden; its value is the matching bit in [values]. */
@@ -44,6 +51,7 @@ data class SiteShields(val mask: Int, val values: Int) {
             blockFingerprinting = on(ShieldFlag.FINGERPRINT, g.blockFingerprinting),
             blockScripts = on(ShieldFlag.SCRIPTS, g.blockScripts),
             waitEmbeds = on(ShieldFlag.EMBEDS, g.waitEmbeds),
+            autostartVideo = on(ShieldFlag.AUTOSTART, g.autostartVideo),
         )
     }
 
@@ -64,6 +72,7 @@ fun ShieldSettings.effective(): ShieldSettings =
     if (shieldsUp) this else ShieldSettings(
         shieldsUp = false, blockAds = false, cosmetic = false, https = this.https,
         blockThirdPartyCookies = false, blockFingerprinting = false, blockScripts = false, waitEmbeds = false,
+        autostartVideo = this.autostartVideo,        // VD1: the owner's choice about this site's videos does not depend on Shields
     )
 
 /**
@@ -96,7 +105,7 @@ class SiteShieldStore(initial: Map<String, SiteShields> = emptyMap()) {
     companion object {
         const val MAX_SITES = 2000
         /** Every per-site flag bit that exists (ShieldFlag.SHIELDS .. EMBEDS). The decoder once capped this at 127 and would have dropped a site's Embeds choice as damage. */
-        const val ALL_FLAGS = ShieldFlag.SHIELDS or ShieldFlag.ADS or ShieldFlag.COSMETIC or ShieldFlag.HTTPS or ShieldFlag.COOKIES or ShieldFlag.FINGERPRINT or ShieldFlag.SCRIPTS or ShieldFlag.EMBEDS
+        const val ALL_FLAGS = ShieldFlag.SHIELDS or ShieldFlag.ADS or ShieldFlag.COSMETIC or ShieldFlag.HTTPS or ShieldFlag.COOKIES or ShieldFlag.FINGERPRINT or ShieldFlag.SCRIPTS or ShieldFlag.EMBEDS or ShieldFlag.AUTOSTART
 
         fun decode(text: String): SiteShieldStore {
             val out = LinkedHashMap<String, SiteShields>()

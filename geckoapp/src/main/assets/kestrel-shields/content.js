@@ -3,7 +3,9 @@
 // D2: when that CSS starts with the marker, the generic selectors that name a class or an id were NOT sent (there are ~29,000 of them): this top document tells the app which classes and ids it holds,
 // in small batches (the page at load, then what gets added), and injects only the selectors that can match (research/ADBLOCK_ENGINE.md, core/filter/CosmeticTokens.kt).
 (function () {
+  var injected = [];      // GL1: every style sheet injected here (the site's own first, then the generic batches), read once by the hiding count
   function inject(css, tag) {
+    if (injected.length < 40) injected.push(String(css));
     var st = document.createElement('style');
     st.setAttribute('data-kestrel', tag);
     st.textContent = css;
@@ -179,6 +181,34 @@
       send();
     } catch (e) { /* never break the page */ }
   }
+  // GL1 (owner 2026-11-21: "some elements of pages are not drawn ... an invisible line, and under the line is blank"; on pornhub the loading circle over a video was cut off with Shields on and whole with Shields off): once the page has loaded,
+  // count how many elements each element-hiding rule injected into this page (the first 400 rules: the site's own come first, then the generic batches the page asked for) matches, and tell the extension the rules that matched, with the number: [selector, count, hides 1|0]. The
+  // selectors are the public lists' own text, no page content. Idle, once, 3.5 s after the load, never longer than 40 ms in all (a slow page is skipped), at most 8 rules sent. The app shows them in the page report, so a blank area has a named rule.
+  function startHidCount(css) {
+    try {
+      var sent = {};
+      function pass(final) {
+        try {
+          var plain = String(injected.join('\n')).replace(/\/\*[\s\S]*?\*\//g, ''), re = /([^{}]+)\{([^}]*)\}/g, m, n = 0, hit = [], t0 = (window.performance && performance.now) ? performance.now() : 0;
+          while ((m = re.exec(plain)) !== null && n < 400) {
+            n++;
+            var sel = m[1].replace(/^\s+|\s+$/g, '');
+            if (!sel || sel.length > 200 || sent[sel]) continue;
+            var c = 0;
+            try { c = document.querySelectorAll(sel).length; } catch (e) { c = 0; }
+            if (c > 0) hit.push([sel.slice(0, 90), Math.min(c, 99999), /display\s*:\s*none/i.test(m[2]) ? 1 : 0]);
+            if (t0 && performance.now() - t0 > 40) break;
+          }
+          if (!hit.length) return;
+          for (var i = 0; i < hit.length; i++) sent[hit[i][0]] = 1;
+          hit.sort(function (a, b) { return b[1] - a[1]; });
+          browser.runtime.sendMessage({ k: 'jhid', n: n, m: hit.slice(0, 8) }).catch(function () { /* no background page */ });
+        } catch (e) { /* a page must never feel this */ }
+      }
+      var go = function () { setTimeout(function () { pass(false); }, 3500); setTimeout(function () { pass(true); }, 12000); };    // a player builds its own elements late: a second look at 12 s tells only what is new
+      if (document.readyState === 'complete') go(); else window.addEventListener('load', go, false);
+    } catch (e) { /* ignore */ }
+  }
   try {
     var host = location.hostname;
     if (!host) return;
@@ -192,6 +222,7 @@
       }
       if (!css) return;
       inject(css, '1');
+      startHidCount(css);
       if (top && css.indexOf('/*kg*/') === 0) startTokens(host);
       var kp = css.indexOf('/*kp*/');
       if (kp >= 0 && kp < 12) startProcedural(host);
@@ -974,5 +1005,44 @@
       }
       tell({ k: 'jserr', t: 'js', m: String(e.message || '').slice(0, 140), s: String(e.filename || '').slice(0, 200), l: e.lineno | 0 });
     }, true);
+    // PERF4 (owner 2026-11-22: photos cannot be attached on claude.ai in Kestrel; the file was picked and handed over fine): a promise that was rejected and nobody handled shows no `error` event; the word it carries is the only
+    // trace of why a page's own image handling gave up. Cut to 140 characters like the others; nothing from a private tab is kept (the background page and the app drop those).
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason, msg = '';
+      try { msg = (r && (r.name ? r.name + ': ' : '') + (r.message || '')) || String(r || ''); } catch (x) { msg = 'rejected'; }
+      tell({ k: 'jserr', t: 'js', m: ('rejected: ' + msg).slice(0, 140), s: String(location.href || '').slice(0, 200), l: 0 });
+    }, true);
   } catch (e) { /* never break the page */ }
+})();
+
+// PERF3c (owner 2026-11-22: "typing is very laggy"): how long a typed character waits before the PAGE sees it. A trusted `input` event carries the time it was made (the parent process, when the keyboard handed the text over);
+// the difference to the time this handler runs is the queue in front of the page's main thread (the page being busy, the engine's parent process being busy). Numbers only, never the text: how many keys, the mean and the worst wait in
+// milliseconds and how many waited 150 ms or more; told once 4 s after the last key (at most 6 times a page). A page the person does not type into costs nothing: one capture listener.
+(function () {
+  try {
+    if (typeof browser === 'undefined' || !browser || !browser.runtime || !/^https?:$/.test(String(location.protocol))) return;
+    var n = 0, sum = 0, mx = 0, over = 0, timer = 0, told = 0, perf = window.performance, rn = 0, rsum = 0, rmx = 0, rover = 0;
+    if (!perf || typeof perf.now !== 'function') return;
+    function tell() {
+      timer = 0;
+      if (!n || told >= 6) { n = 0; sum = 0; mx = 0; over = 0; rn = 0; rsum = 0; rmx = 0; rover = 0; return; }
+      told++;
+      var m = { k: 'typ', n: Math.min(n, 99999), a: Math.round(sum / n), m: Math.round(mx), o: over, f: window === window.top ? 1 : 0,
+                ra: rn ? Math.round(rsum / rn) : -1, rm: Math.round(rmx), ro: rover };        // r*: from the key to the page's next frame (the page's own work after the key: the typing the person feels)
+      n = 0; sum = 0; mx = 0; over = 0; rn = 0; rsum = 0; rmx = 0; rover = 0;
+      try { browser.runtime.sendMessage(m).catch(function () { /* no background page */ }); } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('input', function (e) {
+      try {
+        if (!e || e.isTrusted !== true) return;
+        var d = perf.now() - e.timeStamp;
+        if (!(d >= 0 && d < 60000)) return;
+        n++; sum += d; if (d > mx) mx = d; if (d >= 150) over++;
+        if (typeof requestAnimationFrame === 'function') { var t0 = perf.now(); requestAnimationFrame(function () { var w = perf.now() - t0; if (w >= 0 && w < 60000) { rn++; rsum += w; if (w > rmx) rmx = w; if (w >= 150) rover++; } }); }
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(tell, 4000);
+      } catch (x) { /* a page must never feel this */ }
+    }, true);
+    window.KestrelTyp = { tell: tell };      // for the tests
+  } catch (e) { /* ignore */ }
 })();
