@@ -1,15 +1,13 @@
-# CHECKPOINT 3608 — read me first, then TASKS.md
+# CHECKPOINT 3609 — read me first, then TASKS.md
 
-**Written:** 2026-11-28T09:25:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `5933d492` (this checkpoint is the commit after it)
+**Written:** 2026-11-28T09:26:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/elegant-darwin-h7dlay` · **builds on:** `7de7dd59` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha116 (gecko code 217) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha116 (gecko code 217) gated green by ship.sh and DISPATCHED: android.yml run 46130447814 (run_number 318, head 7de7dd59, 09:25Z). Contains alpha115 + ND6a-A (download failed counters + line) + ND6a-B (Stopped heading) + ND6a-C (private-tab counters fix). The owner already has the interim answer with the alpha115 link.
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/elegant-darwin-h7dlay, inputs {"app":"gecko","full_build":"true","note":"alpha116: a small follow-up to alpha115 (alpha115, with the Proton Drive download fix, is inside this build, so install this one even if you have not installed alpha115). WHAT CHANGED: (1) A download that fails now leaves a trace in the diagnostics: a counter for each reason and one line with the reason, the answer of the server, the site and how far it got. Your failed Proton Drive download left nothing at all, so the diagnostics could not even show that downloads were failing. Downloads from private tabs leave nothing, as always. (2) A privacy slip of alpha115 is fixed: its new download counters also counted downloads from private tabs (only a number, never a site, but your rule is that a private tab leaves nothing behind). They now skip private downloads. (3) The Downloads screen no longer says In progress over a failed download: failed downloads and ones that wait for a decision have their own heading, Stopped, above the Finished ones. WHAT THE NEWEST DIAGNOSTICS SHOWED (build alpha114, 60 uploads): nothing new beyond the known slow spots: the first page after a cold start takes 16 to 19 seconds, claude.ai is limited by its own thousand small scripts, 15 engine kills (12 while the app was away), and the first start after an update ended by itself in 27 of 27 updates (alpha114 and alpha115 changed how Kestrel steps aside during an update; the next update shows whether that worked). The notes are in research/ND6_DIAGNOSTICS_2026-11-28.md. NOT RUN: nothing of this was run on the tablet; the proof is the tests of the download engine and the build checks."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha116), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha116 "alpha116: a small follow-up to alpha115 (alpha115, with the Proton Drive download fix, is inside this build, so install this one even if you have not installed alpha115). WHAT CHANGED: (1) A download that fails now leaves a trace in the diagnostics: a counter for each reason and one line with the reason, the answer of the server, the site and how far it got. Your failed Proton Drive download left nothing at all, so the diagnostics could not even show that downloads were failing. Downloads from private tabs leave nothing, as always. (2) A privacy slip of alpha115 is fixed: its new download counters also counted downloads from private tabs (only a number, never a site, but your rule is that a private tab leaves nothing behind). They now skip private downloads. (3) The Downloads screen no longer says In progress over a failed download: failed downloads and ones that wait for a decision have their own heading, Stopped, above the Finished ones. WHAT THE NEWEST DIAGNOSTICS SHOWED (build alpha114, 60 uploads): nothing new beyond the known slow spots: the first page after a cold start takes 16 to 19 seconds, claude.ai is limited by its own thousand small scripts, 15 engine kills (12 while the app was away), and the first start after an update ended by itself in 27 of 27 updates (alpha114 and alpha115 changed how Kestrel steps aside during an update; the next update shows whether that worked). The notes are in research/ND6_DIAGNOSTICS_2026-11-28.md. NOT RUN: nothing of this was run on the tablet; the proof is the tests of the download engine and the build checks."
-NEVER ship kestrel-g-v0.3.0-alpha116 twice (check BUILDLOG.md and the Releases first).
+WAIT for run 46130447814 (git ls-remote --tags origin kestrel-g-v0.3.0-alpha116, then mcp__github__actions_list list_workflow_jobs resource_id 46130447814: all success; get_release_by_tag shows the APK), then bash tools/record-release.sh kestrel-g-v0.3.0-alpha116 with the IDENTICAL note (docs/handoff/ALPHA116_RELEASE_NOTE.txt via NOTE=$(cat file)), tick ND6a (bash tools/claim.sh ND6a --done 'alpha116 run 46130447814; HandedTest 19/19; digest read in research/ND6_DIAGNOSTICS_2026-11-28.md') and ND6, then the FINAL answer to the owner: alpha116 link on its own line (install the newest, it contains alpha115), what changed in plain words, what was NOT run (nothing on the tablet, no Proton account), ND4a request, the honest ND6 summary (digest shows nothing new beyond known WATCH items; page-load levers need tablet A/B), re-list open items: PDL1a (retry the zip), ND4a (did the app stay open after the install), ND5c (Shields bisect on my.nobullnetworks.com: only Block ads and trackers off, then only Cosmetic filtering off, Send now), ND3f (record claude.ai again), VPS1b/VPS2d (pick), PERF25a (which device Brave ran on).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha116 twice (check BUILDLOG.md and the Releases f
 
 ## Last ten checkpoints
 ```
+  7de7dd59 ckpt 3608: gated kestrel-g-v0.3.0-alpha116 (gecko code 217) and pushed it: handoff self
   72c084f5 ckpt 3606: pre-ship: alpha116: a small follow-up to alpha115 (alpha115, with the Proton
   6a134cd1 ckpt 3604: ND6a-B/C in the tree (not released): Downloads screen 'Stopped' heading for 
   ce3957d6 ckpt 3600: alpha115 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha115 (gecko code 216, r
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha116 twice (check BUILDLOG.md and the Releases f
   165f5255 ckpt 3586: pre-ship: alpha115: downloads that a page makes itself, like Proton Drive, n
   f47e6119 ckpt 3582: PDL1 CODED (not yet released): core Handed.kt (HandedStreams registry, Hande
   3261ff02 ckpt 3569: Second owner message (ND6: after PDL1, look for improvements from sent diagn
-  59778a61 ckpt 3567: Owner message (Proton Drive zip download fails in Kestrel with 'The site sen
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
