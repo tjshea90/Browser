@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Kestrel Shields",
-  "version": "1.0.192",
+  "version": "1.0.195",
   "description": "Ad and tracker blocking plus element hiding for Kestrel G, powered by the app's own filter engine (EasyList, EasyPrivacy, uBlock lists).",
   "browser_specific_settings": {
     "gecko": {
@@ -311,6 +311,29 @@
         "videoprobe.js"
       ],
       "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
+      "js": [
+        "calm.js"
+      ],
+      "run_at": "document_idle",
       "all_frames": true,
       "match_about_blank": false
     }

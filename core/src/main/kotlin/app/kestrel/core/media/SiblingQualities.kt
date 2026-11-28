@@ -37,6 +37,16 @@ object SiblingQualities {
         return byHeight.values.sortedByDescending { longSide(it.w to it.h) }
     }
 
+    /**
+     * PERF5b: the quality to START with when a film has several lists: the biggest whose picture class (the shorter side) is at most [capH] (the tablet's smooth size: 720 in the full-screen screen, 480 in a small
+     * box, or what the person picked last time); when every list is bigger than that, the smallest one; null when there is nothing to choose between. [alts] is the list [alternates] made (biggest first).
+     */
+    fun startFor(alts: List<Alt>, capH: Int): Alt? {
+        if (alts.size < 2) return null
+        val fit = alts.filter { QualityLabel.pClass(it.w, it.h) <= capH }
+        return fit.maxByOrNull { QualityLabel.pClass(it.w, it.h) } ?: alts.minByOrNull { QualityLabel.pClass(it.w, it.h) }
+    }
+
     private fun longSide(s: Pair<Int, Int>): Int = maxOf(s.first, s.second)
 
     /** The extras of the player: one line per quality "w|h|url" (addresses cannot contain a line break). */

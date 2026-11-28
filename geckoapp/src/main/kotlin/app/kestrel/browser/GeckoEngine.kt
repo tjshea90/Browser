@@ -205,6 +205,17 @@ object GeckoEngine {
         "layout.display-list.retain", "dom.ipc.processPriorityManager.enabled", "browser.cache.memory.capacity", "layout.frame_rate", "network.http.max-connections",
         "network.http.max-persistent-connections-per-server", "network.http.speculative-parallel-limit", "network.http.pacing.requests.enabled", "network.dnsCacheEntries",
         "network.dnsCacheExpiration", "layout.css.scroll-anchoring.enabled", "dom.lazy-loading.margin.top", "image.cache.size")
+    /** PERF8c: the engine's own values of the graphics prefs "Safe drawing" sets (and the ones to try next), as ONE Health line, so the live diagnostics prove whether the setting reached the engine. */
+    private val drawPrefs = listOf("gfx.webrender.scissored-cache-clears.enabled", "gfx.webrender.batched-texture-uploads", "gfx.webrender.max-partial-present-rects", "gfx.webrender.allow-partial-present-buffer-age",
+        "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "gfx.webrender.software", "layers.gpu-process.enabled")
+    fun logDrawPrefs() {
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(drawPrefs).accept({ list ->
+                app.kestrel.browser.diag.Health.log("engine", "draw-prefs", list?.joinToString(" ") { "${it.pref.removePrefix("gfx.webrender.")}=${it.value}" } ?: "none")
+            }, { e -> app.kestrel.browser.diag.Health.log("engine", "draw-prefs", "read failed $e") })
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "draw-prefs", "unavailable ${e.javaClass.simpleName}") }
+    }
+
     fun readBackPrefs(done: () -> Unit) {
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(scrollPrefs).accept({ list ->
@@ -219,7 +230,7 @@ object GeckoEngine {
             // the speed batch of config v4 (research/SPEED2.md section 6): name=value(type) so a wrong type shows up as an unchanged default
             "media.cache_readahead_limit", "media.cache_resume_threshold", "browser.sessionhistory.max_total_viewers", "browser.sessionhistory.contentViewerTimeout",
             "browser.cache.memory.capacity", "image.mem.decode_bytes_at_a_time", "layout.framevisibility.numscrollportheights", "layout.framevisibility.numscrollportwidths",
-            "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url",
+            "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "gfx.webrender.scissored-cache-clears.enabled", "gfx.webrender.batched-texture-uploads", "gfx.webrender.max-partial-present-rects", "gfx.webrender.allow-partial-present-buffer-age", "gfx.webrender.pbo-uploads", "gfx.webrender.layer-compositor", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url",
             // the Fast Wi-Fi profile (a VPN is the active network) and the back/forward cache blockers (research/SPEED3.md): their engine defaults are read here before any is changed
             "network.trr.mode", "network.http.http3.enable", "network.dns.disableIPv6", "dom.interactive_widget_default_resizes_visual", "docshell.shistory.bfcache.allow_unload_listeners", "docshell.shistory.bfcache.require_no_opener",
             "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
