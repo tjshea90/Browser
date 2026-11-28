@@ -54,6 +54,8 @@ class ShieldsBridge(
     private val openSpace: (String) -> Unit = {},
     /** RX3-Y2: the YouTube ad skipper reports numbers (ads seen, skipped, ...) and the page of its tab: the whole message (a, s, c, o, d, f, g, r, p). Worker thread. */
     private val adSkips: (JSONObject) -> Unit = {},
+    /** YS1: seekbar.js reports numbers (taps on a video bar, answered by the page, answered by the script, left alone) and the page of its tab: the whole message (t, s, f, o, r, p). Worker thread. */
+    private val seekTaps: (JSONObject) -> Unit = {},
     /** RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (the page's address). The answer is the place in CSS pixels as text, or "" when nothing is armed for that page. Worker thread: reads only immutable values. */
     private val backPlace: (String) -> String = { "" },
     /** RX3-BK1: a Back / Forward show: the page's address, kept by the engine's cache, the navigation type, the bytes its file cost (0 = from cache), the place at the show. Worker thread. */
@@ -109,6 +111,7 @@ class ShieldsBridge(
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "os" -> { openSpace(m.optString("p")); "" }
                     "yts" -> { adSkips(m); "" }
+                    "sbk" -> { seekTaps(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -200,8 +203,9 @@ class ShieldsBridge(
         val s = Shields.effective(prefs(), host)
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
         // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
-        // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players")
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0)
+        // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players"),
+        // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }
