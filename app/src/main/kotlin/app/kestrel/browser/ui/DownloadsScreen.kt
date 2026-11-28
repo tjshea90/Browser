@@ -76,18 +76,22 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
 
     private fun render() {
         val views = DownloadController.views()
-        // moving bytes first, then the waiting line in the order it will start (Start now / Move up / Move down change it), then everything that is paused or has failed, newest first
+        // moving bytes first, then the waiting line in the order it will start (Start now / Move up / Move down change it), then what is paused, newest first. ND6: a failed download, or one that
+        // waits for a decision, is not "in progress" (the owner's own screenshot had two failed rows under that heading): it gets its own heading, "Stopped", above the finished ones.
         fun rank(v: DownloadView) = when (v.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> 0; DlState.QUEUED -> 1; else -> 2 }
-        val running = views.filter { it.state != DlState.COMPLETED }.sortedWith(compareBy<DownloadView> { rank(it) }.thenBy { if (it.state == DlState.QUEUED) it.queuePos else 0 }.thenByDescending { it.created })
+        fun stopped(v: DownloadView) = v.state == DlState.FAILED || v.state == DlState.NEEDS_DECISION
+        val running = views.filter { it.state != DlState.COMPLETED && !stopped(it) }.sortedWith(compareBy<DownloadView> { rank(it) }.thenBy { if (it.state == DlState.QUEUED) it.queuePos else 0 }.thenByDescending { it.created })
+        val halted = views.filter { stopped(it) }.sortedByDescending { it.created }
         val done = views.filter { it.state == DlState.COMPLETED }.sortedByDescending { it.updated }
         clear.visibility = if (views.any { it.state == DlState.COMPLETED || it.state == DlState.FAILED }) VISIBLE else GONE
-        val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}:${it.note}:${it.queuePos}" }
+        val sig = (running + halted + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}:${it.note}:${it.queuePos}" }
         if (sig == signature) { for (v in running) rows[v.id]?.bind(v); return } // same cards: just move the bars of the ones that are not finished (a finished row never changes)
         signature = sig
         val keep = scroller.scrollY
         list.removeAllViews(); rows.clear()
         if (views.isEmpty()) { list.addView(empty); return }
         if (running.isNotEmpty()) { list.addView(section("In progress")); for (v in running) addRow(v) }
+        if (halted.isNotEmpty()) { list.addView(section("Stopped")); for (v in halted) addRow(v) }
         if (done.isNotEmpty()) { list.addView(section("Finished")); for (v in done) addRow(v) }
         scroller.post { scroller.scrollTo(0, keep) }
     }
