@@ -83,6 +83,8 @@ class Prefs private constructor(ctx: Context) {
     // ---- Network lab additions of the external review (research/REVIEW-EXTERNAL-1.md). Since alpha26 the two with a clear gain and a small stated cost are ON (link look-ups, font fallback); the others stay OFF until measured with Diagnostics
     /** EX-6: let Firefox look up the hosts of the links on https pages before they are tapped (engine default: off for https pages). ON by default since alpha26; never with Data saver, never while a private tab is in front. */
     var labDnsPrefetch: Boolean get() = bool("lab_dns", true); set(v) = put("lab_dns", v)
+    /** NL1 (research/REVIEW_2026-11-22_NEWLEVERS.md): start Mozilla's per-site compatibility fixes (Kestrel G only) a few seconds after the first page of a run has loaded. ON by default; off stops them. */
+    var siteFixes: Boolean get() = bool("site_fixes", true); set(v) = put("site_fixes", v)
     /** EX-16: network.buffer.cache.size 32768 instead of GeckoView's 16384 (half as many buffer hand-offs per megabyte at Fast Wi-Fi speeds). */
     var labBuffer: Boolean get() = bool("lab_buf", false); set(v) = put("lab_buf", v)
     /** EX-16: text in a web font shows after 0.5 s in the fallback font instead of staying invisible for up to 3 s. ON by default since alpha26 (readable text sooner on a slow link; the page may jump a little when the font arrives). */
