@@ -24,13 +24,13 @@ object HandedOver {
      * Keeps the engine's own body of [response] and returns the address the download is listed under: the response's address, except a data: address (it can be megabytes long and
      * would be stored and shown) which gets a short stand-in. Without a body nothing is kept.
      */
-    fun offer(response: WebResponse): String {
+    fun offer(response: WebResponse, privateTab: Boolean = false): String {
         val uri = response.uri
         val key = if (uri.startsWith("data:", true)) "data:kestrel/" + dataSeq.incrementAndGet() else uri
         val body = response.body ?: return key
         try { response.setReadTimeoutMillis(READ_TIMEOUT_MS) } catch (e: Throwable) { /* the engine's default stays */ }
         streams.offer(key, response.statusCode, HashMap(response.headers), body)
-        app.kestrel.browser.diag.Health.count("download.handed.offered") // a count only: never the address (a private tab's downloads are counted the same, with no site)
+        if (!privateTab) app.kestrel.browser.diag.Health.count("download.handed.offered") // a count only, never the address, and nothing at all for a private tab (the owner's rule)
         return key
     }
 

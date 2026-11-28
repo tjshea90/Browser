@@ -106,7 +106,8 @@ class HandedResponse(private val e: HandedStreams.Entry) : FetchResponse {
  * the address cannot be asked for again (a service worker's stream, blob:, data:) or the download already started from it. Otherwise (kind [FETCHER_HANDED]) the site is asked as usual,
  * which keeps several connections, pause and continue; the engine's stream is used only when that answer is not the file (an error, a web page where the engine's own answer was none,
  * an answer that cannot be reached) and is closed as soon as the ordinary answer proves good. A refusal for safety (certificate, https to http, own network) is never worked around.
- * [note] is told what happened ("ordinary" = the site's own answer was the file, "used" = the engine's stream was served, "gone" = it was no longer there): counters for Diagnostics, never an address.
+ * [note] is told what happened ("ordinary" = the site's own answer was the file, "used" = the engine's stream was served, "gone" = it was no longer there): counters for Diagnostics, never an address,
+ * and never for a private download (the owner's rule: nothing from a private tab is saved or sent, not even a count).
  */
 class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams, private val onlyHanded: Boolean = false, private val note: (String) -> Unit = {}) : Fetcher {
     override val probeWindow: Long get() = real.probeWindow
@@ -114,26 +115,26 @@ class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams
 
     @Throws(FetchException::class)
     override fun open(req: FetchRequest): FetchResponse {
-        if (onlyHanded) return claim(req.url)
+        if (onlyHanded) return claim(req)
         val own = handed.peek(req.url) ?: return real.open(req)
-        if (!(req.url.startsWith("http://", true) || req.url.startsWith("https://", true))) return claim(req.url)
+        if (!(req.url.startsWith("http://", true) || req.url.startsWith("https://", true))) return claim(req)
         val resp = try { real.open(req) } catch (e: FetchException) {
             when (e.kind) {
                 FetchException.Kind.TLS, FetchException.Kind.INSECURE_REDIRECT, FetchException.Kind.LOCAL_NET, FetchException.Kind.BAD_URL -> { handed.drop(req.url); throw e }
-                else -> return claim(req.url)
+                else -> return claim(req)
             }
         }
         val good = usable(resp, ContentSniff.isHtmlType(own.header("Content-Type")))
-        if (good != null) { handed.drop(req.url); note("ordinary"); return good }
+        if (good != null) { handed.drop(req.url); if (!req.priv) note("ordinary"); return good }
         try { resp.abort() } catch (e: Exception) { /* ignore */ }
         try { resp.close() } catch (e: Exception) { /* ignore */ }
-        return claim(req.url)
+        return claim(req)
     }
 
-    private fun claim(url: String): FetchResponse {
-        val e = handed.take(url)
-        if (e == null) { note("gone"); throw FetchException(FetchException.Kind.HANDED_GONE, "the page's own stream of this file is gone") }
-        note("used")
+    private fun claim(req: FetchRequest): FetchResponse {
+        val e = handed.take(req.url)
+        if (e == null) { if (!req.priv) note("gone"); throw FetchException(FetchException.Kind.HANDED_GONE, "the page's own stream of this file is gone") }
+        if (!req.priv) note("used")
         return HandedResponse(e)
     }
 

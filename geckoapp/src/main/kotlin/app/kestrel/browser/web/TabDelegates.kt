@@ -262,7 +262,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // The channel starts suspended and resumes on the first read: not reading costs no data. The download manager makes its own (Range-capable, resumable) request through the same
         // network stack, with the same cookies. PDL1: the engine's own stream is KEPT for a few minutes for the files that request cannot get (Proton Drive's service worker stream, a
         // blob: file: the second request gets the site's web page); the manager closes it unused when its own request works, and a declined question drops it.
-        val address = app.kestrel.browser.net.HandedOver.offer(response)
+        val address = app.kestrel.browser.net.HandedOver.offer(response, tab.isPrivateTab)
         tab.gecko.handedAt = android.os.SystemClock.uptimeMillis()
         app.kestrel.browser.Io.main.postDelayed({ app.kestrel.browser.Io.exec { app.kestrel.browser.net.HandedOver.streams.sweep() } }, app.kestrel.core.download.Handed.MAX_AGE_MS + 5_000L)
         a.download(tab, address, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length, redirected = response.redirected)

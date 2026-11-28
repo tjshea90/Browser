@@ -269,6 +269,33 @@ class HandedTest {
         assertFalse(failed.any { it.priv })
     }
 
+    @Test(timeout = 60_000) fun aPrivateDownloadLeavesNoCountAndAnOrdinaryOneIsCounted() {
+        val told = java.util.concurrent.CopyOnWriteArrayList<String>()
+        fun harness(): H {
+            val server = FakeServer(page).also { it.contentType = "text/html" }
+            val h = H(server)
+            // the same engine, but with a fetcher that reports to the test
+            return h
+        }
+        val data = testBytes(MiB, 31)
+        val reg = HandedStreams()
+        val server = FakeServer(page).also { it.contentType = "text/html" }
+        val fetcher = HandedFetcher(server, reg, note = { told.add(it) })
+        // a private source: the engine's stream is used, nothing is told
+        reg.offer(swUrl, 200, swHeaders(data.size.toLong()), Tracked(data))
+        val r1 = fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = true))
+        assertTrue(r1.oneShot); r1.close()
+        assertTrue("nothing is counted for a private download: $told", told.isEmpty())
+        // the same for a download with nothing left to claim
+        try { fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = true)); throw AssertionError("expected HANDED_GONE") } catch (e: FetchException) { assertEquals(FetchException.Kind.HANDED_GONE, e.kind) }
+        assertTrue(told.isEmpty())
+        // a regular one is counted
+        reg.offer(swUrl, 200, swHeaders(data.size.toLong()), Tracked(data))
+        fetcher.open(FetchRequest(swUrl, -1, -1, null, emptyMap(), priv = false)).close()
+        assertEquals(listOf("used"), told.toList())
+        harness().stop()
+    }
+
     // ---------------------------------------------------------------------------------------------------------------- the registry
 
     @Test fun anUnclaimedStreamIsClosedWhenItIsTooOldAndAnOlderOfferForTheSameAddressIsClosedWhenReplaced() {
