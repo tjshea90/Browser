@@ -1,609 +1,5 @@
 # OUTBOX - what Claude told the owner (the last reply of every turn), newest last. Written by tools/capture_outbox.sh on the Stop hook; key-shaped strings are redacted and long replies cut in the middle. The mirror of INBOX.md. (older entries: git history)
 
-## 2026-11-12T07:59:42Z
-> The phone downloads are ready to try. The two APKs below are built and signed by GitHub. I tested them on the Android 10 emulator, not on your real phone and tablet.
->
-> **1. Kestrel Courier 0.1.0-alpha1 — install this on your phone** (about 150 KB)
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha1
->
-> **2. Kestrel G 0.3.0-alpha19 — install this on your tablet**
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha19
->
-> **How to set it up**
-> 1. On the phone, open the first link, tap the APK and allow installing from your browser if Android asks.
-> 2. Open Kestrel Courier. Switch on **Ready for the tablet**. Tap **Allow it to run with the screen off**, and allow its notification if asked.
-> 3. Turn on the phone's hotspot and join it with the tablet.
-> 4. On the tablet, install alpha19. Alpha18 will also offer it as an update inside the app. Then open Menu > Settings and scroll to **Download on my phone**.
-> 5. Tap **Pair with the phone** and type the 16-character code the Courier shows. This is done once.
-> 6. Set **Use the phone** to "When the phone is there".
-> 7. Tap **Test the phone link**. It measures the wifi between the two, the phone's internet and the tablet's internet. Then it says in one sentence whether the phone is worth using. That answers your question about whether the phone is really faster.
->
-> **What happens when you download a file**
-> - Your phone downloads it over its own connection.
-> - The tablet's Downloads row shows it live ("On your phone", percent, speed, Pause and Cancel buttons).
-> - When the phone has the whole file, the tablet copies it over the wifi, and the phone then deletes its copy.
-> - If the phone isn't there or can't do a download, the tablet downloads it by itself and the row says why.
->
-> **What I checked**
-> - Both apps in one emulator: a 12 MB file went through the phone and the copy on the tablet matched the original byte for byte.
-> - With the Courier off, the tablet downloaded by itself and showed the note.
-> - Over 120 automated tests cover the rest of the logic.
->
-> **What is not done yet**
-> - Videos (HLS and DASH streams, and making them MP4) are still downloaded by the tablet itself. Doing that on the phone is the next stage. The design is written and the file downloads are the foundation for it.
-> - Private tabs and app updates always stay on the tablet.
-> - I could not test your real phone's rules (Android 16 background limits, battery saver) or the real hotspot speeds. The Diagnostics screen has a new "Phone link" line to send me if something doesn't work.
->
-> **Questions for you (the Y2 ones)**
-> 1. Is your phone an Android 16 phone, not an iPhone?
-> 2. What do you see when you say the phone is faster, in MB/s or in minutes for the same file? The link test will give me real numbers if you send them.
-> 3. Should it handle everything, or only big files and videos? Right now it takes every file the tablet itself would download.
->
-> **Still waiting on you**
-> - The Proton Mail "Page loads" numbers.
-> - Your keyboard app, accessibility and autofill details, and whether the tablet does 5 GHz wifi.
-> - A yes or no on a scheduled build of the ad-block lists. It would use GitHub minutes automatically, so I won't add it without your OK.
->
-> Next I'm making the phone more patient on its first answer, since the emulator showed a slow first reply makes the tablet give up early, and checking what happens when Android kills the Courier in the middle of a download.
-<!-- sha:d05cefc2c207 -->
-
-## 2026-11-12T09:37:23Z
-> Videos now go through your phone too. I tested it on the emulator, not on your real phone and tablet (details below).
->
-> **How to try it:**
-> 1. **On the phone:** install Courier alpha2 over alpha1 (same signing key) and leave "Ready for the tablet" on.
-> 2. **On the tablet:** update to Kestrel G alpha20. Your pairing and the "Download on my phone" setting stay as they are.
-> 3. **Download a video:** open a page with a video, tap the download icon, pick the video, then open Menu > Downloads.
-> 4. **What you should see:** the row says "On your phone" with live progress, speed, Pause and Cancel. The finished MP4 then lands on the tablet.
->
-> **What the phone does:**
-> - It downloads HLS videos and videos whose picture and sound come apart, and it merges them with its own converter.
-> - If the phone can't do a video or isn't reachable, the tablet downloads it itself and the row says why.
-> - With an old Courier the tablet just downloads by itself.
-> - Private tabs and app updates always stay on the tablet.
->
-> **What I tested:**
-> - On the emulator, with both apps running together, a video went through the phone and the MP4 came out identical in content to what the tablet makes on its own.
-> - It survived Pause/Resume and the Courier being killed mid-video, and the fallback worked.
-> - Testing caught a bug where the phone would have handed over a video without its sound. That's fixed.
-> - Not checked: your real hotspot, real speeds, Android 16, and H.265 videos on your phone. Tap "Test the phone link" in Settings (about 40 MB) to see whether the phone is actually faster.
-> - If the phone's data plan is the limit, the same plan pays for these downloads.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha2
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha20
->
-> **Still open, waiting on you:**
-> - Is the phone an Android 16 phone?
-> - When you say the phone is faster, what do you see (MB/s, or minutes for the same file)?
-> - Should it handle everything, or only big files and videos?
-> - Your real pair test of the two apps.
-> - The Proton Mail "Page loads" numbers.
-> - Your keyboard app, accessibility, autofill and 5 GHz facts.
-> - A yes or no on a scheduled CI list-build workflow.
-<!-- sha:8a11c0553a4e -->
-
-## 2026-11-12T15:35:32Z
-> Yes, the phone can speed up page loading, but only in one way. I built it, and I tested it on the emulator only, not on your real phone and tablet.
->
-> Your LinkMeter notes say the carrier caps the **hotspot** at 5 Mbit/s, while the phone's own traffic isn't capped. So the phone helps when it opens the connections itself, not when it does "processing". It already did that for files and videos. Now it does it for web pages too.
->
-> **What's new (Courier alpha3 on the phone, Kestrel G alpha21 on the tablet):**
-> - **Pages through the phone.** The tablet's https pages go through a small proxy in the Courier, and the phone makes the real connections. The phone sees site names, never page contents. If the phone stops answering, pages load directly by themselves.
-> - **One switch for hotspot only.** There's a new "Phone helper" tile in the main menu. Off means the tablet stops using the phone and the phone's proxy closes. The Courier's notification has "Turn off" if you want it fully stopped.
-> - **Unmetered.** The data saver is now off by default, so there's no "metered connection" label and no big-download questions. The levels are still in Settings.
-> - **Back and scrolling.**
->   - **Back:** 4 pages are kept for an hour (it was 2 pages for 6 minutes).
->   - **Memory:** 64 MB page cache, and decoded images kept 3 minutes.
->   - **Loading ahead:** images decoded two screens ahead, and lazy images start loading earlier.
->   - **One limit no setting can lift:** pages that send `Cache-Control: no-store` (webmail, banks) are never kept by any browser, so Back reloads those.
-> - **Two clashes with LinkMeter fixed.** The Courier used LinkMeter's port 8765 (now 8780). The tablet also lost the phone while LinkMeter's VPN was on, which is fixed in code but untested with the VPN.
->
-> **What the phone can't speed up:**
-> - **Rendering, JavaScript and image decoding** stay on the tablet. Streaming a rendered page would make scrolling wait on the wifi.
-> - **Prefetching or transcoding https** would need a fake certificate on the tablet.
-> - **Ad block** stays in the browser. It needs to see the page, and at the proxy only the site name of https traffic is visible.
->
-> **Wifi note:** 2.4 GHz tops out around 30–50 Mbit/s, so at night (150 Mbit/s) the wifi is the limit. With the phone close to the tablet, try 5 GHz.
->
-> **What I tested:**
-> - **Emulator:** a page loaded through the proxy from a name only the phone could resolve. Loading fell back to direct when the proxy was dead or refused the tablet. Back restored a page from the cache.
-> - **Not tested:**
->   - your real hotspot
->   - real speeds and battery
->   - Android 16 background limits
->   - how scrolling feels
->
-> To see whether it's worth it: install both, then Settings > Phone helper > Test the phone link. The last sentence says whether pages through the phone are faster, about the same, or slower. If not faster, switch it off from the menu. With an older Courier, the tablet just loads pages itself.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha3
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha21
->
-> **Still open, waiting on you:**
-> - Your real pair test, and that "Pages through the phone" sentence.
-> - How scrolling, white areas and Back feel now.
-> - The Proton Mail "Page loads" numbers.
-> - Your keyboard app, accessibility and autofill facts.
-> - A yes or no on a scheduled CI list-build workflow.
-<!-- sha:f780843ede9d -->
-
-## 2026-11-12T19:33:49Z
-> **Kestrel G alpha22 is out.** It also carries the Fast Wi-Fi and Courier changes from your last message.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha22
->
-> Everything below was checked on the Android 10 emulator only. The emulator has no hardware acceleration, so its speed means nothing. I checked what happens, not how fast. Nothing here has been tried on your tablet or on real Fast Wi-Fi.
->
-> ## Your four requests
->
-> **1. Fast Wi-Fi.** The browser now notices when LinkMeter's Fast Wi-Fi is the active connection and switches itself to match:
-> - **Lookups** go through the phone's own resolver instead of the encrypted-DNS route, which would have to squeeze through the tunnel.
-> - **HTTP/3** is off, since Fast Wi-Fi refuses it and the tries would only fail.
-> - **Phone helper** rests.
->
-> When Fast Wi-Fi ends, your own settings come back exactly as you had them. Menu > Diagnostics has a "Network:" line saying which profile is active.
->
-> **2. Courier closed.** Every Courier option is off by default. The "Phone helper" tile in the main menu only appears once the phone is paired, and it rests by itself while Fast Wi-Fi is on. No new Courier release was needed, so alpha3 stays as it is.
->
-> **3. Your past prompts.** An independent reviewer went through all 25 of your messages (102 requests): 63 done, 33 partly done. In the order you stressed them, the open items are:
-> 1. speed, scrolling and Back
-> 2. typing lag in pages
-> 3. ad-blocking depth
-> 4. "mp4 always" leftovers
-> 5. download manager
-> 6. UI polish
-> 7. Back up / Restore
-> 8. security
->
-> Finished now:
-> - the speed items (alpha22 below)
-> - engine freshness: Firefox's engine 160.0.20261104181552 is still the newest, so there is nothing to update
-> - workflow security: GitHub's token is read-only by default, and links from web pages can only ask other apps for open, write, dial or share
-> - bookkeeping: 18 old task items ticked, and the docs now say daily lists and an unmetered hotspot
->
-> Already in the code, not in alpha22, coming in the next alpha:
-> - swiping a tab card sideways closes it (promised three times)
-> - a cold start opens straight onto "Opening <site>" instead of flashing Home
-> - the network check no longer runs on the screen thread
->
-> Next, in order: typing lag, ad-block depth, Back up / Restore, the Settings restyle.
->
-> **4. Speed, what changed in alpha22:**
-> - **Tabs stay ready by free memory.** Before, only 2 pages stayed alive, so with 3+ tabs every switch reloaded. Now it follows the memory the tablet reports: about 6 tabs at your usual 800 MB–1 GB free. Leaving the app no longer closes your tabs. Settings > Appearance > "Tabs kept ready" lets you force Few or Many.
-> - **Back.** Firefox's own cache now keeps 6 pages for an hour (it was 4), and those Backs are instant. Pages that forbid caching (Proton Mail, banking) can't be kept by any browser and must reload. Kestrel now takes a picture of the page as you leave it and shows it the moment you press Back while the real page reloads. That hides the wait bu
-> [... 2904 characters omitted ...]
-> ny problem, Menu > Diagnostics > Copy.
-> 2. For the Proton Mail slowness: open mail.proton.me twice and paste the "Page loads" lines from Diagnostics. Also tell me your keyboard app and whether an accessibility or autofill service is on.
-> 3. A scheduled GitHub job that compiles the ad-block lists once a day (yes or no). I've asked eight times. If your "do whatever is logical" was meant as yes, say so.
-> 4. The private signing key: only you can create those four secrets. Until then anyone holding the public dev key could sign an update.
-> 5. With Fast Wi-Fi on, read the Diagnostics "Network:" line and tell me what it says.
-> 6. Any site where a `.ts` file still appears, the download icon stays grey, or a spam page opens after play.
-> 7. Optional: project licence, landscape tab layout, Cromite comparison. The full list is in `research/PROMPT_AUDIT.md`.
->
-> I'm continuing down the list in the background.
-<!-- sha:c815f5a97dc8 -->
-
-## 2026-11-12T21:11:02Z
-> **Kestrel G alpha23 is out.** The first part of your message repeats your last four requests; those were answered with alpha22, and their open items are listed at the bottom.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha23
->
-> Everything below was checked on the Android 10 emulator only. Its speed means nothing, so I checked what happens, not how fast. Nothing here has been tried on your tablet or on a real LinkMeter connection.
->
-> ## Your three new requests
->
-> **1. One switch for the Phone helper.**
-> - The menu tile and Settings now control the same switch.
-> - **Off:** downloads, videos and pages through the phone are all off. Settings no longer shows anything switched on under an off helper, which was the "Load pages through the phone" you found still on.
-> - **On:** all of it turns on. A stronger choice you made earlier ("always wait for the phone") is kept.
-> - It stays off by default.
->
-> **2. Long-press video: the new "Save video" sheet.**
-> - **Exact video first:** the file under your finger is preselected and marked **THIS VIDEO**.
-> - **Small or odd files:** the little .php files, previews and trackers sit under a closed group, "Other files on this page (3)". Each row there shows its file name (dl.php, getit.php, track.php) so you can tell them apart.
-> - **How it decides:** it compares each file's size against the pressed one, and keeps other qualities of the same video in the main list. Tracker-looking addresses are tucked away.
-> - **Name:** the NAME card shows the name the site gives the file (from its download header), otherwise the page title, with a **RENAME** button to edit it before saving.
-> - **Formats:** one row per quality, such as 1080p, 720p or 360p, with the file type, size and length. A big **Download** button shows the size of the chosen row.
-> - **Tested on a page I built** with three qualities and three .php-style files:
->   - the .php files stayed hidden
->   - a .php file whose server name is "Summer Trip 2026.mp4" showed that name
->   - I typed "My Holiday Clip", picked 720p and pressed Download; **My Holiday Clip.mp4** (1.8 MB) appeared in Downloads
-> - **Bug found and fixed on the way:** a long press was ignored when two tabs held the same page.
->
-> **3. Fast Wi-Fi.**
-> - **Browser side:** it already switched to the phone's own lookups and turned HTTP/3 off. Now, when it recognises LinkMeter's own tunnel, it also:
->   - turns IPv6 off, because the tunnel blocks it and those lookups only dead-end
->   - lets downloads give a loading page about 1 MB/s instead of 150 KB/s. The 150 KB/s was set for the capped hotspot and would slow a big download for nothing on a link this much faster
-> - **Other VPNs and no VPN:** another VPN keeps the careful values, and with no VPN nothing changes.
-> - **On screen:** Home says "Fast Wi-Fi", and Menu > Diagnostics > "Network:" says whether LinkMeter's tunnel was recognised.
-> - **LinkMeter side:** I read its tunnel and relay code and found no defect: no-delay sockets, 256 KB windows, sensible limits. I chan
-> [... 850 characters omitted ...]
-> arlier may keep the slow path.
-> 2. How tabs, Back and scrolling feel now (Menu > Diagnostics > Copy for any problem).
-> 3. For the Proton Mail slowness: the "Page loads" lines from Diagnostics after opening mail.proton.me twice, plus your keyboard app and whether an accessibility or autofill service is on.
-> 4. A yes or no on a scheduled GitHub job that compiles the ad-block lists daily.
-> 5. The private signing key. Only you can create those four secrets.
-> 6. Any site where a .ts file still appears, the download icon stays grey, or a spam page opens after play.
-> 7. Optional: project licence, landscape tab layout, Cromite comparison.
->
-> **Next, in order:** typing lag, ad-block depth, Back up / Restore, then the Settings restyle. I already have a lead on typing: Firefox 160 has a setting that makes the keyboard shrink only the visible area instead of re-laying out the whole page. I'm testing it now.
-<!-- sha:5811858b1cdd -->
-
-## 2026-11-12T22:49:46Z
-> Kestrel G alpha24 is built, signed and published. I tested it on the Android 10 emulator and with the unit tests, but not on your real tablet.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha24
->
-> To install, open that page on the tablet and tap `kestrel-g-0.3.0-alpha24.apk`. It installs over the current Kestrel G because the signing certificate is the same. If Android says "not enough storage", free some room first. An install needs about a tenth of the tablet's storage free afterwards.
->
-> **What's new**
-> 1. **Back up & restore** (Menu > Settings > Back up & restore). "Back up now" writes one file, `Kestrel backup <date>.json`, into your Downloads folder with no picker and no permission prompt. It holds your bookmarks, history, settings, per-site Shields choices and open tabs. The file survives uninstalling Kestrel. "Restore" opens the file picker. It shows what the file contains and asks before changing anything. Bookmarks, history and tabs are added to yours, and your settings and per-site Shields choices are replaced by the backup's. The phone pairing code is deliberately left out, so you pair again after a restore. On the emulator I backed up, wiped the app, and restored. The settings, per-site Shields, bookmarks, history and tabs all came back.
-> 2. **Much deeper ad hiding.** All 29,204 generic hiding rules from the lists now work; only the first 1,200 did before. Each one applies only on pages that actually contain a matching class or id, so pages aren't slowed. I also fixed two bugs in how the hiding rules were written that would have stopped some of them working. I checked this on test pages built with real names from the lists, including an element added late and an exception rule. I haven't seen it on real websites.
-> 3. **Keyboard fix.** Tapping a text field in the lower half of the screen now scrolls it above the keyboard instead of leaving it hidden until you type. On the emulator the field moved from 406 px to 146 px, inside the 335 px of screen the keyboard leaves visible.
->
-> **Still open: the typing lag.** The keyboard fix removes one cause, but the lag in Proton Mail and the Google search box needs numbers from your tablet. Type 20 characters in each and tell me roughly how long they take to appear. Also tell me which keyboard app you use and whether any accessibility or autofill service is on.
->
-> **Next for alpha25.** The Firefox engine now answers ad-blocking requests on its own worker thread, so hiding rules arrive sooner after a cold start. I'm also adding list-driven stripping of tracking parameters from links you open, such as `?si=` on YouTube share links. The core part passes its 21 unit tests and the rest isn't connected yet. After that come the remaining ad-blocking items, "mp4 always", the download-manager queue and UI polish.
->
-> **What I need from you**
-> - Open Diagnostics with Fast Wi-Fi on. The Network line should say "LinkMeter tunnel recognised: true" and show 1000 KB/s.
-> - Tell me how tabs, Back and scrolling feel.
-> - Send the Proton Mail numbers and the keyboard and accessibility facts above.
-> - Yes or no on a scheduled GitHub job that rebuilds the ad lists automatically.
-> - The private signing key (four repo secrets), if you want releases signed with your own key.
-> - Report any video-site problems: `.ts` files, a grey download icon, spam after pressing play.
-> - Optional: the licence choice, landscape tabs, and the Cromite comparison.
-<!-- sha:15de348e3486 -->
-
-## 2026-11-13T00:48:18Z
-> Alpha25 is built, signed and published; the Release has the 93 MB APK. It should install over your current Kestrel G, and the in-app Updates sheet will offer it.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha25
->
-> Your message 16 reached me twice after a session restart, and I handled it once. The review is saved as `research/REVIEW-EXTERNAL-1.md`, and its 18 rows are in TASKS as EX-1 to EX-18. I worked them top to bottom, and alpha25 is the result.
->
-> **Changes you will notice, and how to switch each off**
-> - **Taps no longer wait about a quarter of a second on wide pages.** Double-tap zoom is now off by default; pinching still works. On the emulator a tap took 18 ms instead of 253 ms. To get double-tap zoom back, use Settings > Appearance.
-> - **YouTube, Vimeo, Facebook, Instagram, TikTok, Spotify, SoundCloud, Disqus and Google Maps players now show a "Tap to load" box.** Nothing in them runs until you tap, so pages open faster. Settings > Shields turns it off, or you can turn it off per site in the Shields panel. On the emulator the box replaced a test player, and one tap loaded the real address.
-> - **2,441 more rules clean tracking parts out of links you open.**
-> - **Three fixes.**
->   - The Wi-Fi lock for background downloads really works on Android 10 now. Android logged it being taken when a download started and released at the last byte.
->   - "Warm up the top suggestion" really opens the connection while you type. The Firefox engine silently ignored it before.
->   - JPEG XL pictures are no longer requested; this tablet decodes them slowly.
-> - **Settings > Network lab has six new switches, all off.** Each says what it costs, for example battery or lookups for links you never tap. Diagnostics has a Tap lab and a Decode lab to measure the tablet.
-> - **Smaller fixes.**
->   - Ad-hiding rules arrive sooner after a cold start.
->   - The dock follows the keyboard.
->   - A swiped-away tab keeps its scroll position.
->   - A download whose file name Android refuses now tries the next name instead of failing. I found this while testing.
->
-> **Not built:** I skipped the idea of pre-connecting to search results and to the link under your finger. It would contact sites you haven't chosen, for a head start of about a tenth of a second.
->
-> **What was and wasn't tested:** The checks were 825 unit tests, 99 browser-script tests and the Android 10 emulator. Nothing was run on your tablet, and the emulator numbers only show the before/after difference.
->
-> **Tip:** About once a week, leave the tablet on the charger overnight with the screen off. Android only does its storage clean-up and app optimising then.
->
-> **Still open, and only you can do these**
-> 1. Check the "Network:" line with LinkMeter on (the tunnel should be recognised, about 1000 KB/s).
-> 2. Tell me how tabs, Back and scrolling feel.
-> 3. Send Proton Mail numbers and your keyboard app. For typing lag, try Settings > Appearance, "Zoom to the text box you tap", off.
-> 4. Answer yes or no on the scheduled GitHub list-build workflow.
-> 5. Decide on a private signing key (four secrets).
-> 6. Report video-site problems: `.ts` files, the grey icon, spam after play.
-> 7. Send the Tap lab and Decode lab numbers from the tablet.
-> 8. Try the Network lab switches one at a time and tell me the results.
-> 9. Optional: the licence, landscape tabs, and the Cromite comparison.
->
-> Next I'll finish the rest of the ad-hiding work and then the download manager queue.
-<!-- sha:95e28771348b -->
-
-## 2026-11-13T02:47:28Z
-> Alpha26 is built, signed and published. Nothing in it has been tried on your tablet: the checks were 857 JVM tests, 114 browser-script tests, ffmpeg-made video test files, and runs on the Android 10 emulator.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha26
->
-> It installs over your current Kestrel G, and the Updates sheet will offer it.
->
-> **Fixes and optimizations from the review**
-> - **Link warm-up:** the browser opens the connection to a link the moment your finger touches it, and to the first three search results after a search. On the emulator, holding a finger on a cross-site link made the browser connect while the finger was still down. The search-result part is covered by web tests only, because the emulator can't reach a search engine.
-> - **Two optimizations are now on by default, not left as switches:**
->   - Firefox looks up the addresses of links ahead of your tap. The emulator can only load plain-http pages, where this already happens, so the https effect needs your tablet to measure.
->   - Web-font text appears in a plain font after half a second instead of staying invisible for up to 3 seconds. This was proven on the emulator.
-> - **Privacy costs:** the warm-up makes the site see a connection from your phone's address even if you never open it. The link look-ups show your DNS resolver the addresses of links you never tap. Both stay off in private tabs and with Data saver. Settings > Network lab has "Warm up connections" and "Look up links ahead" to turn them off.
-> - **New switch, off by default:** "No AVIF pictures on Fast Wi-Fi". Turn it on if the Decode lab shows AVIF is slow on your tablet.
-> - **Proven on the emulator:** the Wi-Fi lock for downloads and the "no JPEG XL pictures" header.
-> - **Not built:** I decided not to raise the download window size for Fast Wi-Fi. Two download connections already cover each other's gaps, and bigger windows would double the worst-case memory.
->
-> **Work I was doing before the review**
-> - **Download manager:**
->   - A waiting download says "Waiting in line" with Start now, Move up and Move down. A paused one also has Start now. I tried these on the emulator and they work.
->   - A file whose server states a checksum is checked at the end.
->   - Files are written in bigger pieces.
->   - A file name Android refuses makes the download try the next name instead of failing.
-> - **Videos:** H.265 pictures and AC-3, E-AC-3 and MP3 sound now end as one MP4 instead of a `.ts` file. The rest of an advertisement the MP4 writer leaves out is no longer downloaded. ffmpeg decodes the files I produced without errors; whether your tablet's player does is untested.
-> - **Ad blocking:** the bundled lists now include rules that restyle a page and rules that hide a box containing a word like "Sponsored". 522 of 1,172 such rules in the real lists are understood.
-> - **Look:** Settings sections are cards like the menu and the Downloads list. The app also shows a shield on black the moment you tap its icon, instead of an emp
-> [... 499 characters omitted ...]
-> helper under Fast Wi-Fi, keep Wi-Fi awake (battery), zoom to the text box you tap, and fetching the next page early.
->
-> **Open items for you**
-> 1. Check the "Network:" line with LinkMeter on (the tunnel should be recognised, about 1000 KB/s).
-> 2. Tell me how tabs, Back and scrolling feel.
-> 3. Send Proton Mail numbers and your keyboard app. For typing lag, try Settings > Appearance, "Zoom to the text box you tap", off.
-> 4. Answer yes or no on the scheduled GitHub list-build workflow.
-> 5. Decide on a private signing key (four secrets).
-> 6. Report video-site problems: `.ts` files, the grey icon, spam after play.
-> 7. Send the Tap lab and Decode lab numbers from the tablet.
-> 8. Try the Network lab switches one at a time and tell me the results.
-> 9. Optional: the licence, landscape tabs, and the Cromite comparison.
-> 10. Tip: about once a week, leave the tablet on the charger overnight with the screen off.
-<!-- sha:639c7e60cb22 -->
-
-## 2026-11-13T03:47:31Z
-> **Alpha27 is out.** I found why the loading symbol stays on the video, and fixed it. I could not explain the choppiness: I have no access to your tablet, so the new Video lab (below) is how we find out.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha27
->
-> **The stuck loading symbol**
-> - **Cause:** the browser refused every request by a page to start a video by itself, even a muted one. Most players start muted and only hide their loading symbol once the video starts, so it never went away.
-> - **Reproduced:** on the emulator with alpha26, muted autoplay stayed paused and a muted `play()` call got a "not allowed" error. With alpha27 both play and the symbol clears.
-> - **Still blocked:** a video with sound still waits for your tap, as in every browser. **Settings > Video** turns muted autoplay off.
-> - **Second suspect:** since alpha3 every site was told "reduce motion", and GIFs played once. That can freeze a site's own loading symbol. Pages now animate normally. **Settings > Video > Calm pages** brings the old behaviour back.
->
-> **Your questions**
-> - **Hardware:** H.264 and AAC (what most sites use) go through the tablet's own video decoders. The engine decodes VP9, AV1, Opus and similar itself, on the processor.
-> - **VP9:** the engine already keeps it away from streaming sites.
-> - **AV1 and H.265:** alpha27 now keeps them away too, unless the tablet has a hardware decoder for them. Sites then send H.264. The choice is **Settings > Video > Video formats offered to sites**.
-> - **More codecs:** none needed. The few missing ones (Dolby, DTS) are licensed formats the tablet's own decoders cover if the maker paid for them.
-> - **"Updated java":** I took this to mean JavaScript. It is Firefox 160's engine with its fast compilers and WebAssembly on. Java applets and Flash no longer exist in any browser.
-> - **Protected (Netflix-style) video:** it was refused outright. It now asks "wants to play protected video" if the tablet supports it. The emulator does, and I proved the prompt there; your tablet is untested.
->
-> **Choppy video**
-> There are three possible causes, and the new tools tell them apart:
-> - **Menu > Diagnostics > Video lab** plays short clips stored in the app and says smooth or choppy for each, with dropped pictures.
-> - **All clips smooth:** the site's stream is probably more than your 5 Mbit/s hotspot carries. Pick a lower quality in its player.
-> - **Only VP9 or H.265 choppy:** the processor is doing the decoding.
-> - **H.264 choppy too:** the problem is the tablet or the page itself.
-> - **Diagnostics** also lists the tablet's real video decoders, hardware or software.
->
-> **Paid or licensed items** (none needed today, full list in `research/VIDEO_AUDIT.md`):
-> - **Widevine L1** (HD protected video): Google, through the tablet's maker.
-> - **Patent pools**, only if we ever shipped our own decoders: Via LA (H.264, AAC) and Access Advance (H.265).
-> - **Dolby and DTS:** for their soundtracks.
->
-> I declined three free options. Ruffle (a Flash emulator) is 
-> [... 550 characters omitted ...]
-> e of the test clips.
->
-> **Please send:**
-> 1. The site or link of the choppy video, and whether the symbol shows when the page opens or after you press play.
-> 2. The Video lab result (Run, then Copy the results).
->
-> **Still open from you:**
-> - **LinkMeter Fast Wi-Fi:** the "Network:" line in Diagnostics, and the speed (~1000 KB/s).
-> - **Feel:** tabs, Back and scroll.
-> - **Proton Mail:** the numbers, and whether turning off "Zoom to the text box you tap" helps the keyboard.
-> - **Ad-lists build:** yes or no to a scheduled GitHub build of the lists.
-> - **Signing key:** the private signing key (four secrets).
-> - **Earlier video problems:** the `.ts` files, grey icon and spam after play.
-> - **Lab numbers:** Tap lab and Decode lab from the tablet.
-> - **Network lab:** the switch comparisons.
-> - **Optional decisions:** licence, landscape tabs, Cromite comparison.
-> - **Charging:** the weekly overnight-charge tip.
-<!-- sha:efc99f48089f -->
-
-## 2026-11-13T03:47:59Z
-> Two late heartbeat wake-ups arrived: scheduled prompts from the 2-hourly "Kestrel resume heartbeat" that I set up earlier. They fired while I was busy, and their text still describes the alpha22 work list. I'm standing down on both, per the rule they carry ("stand down if another session's real work is under 60 minutes old"). This session finished alpha27 minutes ago.
->
-> - **State:** nothing is uncommitted. Local and GitHub are both at `c689906`, which includes alpha27 recorded in BUILDLOG.
-> - **Heartbeat:** it stays armed (`trig_01LLoVKsjuTUaDn61UGP1pBN`). Its delete condition, 24 hours of owner silence with nothing safe left, is not met, since you wrote about two hours ago.
-> - **Nothing started:** the remaining items either need your tablet data or are speculative without it. These are the ad-player stand-ins, the fragmented-MP4 downloader, background audio and picture-in-picture. I'll pick them up once the Video lab numbers or the choppy video's site arrive.
->
-> My reply above is current: the same Release link, and the same questions still open for you.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha27
-<!-- sha:29ddb7e9c7de -->
-
-## 2026-11-13T04:59:32Z
-> **Alpha28 is out. I found why doraby.com loses its photos and the search icon, and fixed it.** Everything was tested on the emulator, but one link in the chain is not seen on your tablet yet.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha28
->
-> **doraby.com**
-> - **What the site needs:** its photos, menu and search icons all load through one helper host, `cdn.jsdelivr.net`. If those files can't arrive, the page looks exactly as you described. I reproduced that on the emulator.
-> - **The cause:** Kestrel asked Firefox's built-in tracking protection for its strictest set. That set includes a "Content" list that names jsDelivr and many video-player hosts (JW Player, Brightcove, Kaltura, Mux, Bitmovin, Vimeo and more).
-> - **The fix:** alpha28 leaves that list out. Ads and trackers are still blocked by Kestrel's own lists.
-> - **Likely the video player too:** the loading symbol stuck on your video player is probably this same cause. The muted-autoplay problem from alpha27 was real as well.
->
-> **Proof, and what's missing**
-> - I checked that Firefox blocks hosts on that list (a stand-in host was blocked), that Kestrel's old setting included it, and that the new one drops it.
-> - jsDelivr itself being refused on your tablet is not observed, because the emulator can't download Mozilla's lists. So please check doraby.com yourself.
->
-> **New tools**
-> - **Menu > Diagnostics > Page report:** for each page it lists which files failed and why, script errors, and what Firefox's own protection blocked. It is never kept for private tabs.
-> - **Menu > Reload without cache:** loads the page and all its files fresh.
->
-> **Your lab numbers**
-> - **Video:** all four clips (H.264 720p and 1080p, VP9, H.265) played with 0 of 150 pictures dropped, decoded by the video chip. The screen drew at 65 frames per second. So the tablet is not what makes video choppy; the cause is the site's stream versus the 5 Mbit/s hotspot, or the page itself.
-> - **JavaScript:** about 3 to 5 times slower than a phone, as expected. WebAssembly "fast math" (SIMD) is not available on this tablet's 32-bit mode, which is rarely needed.
-> - **Protected video:** Widevine works.
-> - **Lab fix:** the "24.8 fps, mostly smooth" lines were my arithmetic error (fixed).
-> - **Tap lab:** taps are answered in 3 ms, so the double-tap-zoom fix works on the tablet.
-> - **Decode lab:** AVIF takes 108 ms to decode against WebP's 50 ms, but its files are three times smaller. On your hotspot AVIF still wins, so "No AVIF" stays off.
->
-> **Please check**
-> 1. After installing, does doraby.com show the photos and the menu and search icons? If anything is still missing, tap Menu > Diagnostics > Copy and paste it to me. The Page report names the failed files.
-> 2. If a video still stutters, send me the site or link.
->
-> **Still open from you**
-> - **LinkMeter:** the "Network:" line in Diagnostics.
-> - **Feel:** tabs, Back and scroll.
-> - **Proton Mail:** the numbers and keyboard test.
-> - **Ad lists:** yes or no to the scheduled GitHub list build.
-> - **Signing key:** the private signing key.
-> - **Earlier video problems:** the `.ts` files, grey icon and spam after play.
-> - **Network lab:** the switch comparisons.
-> - **Optional:** licence, landscape tabs, Cromite comparison.
-> - **Charging:** the overnight-charge tip.
-<!-- sha:6db802838522 -->
-
-## 2026-11-13T05:02:23Z
-> I saved a handoff for this session, and the work is committed and pushed to GitHub.
->
-> The handoff files are `.handoff/handoff.md` and `.handoff/handoff.json`, plus a timestamped copy under `.handoff/handoffs/2026-11-13/`. It also refreshed the learnings section in `CLAUDE.md` and `AGENTS.md`. I checked the files for the owner's email and found nothing.
->
-> The next session picks up from there. The main thing it is waiting on is the owner confirming that alpha28 fixes doraby.com and the video player on the tablet. If it is still broken, they should send a Diagnostics copy so the Page report can name the failed files.
->
-> The two doraby.com fix links I couldn't test on the tablet remain open. I tested the Firefox-tracking-protection cause on the emulator, but not jsDelivr being refused on the owner's tablet itself.
->
-> The 2-hourly wake-up trigger (`trig_01LLoVKsjuTUaDn61UGP1pBN`) is still active. It stands down while work is less than an hour old.
-<!-- sha:da89b6f0586a -->
-
-## 2026-11-13T07:18:45Z
-> Your report shows the tablet is still on alpha27. alpha28 never installed, so the doraby.com fix hasn't reached it. The tablet only has 1.62 GB free of 27.75 GB, and Android refuses an update unless about 3.1 GB would still be free afterwards. It insists on keeping a tenth of the storage free, plus room to unpack the new version.
->
-> I made alpha29, which includes alpha28 (full list below). I haven't run any of it on your tablet. I tested it on an emulator and with unit tests.
->
-> **What to do**
-> 1. Free about 1.5 GB, more if you can.
->    - Kestrel's menu, then Downloads, lists every file with its size. Delete movies you've already watched.
->    - Android's Settings, then Storage, shows what else is big. If the tablet has a microSD slot, move videos there.
->    - Android's Settings, then Apps, then Kestrel G, then Storage, then Clear cache gives back about 228 MB right now.
-> 2. Install the newest Release below. It covers everything since alpha27.
-> 3. Don't uninstall first. You'd still be about 1.1 GB short and would be left with no browser.
->
-> The 3.1 GB figure comes from a rule I measured on a test tablet, so your tablet's own message may differ. If Android refuses, Kestrel's Updates screen shows its exact number.
->
-> **What else your report showed**
-> - **doraby.com:** 18 requests were blocked, but only 7 were ours. Firefox's own tracking protection blocked about 11 more, which confirms the cause.
-> - **Video hardware:** your tablet has real hardware decoders for H.264, H.265, VP9 and VP8, and a Mali-G52 GPU. AV1 is software only, so Kestrel never offers it. Protected video (Widevine L3) is standard-definition only.
-> - **Scrolling:** all three scroll modes measured smooth, 62–65 frames a second.
-> - **Fast Wi-Fi:** the Fast Wi-Fi tunnel is recognised, and the keyboard detection works.
-> - **pelisjuanita.com:** the part I can see is a login page, so I can't tell whether its video pages have a problem.
->
-> **What alpha29 changes**
-> - **Shields off:** it now also turns Firefox's own tracker blocking off for that site. If a page is missing photos, icons or its player, tap the shield icon and switch Shields off for the site.
-> - **Updates screen:**
->   - It shows the real numbers, warns before a download the installer would refuse, and has a Clear cache button.
->   - It lists your biggest downloads.
->   - It only offers "install the other way" when uninstalling would actually free enough.
-> - **Diagnostics:** the Video line was stuck on "decoders unknown" and now shows the real ones. The Storage line says how far short an update would be.
->
-> **What I tested**
-> - **Emulator:** Shields off made a blocked test script load. The warning and Clear cache button worked with the real engine (cache 24 MB to 0.1 MB, 23.5 MB freed).
-> - **Not reproduced:** Android's real "not enough storage" refusal after a download. Only unit tests cover that screen.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha29
->
-> **Still open, from you**
-> - Once alpha29 is installed: do doraby.com's photos, icons and movie player work? If not, open Menu, Diagnostics, Page report right after the page loads and send me the copy.
-> - Which site or link has the choppy video, and on which page does the loading symbol stick?
-> - Does scrolling and Back feel smooth to you, given the measured numbers?
-> - Proton Mail speed, and the keyboard app, with "Zoom to the text box you tap" switched off.
-> - Yes or no: build the ad-block lists on a GitHub schedule?
-> - The private signing key (four repo secrets).
-> - Earlier video-site problems: .ts files, the grey icon, spam after play.
-> - Network lab switch results.
-> - Optional: a licence, landscape tabs, the Cromite comparison.
-> - Weekly tip: charge the tablet overnight with the screen off.
-<!-- sha:77e28b19adf3 -->
-
-## 2026-11-13T12:21:06Z
-> All three requests are done and in alpha30, but I haven't tested any of it on your tablet. It is still on alpha27, so none of the fixes have reached it.
->
-> **1. Settings in private mode.** Settings now stays in the menu in private windows (both apps) and opens in the private colours. On the emulator the private menu lists Settings and it opens.
->
-> **2. "Open in new tab" in the background.** After a long-press on a link, the page now opens in a tab behind the one you're on. The foreground tab stays, the tab counter goes up, and a small "Opened in a new tab" notice appears. On the emulator the second page loaded and the front tab stayed put. "Open in private tab" and "Open image in new tab" work as before.
->
-> **3. Doraby movies and the Cloudflare message.** I found the likely cause, but I haven't seen it on a device.
-> - Doraby's movie is a frame from another site (vidfast.vc, vidy.st and others). Cloudflare's check runs from `challenges.cloudflare.com`.
-> - Firefox's own tracking protection, as alpha27 set it up, lists `cloudflare.com` and `cdn.jsdelivr.net` as "content" and refuses them. That matches Doraby's missing photos and "can't access Cloudflare".
-> - alpha28 removed that. Shields off for a site (alpha29) now also switches Firefox's own protection off for that site.
-> - Kestrel's own lists don't block the six Doraby players or Cloudflare's check; a new test confirms it.
-> - **Two questions for you:** which version does Menu > Diagnostics show on its "App:" line? And what were the exact words on the site that said "incompatible browser"?
->
-> **Your complaint that prompts went unanswered.** I compared your messages with my replies. Each one had a reply, but several came hours late, were folded into a release message, or answered only part of a multi-part prompt. Your Diagnostics paste took until 07:18 to get an answer. I can't tell which ones you meant. Which earlier prompts did you mean? Meanwhile the list is in `TASKS.md` (AI1d) and in `.handoff/handoff.md`. The handoff tool needed an approval that nobody answered, so I wrote that file by hand.
->
-> **Install:** free about 1.5 GB first; the tablet has 1.62 GB free and needs about 3.1 GB. Use Menu > Downloads to delete movies you've watched, and Android's Settings > Storage. Then install alpha30.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha30
->
-> **Needs your approval:** the heartbeat (a 2-hourly self-wake-up) is still on. It fires with an old message every 2 hours and cancels any approval prompt I have open. Please approve my "disable heartbeat" request next time it appears, or tell me to delete it.
->
-> **Still open from you**
-> - Doraby: after installing alpha30, open a watch page, tap play, wait 10 s, then send Menu > Diagnostics > Page report.
-> - The site or link with the choppy video.
-> - Does scrolling and Back feel smooth?
-> - Proton Mail speed, and the keyboard app with "Zoom to the text box you tap" off.
-> - Yes or no: scheduled GitHub ad-list builds.
-> - The private signing key.
-> - Earlier video problems: `.ts` files, grey icon, spam after play.
-> - Network lab results.
-> - Optional: licence, landscape tabs, Cromite comparison.
-> - Weekly tip: charge the tablet overnight with the screen off.
-<!-- sha:5dca78d6d931 -->
-
-## 2026-11-13T14:23:40Z
-> Standing down: the heartbeat's old work list is finished, and your three requests are shipped in alpha30 and answered. I'm waiting for your reply on the version shown in Menu > Diagnostics, the exact words of the Cloudflare site, and which earlier prompts you meant.
-<!-- sha:c63a9a6b61e6 -->
-
-## 2026-11-13T16:19:08Z
-> Standing down again. This is the same 2-hourly heartbeat with the old alpha22-era text, and its work list is finished. I'm waiting for your reply on alpha30. The heartbeat is still on and costs a wake-up every 2 hours; say "disable it" and approve the request, or tell me to delete it.
-<!-- sha:b5f77a9002d8 -->
-
-## 2026-11-13T17:44:22Z
-> Yes, adb helps. It also exposed a mistake of mine: your tablet very likely has enough room to update already.
->
-> **What I got wrong.** I told you Android keeps a tenth of the storage free after an install, so you'd need about 3.1 GB free. I checked the Android 10 source and tested on the emulator, and that was wrong. Android keeps 5 % of storage free, but never more than 500 MB, and an update needs about 0.45 GB on top of that. On your tablet (500 MB + 0.45 GB, about 1 GB) the update should already fit in your 1.6 GB free. That is tested on the emulator only, not on your tablet, which may have different settings. I fixed the numbers and wording in the app's code, but the fix is not released yet. You don't need it to update.
->
-> **Setup once.** On the tablet, go to Settings > About tablet and tap Build number 7 times. Then open Developer options and turn on USB debugging. Plug in the cable and accept the prompt on the tablet. On the computer, install Android "platform-tools". `adb devices` should then show `device`. Turn USB debugging off when you're done.
->
-> **First, three read-only commands. Paste the output back.**
-> ```
-> adb shell df /data
-> adb shell settings get global sys_storage_threshold_percentage
-> adb shell settings get global sys_storage_threshold_max_bytes
-> ```
-> `null` means Android's normal settings.
->
-> **Then install over the cable.** Download the alpha30 APK on the computer, which is faster than the 5 Mbit/s hotspot. Run this in the folder where you saved it, with the APK's file name:
-> ```
-> adb install -r <the APK file>
-> ```
-> It prints `Success` and keeps your data. If it fails, the error line says exactly why.
->
-> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha30
->
-> **Commands that help speed or function.** I ran these on the Android 10 emulator. The commands worked, but I did not measure a speed-up from any of them.
-> - **Animations off** (undo by setting each back to 1). This makes the whole tablet feel snappier:
->   ```
->   adb shell settings put global window_animation_scale 0
->   adb shell settings put global transition_animation_scale 0
->   adb shell settings put global animator_duration_scale 0
->   ```
-> - **Free memory before browsing:** `adb shell am kill-all`.
-> - **Find what eats the 2 GB:** `adb shell dumpsys meminfo`. Paste the "Total PSS by process" part. I can then tell you which preinstalled apps are safe to switch off. That is reversible with `pm enable`.
-> - **In-app updates without the Settings detour:** `adb shell appops set app.kestrel.browser.gecko REQUEST_INSTALL_PACKAGES allow`
-> - **Downloads keep going on battery with the screen off:** `adb shell cmd deviceidle whitelist +app.kestrel.browser.gecko`. Undo it with `-` instead of `+`. I only checked that the command runs.
-> - **More room:** `adb shell pm trim-caches 2G` clears other apps' caches. `adb pull` copies big files to the computer, and then you can delete them on the tablet.
-> - **Only if an install ever says "not enough storage":** `adb shell settings put global sys_storage
-> [... 1310 characters omitted ...]
-> nything to this repo") reached a second session started around 17:17, not this one. This reply answers both. Nothing was written for this answer except the automatic chat log. My test notes and the unreleased fix were saved before that message.
->
-> **Still open from you:**
-> - The adb outputs above, or just try the in-app update now.
-> - Menu > Diagnostics "App:" version line.
-> - Doraby: after updating, open a watch page, tap play, wait 10 s, then send Diagnostics > Page report. Also the exact words of the "incompatible browser / Cloudflare" site.
-> - Which earlier prompts felt unanswered.
-> - The choppy-video link, scroll and Back feel, Proton Mail numbers, and keyboard test.
-> - Yes or no on the scheduled GitHub ad-list build.
-> - Your private signing key.
-> - Earlier video problems (.ts files, grey icon, spam after play), and network lab results.
-> - Optional: licence, landscape tabs, Cromite comparison.
-<!-- sha:67ae69a79246 -->
 ## 2026-11-13T17:35:45Z
 > No permission will make Kestrel faster: it asks Android for almost nothing, and none of it affects speed. Below is what adb can do, best first.
 >
@@ -1659,3 +1055,1152 @@
 >
 > 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with "Yes Boss!".
 <!-- sha:53bdeeadb01a -->
+
+## 2026-11-15T16:00:31Z
+> Alpha48 isn't released yet. I'm waiting on three things:
+> - **Lab run 5** (20-minute check on the real engine): it ends around 16:15 container time. It will show whether Back leaves full screen and how the unrequested-download questions behave.
+> - **The independent code review** of the alpha48 changes: it's still running.
+> - **The one-hour hotspot run** (43732896160): it starts right after run 5. The lab's own test downloads and clips are now slowed to hotspot speed as well.
+>
+> Web tests (418) and the Kotlin unit tests are green. I'll ship alpha48 once run 5 and the review are in, and I'll answer you in plain words then.
+<!-- sha:5a3683f0fb9e -->
+
+## 2026-11-15T16:48:47Z
+> Status: the last guard tests pass. The lab run for your video controls and long press is queued (the old hour run was cancelled so it doesn't block it). Next I read its screenshots and fix whatever the real Firefox engine shows.
+>
+> 📌 **Chat checkpoint: 🟡 Yellow**
+>
+> **Goal:** Kestrel, the owner's light Android browser for a 2 GB Android 10 Go tablet on a 5 Mbit/s hotspot. Current asks (owner messages 43 and 44): full-screen video rotation, an emulator lab with a one-hour soak, a Yahoo Finance video with no controls, and a long press on a video opening download options instead of the floating panel.
+>
+> **Decisions made:**
+> - Kestrel draws its own bar on a tapped video that has no controls (Settings "Video controls": Automatic, Always, Off).
+> - A long press on a video opens the Save video sheet, also for players inside shadow roots.
+> - All nine review findings (RV1–RV9) are fixed before shipping alpha48 (code 149).
+>
+> **Changed / rejected:**
+> - "Back does not leave full screen" was a lab artifact (Android's "Viewing full screen" box ate the key), not an app bug.
+> - Run 109, the old one-hour run, was cancelled.
+> - nytimes, espn, twitch and YouTube home were dropped from the soak (they killed the emulated phone).
+>
+> **Key details:**
+> - Branch `ccr-b3c2484c-sbew36`, last ckpt 2399 (commit 4e233ebe).
+> - Lab `vc` suite is queued via android.yml app=lab.
+> - Heartbeat trigger `trig_01Y8CFHKVb6hmQmEEM78p6gv`.
+> - Release note draft is in the scratchpad (`note48.txt`).
+> - Release flow: `ship.sh gecko` → dispatch android.yml → `record-release.sh` after green.
+>
+> **Done so far:** web tests 430 and videobar 13 pass; Kotlin tests pass; HANDOFF and research notes updated.
+>
+> **Open / next steps:**
+> 1. Read the `vc` lab run and fix what it shows.
+> 2. Dispatch the hotspot hour run.
+> 3. Ship alpha48 and send the Release link.
+> 4. Answer the owner in plain words.
+> 5. Delete the heartbeat trigger.
+>
+> **Rules to remember:** ckpt after every step; write owner requests into TASKS before code; no `push:` workflow trigger; no APKs or keys in the repo; ASCII only; say what was not run on the tablet; re-list open items (RX4-V2: keep sound playing when the screen is off?).
+>
+> ⚠️ **Health:** One compaction so far and many large logs; CHECKPOINT.md in the repo is the authoritative state.
+>
+> 💡 This chat is getting long. Consider `/amhandoff` at the next good stopping point.
+> 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
+<!-- sha:fa68c188dfb6 -->
+
+## 2026-11-15T16:51:29Z
+> Waiting for the lab run's result.
+<!-- sha:755179e26901 -->
+
+## 2026-11-15T16:52:28Z
+> Still waiting for the lab run to finish; I'll read it when it does.
+<!-- sha:58f3a58fbfa0 -->
+
+## 2026-11-15T16:54:11Z
+> Waiting for the video-controls lab run to finish (about 17:00 on the container clock).
+<!-- sha:46e986a8cc85 -->
+
+## 2026-11-15T16:59:47Z
+> Waiting for the second video-controls lab run (about 17:12 on the container clock).
+<!-- sha:128466e1f8e2 -->
+
+## 2026-11-15T17:01:13Z
+> Still waiting on the second video-controls run; nothing else is blocking.
+<!-- sha:648e0b020076 -->
+
+## 2026-11-15T17:04:17Z
+> Waiting for the second video-controls run to finish.
+<!-- sha:424131410d96 -->
+
+## 2026-11-15T17:09:07Z
+> Waiting on two things: the third video-controls lab run (now on Yahoo's video page) and the local ship gates for alpha48.
+<!-- sha:7c260ffa049c -->
+
+## 2026-11-15T17:12:12Z
+> The ship gates are re-running after a one-line fix for a rare crash in the Courier server's shutdown code that kept failing the tests. The third lab run is also going.
+<!-- sha:d171cba405f7 -->
+
+## 2026-11-15T17:13:14Z
+> Waiting for the ship gates and the third lab run; I'll read both as they finish.
+<!-- sha:60a58225c5cf -->
+
+## 2026-11-15T17:15:33Z
+> Ship gates are green and pushed. I'm waiting for the third lab run before dispatching the release, so a bug it shows can still go into alpha48.
+<!-- sha:dbe49cd6e7b3 -->
+
+## 2026-11-15T17:19:52Z
+> Waiting for the alpha48 build to finish; the next check is at 17:35 container time.
+<!-- sha:1f1c1bf4dd51 -->
+
+## 2026-11-15T17:36:20Z
+> alpha48 is released. Your Yahoo problem is fixed and tested on the real Firefox engine, but not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha48
+>
+> **Your Yahoo Finance video**
+> - **Why the long press showed the floating panel:** Yahoo's player is built as a hidden "web component". Kestrel's video code couldn't see inside it, so it thought you pressed on empty space and opened the panel. The same blindness affected the other video features.
+> - **Why it had no controls:** in my check of the live page, the player draws almost no buttons while its ad plays. In my emulator run it did show its own buttons while the main video played, so the ad moment is my best explanation of what you saw.
+> - **What changed:**
+>   - **Controls:** if you tap a video that shows no buttons, Kestrel puts its own bar on it: play/pause, a track to tap or drag with the time, mute, and full screen. It hides itself and stays away where the page has its own buttons.
+>   - **Setting:** Settings > "Video controls" has Automatic, Always and Off.
+>   - **Long press:** this now opens the "Save video" options (download, copy the address) instead of the panel, including for players like Yahoo's.
+> - **What I tested:** on the real Firefox engine in an Android 10 emulator on GitHub, on four test pages and on Yahoo's real video page. On Yahoo, the long press opened "Save video" with no panel, and the tap left the page's own buttons alone. In that run the player was a live stream, so "Save video" said live streams can't be saved.
+> - **Not run on your tablet:** the emulator is a pretend tablet with software graphics.
+>
+> **Also in alpha48**
+> - **Full-screen video** turns sideways with the tablet, follows it with Android's rotation lock on, has a turn button at the left edge, and Back leaves full screen first. Android's one-time "Viewing full screen" box takes the first Back press, which is normal.
+> - **Downloads and installs:**
+>   - A download nobody tapped asks first.
+>   - A fake "Kestrel update" file is refused.
+>   - The Safe Browsing text is corrected.
+> - **Fixes from an independent check of this version:**
+>   - A site's own screen lock was misread.
+>   - Full screen could stay stuck after its tab was killed or closed.
+>   - A web page could have posed as the updater.
+>   - Redirecting download links were wrongly treated as started by themselves.
+>   - Several questions could pile up.
+>
+> **The emulator hour:** the lab runs on GitHub. A full one-hour browsing, video and download run with your hotspot speed is going now and ends in about an hour. The shorter runs found that the pretend phone's own system dies under heavy pages. The lab now restarts it and I took the heaviest sites out of the mix. I'll write up what the hour shows and fix what I can.
+>
+> **Open items**
+> 1. **Your tablet test:** play a Yahoo Finance video, long press it, tap a video that shows no buttons, play a film in full screen, turn the tablet, and press the turn button.
+> 2. **Question for you:** should sound keep playing when you leave Kestrel or turn the screen off? I won't build that until you answer.
+> 3. **Your GitHub steps:** a protected `release` environment, the "pin actions to a full commit" policy, and the private signing key last.
+> 4. **Not started:** cold-start speed, startup profile, the 250 ms wait, repeated page checks, and what Shields-off really lifts. Several need your tablet's Diagnostics numbers.
+<!-- sha:ac91cb85b1b3 -->
+
+## 2026-11-15T18:08:31Z
+> Status: alpha48 is released and the Release link is above. I'm now waiting on two things: the one-hour browsing soak in the lab (it ends around 18:35) and a second independent review of the new video-bar code. I'll fix anything real from either.
+<!-- sha:56ffb546efcb -->
+
+## 2026-11-15T18:21:24Z
+> Waiting for the Kotlin compile, the hour soak (about 18:36) and the sound run that follows it; I'll read each as it lands.
+<!-- sha:6392419da406 -->
+
+## 2026-11-15T18:21:57Z
+> Everything is pushed. Waiting for the hour soak (about 18:36) and then the sound run.
+<!-- sha:f5c5295f9107 -->
+
+## 2026-11-15T18:34:07Z
+> Status: the one-hour soak finished, and its numbers are mostly unusable. The emulator's 5 Mbit/s cap made ordinary pages like Wikipedia and BBC time out. Since you say fast wifi is the normal case, the main lab runs are now fast-network. The soak also flagged three "crashes" that were only helper processes closing normally, which I'm fixing. Next are the sound check, then the big site-by-site compatibility run.
+>
+> 📌 **Chat checkpoint: 🔴 Red**
+>
+> **Goal:** Kestrel, the owner's private browser for a 2 GB Android 10 Go tablet, mostly on fast wifi. Current asks (messages 43–45):
+> - full-screen rotation (shipped)
+> - video controls and long-press options (shipped in alpha48)
+> - sound must stop when not on the Kestrel tab (SND1)
+> - a polished, compatible, fast daily browser (PD1)
+> - fast-wifi emulator runs that log everything, then tune Kestrel from them (LAB2)
+>
+> **Decisions made:**
+> - Lab runs use the runner's fast link by default; hotspot shaping is not used for the main runs.
+> - The compat suite loads about 100 sites twice, Shields ON then OFF, from a cold cache.
+> - No foreground service for sound (the answer to RX4-V2 is NO).
+>
+> **Changed / rejected:**
+> - The hour soak under 5 Mbit/s shaping is not trustworthy for page speed.
+> - Helper-process deaths (`:media`, tab processes) are not app crashes.
+> - The earlier "Back does not leave full screen" report was a lab artifact.
+>
+> **Key details:**
+> - Branch `ccr-b3c2484c-sbew36`.
+> - alpha48 is released (tag `kestrel-g-v0.3.0-alpha48`, commit 281c48f4).
+> - Hour soak run 43740398387 has been read.
+> - Sound run 43745675957 is queued.
+> - Video-bar review agent `af040def2527a6855` is still running.
+> - Heartbeat trigger `trig_01Y8CFHKVb6hmQmEEM78p6gv`.
+>
+> **Done so far:** the lab harness is written and tested (page-health probe, scroll and memory measures, compat suite, report tables), and the Kotlin compile is green.
+>
+> **Open / next steps:**
+> 1. Fix the lab's helper-process false "crash".
+> 2. Read the sound run and fix SND1b if needed.
+> 3. Dispatch the 90-minute fast-net compat run, then read it and tune.
+> 4. Read the reviewer's result.
+> 5. Delete the heartbeat when done.
+>
+> **Rules to remember:** ckpt after every step; owner requests go into TASKS first; no `push:` workflow trigger; no APKs or keys in the repo; say what was not run on the tablet; sound must not play away from Kestrel; answer in plain words and re-list open items.
+>
+> ⚠️ **Health:** very long session with one compaction and many large logs; CHECKPOINT.md in the repo is the real state.
+>
+> 🔴 I'd move to a fresh chat now. Run `/amhandoff` and I'll write a file that brings the new chat fully up to speed.
+> 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
+<!-- sha:3230fc3d5e8f -->
+
+## 2026-11-15T18:35:34Z
+> Waiting for the sound run (about 18:44) and the reviewer's report.
+<!-- sha:69a7d11712e5 -->
+
+## 2026-11-15T18:36:56Z
+> The second independent review found twelve issues in the video-bar code, three of them major. They need fixing before alpha49. The worst is that a long press on a link sitting over a decorative video could wrongly open the Save sheet. I'm reading the files and fixing them now.
+<!-- sha:da874f23e39c -->
+
+## 2026-11-15T19:23:09Z
+> alpha49 is ready for your tablet:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha49
+>
+> I measured your three screenshots, and all three problems come from the same two causes.
+>
+> **1. Controls under the navigation bar.**
+> - On your tablet both system bars stay visible in full screen. alpha48 laid the page out edge to edge under them, so the player's bottom controls, and Kestrel's own bar, sat behind the navigation bar.
+> - Now the page is laid out inside any bar the tablet keeps. Where a system really hides its bars, the picture is still full-bleed.
+> - Menu > Diagnostics has a new line, "Full-screen system bars", that says what your tablet does.
+>
+> **2. Laggy, glitchy turning.**
+> - I did what you suggested. While the screen turns under a full-screen or playing video, the video pauses and the page is covered with black until the screen has stopped changing (about a second). Then it plays again by itself.
+> - A video you had paused stays paused, and so does one you touch during the turn.
+> - The engine only lets me pause videos that have sound. A muted video is only covered, not paused.
+> - Your third screenshot showed a stale layout with a grey strip after turning back. I don't yet know whether that is the page or the engine. The emulator run described below checks the live Yahoo player for it.
+>
+> **3. No controls in landscape.**
+> - Part of it was the navigation bar covering them, which is fixed above.
+> - Kestrel's own bar was also never drawn when the full-screen player is a web component like Yahoo's (a bug the independent check found). That is fixed. Tap the film in full screen and the bar appears if the page has none of its own.
+>
+> **Sound.**
+> - In the emulator the sound already stops when you leave the app by Home or screen-off. The clip's own clock stood still and the engine reported it paused. My first lab verdict of "sound kept playing" was a bad measurement, and I corrected it.
+> - I found one real gap by reading the code: Kestrel's own Home screen over a playing page left the page playing underneath. The app now pauses it, and also pauses any video left playing on another tab.
+>
+> **Also fixed**, from a second independent check of the video bar:
+> - A link, button or picture over a decorative video no longer opens the video menu or the bar.
+> - A long press released a moment late no longer brings the bar up behind the video menu.
+> - Two ad frames of the same size no longer confuse it.
+> - A web page can no longer switch the bar's menus off or cancel your taps.
+> - The page's own controls are now found on pages with very many links.
+>
+> **Not run on your tablet.** Everything above ran in headless browsers and guard tests only. The emulator runs of these exact full-screen cases are still queued. They include a switch that makes the emulator keep its bars the way your tablet does, plus the live Yahoo player turned both ways.
+>
+> **Still running, not finished:**
+> - The emulator run of the full-screen cases above, queued behind the big compatibility run.
+> - The compatibility run on about a hundred sites at fast-wifi speed, due around 20:10 UTC.
+> - An independent code check of the new code. If any of these finds something real I will ship alpha50.
+>
+> **Open for you:**
+> - Please try alpha49: the Yahoo Finance video in full screen, turned both ways. If a bar still covers anything, send me the Diagnostics lines "Full-screen system bars" and "Turning under a video".
+> - Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:5705f1b86c79 -->
+
+## 2026-11-15T20:43:57Z
+> alpha50 is out and replaces alpha49. Please install this one:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha50
+>
+> **Why alpha50.** An independent code check of alpha49 found two real problems, both fixed:
+> - The "Full-screen system bars" line in Diagnostics could say "hidden" while both bars were showing on Android 10. That is the line I asked you to send me.
+> - A tab that had been closed or put to sleep could still make a turn of the screen cover the page for nothing.
+> - Turning the tablet a second time during a turn was ignored once the video had been paused. That is also fixed.
+> - The code that handles turning now has twelve unit tests for exactly these cases.
+>
+> **Not proven yet.**
+> - The emulator run of your full-screen and turning cases proved nothing. That emulator booted with a 16 MB memory limit for apps, so Kestrel kept crashing on start-up and no page action ever ran. That limit is a quirk of the emulator, because the later boot and every earlier run had 512 MB. I added a guard so the Shields background code can no longer take the whole browser down on a memory error. The app now also logs its memory limit at start, and I re-ran the emulator at about 20:50 UTC. Until that run is clean, the full-screen, turning and Yahoo-controls fixes are checked only by tests, not on a real engine, and not on your tablet.
+> - The big compatibility run on about a hundred sites was also mostly void. The emulator's own system was killed three times, and only four sites loaded: Google, Bing, DuckDuckGo and Wikipedia. The two "crashes" it reported were not Kestrel. I changed the setup (more memory, one tab per site, a longer wait) and will re-run it after the full-screen run.
+>
+> **Still open:**
+> 1. Your tablet test of alpha50: the Yahoo Finance video in full screen, turned both ways, and the two Diagnostics lines if anything is still covered.
+> 2. The emulator results for full screen, turning and the Yahoo player. I will tell you what they show.
+> 3. The compatibility run, then fixes from it.
+> 4. Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:2848c2e14233 -->
+
+## 2026-11-15T21:05:38Z
+> alpha51 is ready, and you were right that alpha50 changed nothing for you. The link is here:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha51
+>
+> **Why alpha48 to alpha50 looked identical on your tablet.**
+> - Those versions only changed how Kestrel reacts to the system bars, and your tablet doesn't behave the way I assumed.
+> - My best explanation: it accepts the request to hide the bars and lays the page out as if they were gone, but still draws both bars on top. The app is told the bars are gone, so nothing it can read would have caught this. I can't prove it from here.
+>
+> **1. Controls under the navigation bar (and no controls in full screen).**
+> - By default, Kestrel no longer asks the tablet to hide its bars in full screen.
+> - The video now fills only the space between the status bar and the navigation bar, the same layout every normal page already gets. That is why the dock is never hidden behind the bar there.
+> - The player's own controls, and Kestrel's own bar when you tap a film that has none, therefore sit above the navigation bar in both orientations.
+> - Settings has a new row, "System bars in full-screen video". "Keep" is the default. "Hide" fills the whole screen and only makes sense on a tablet that really hides its bars.
+> - **Please check that row exists.** If it is missing, the update did not install. Android keeps the old version without a clear message when the tablet is low on storage. That alone would explain "nothing changed".
+>
+> **2. Pausing while the screen turns.**
+> - My earlier pause only worked for videos with sound, and the Yahoo video is muted. So it was never paused at all.
+> - Now the page itself pauses every video when the screen turns, muted ones included. This works for videos inside web-component players like Yahoo's.
+> - When the screen has stopped moving, the page is given one extra resize, so a player that measured itself from the old shape redoes its size. Then the video plays again by itself. A video you had paused stays paused, and so does one you touch during the turn.
+> - The black cover during the turn is still there.
+> - Diagnostics has a new line, "Turning, the page's own pause".
+>
+> **What I could not verify.**
+> - Everything was tested in headless browsers (452 tests) and unit tests only. It was not tested on your tablet.
+> - The emulator run for these cases has not given a clean result yet. Its first attempt died of the emulator's tiny memory limit. The second failed at start-up because of a mistake in my own workflow script, which is now fixed. A third run is in progress.
+> - I have not seen the "wrong size for a few seconds" symptom reproduced anywhere. The extra resize is my best guess at the cause, not a proven fix. In your third screenshot the picture was 575 pixels tall, which is the landscape height. That suggests the page kept the old height after the width had already turned.
+> - If the wrong size still happens, send the Diagnostics lines "Turning under a video" and "Turning, the page's own pause".
+>
+> **Still open:**
+> - Your tablet test of alpha51, starting with the new Settings row.
+> - The emulator results for the Yahoo player, which I will report.
+> - The compatibility run, which was mostly void and is being redone.
+> - The owner-only GitHub steps: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:d4c598f2b2c8 -->
+
+## 2026-11-15T21:35:47Z
+> alpha52 is out and signed. Here is my answer to your message 47.
+>
+> **Release (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha52
+>
+> You were right that alpha49 and alpha50 changed nothing for you. They rested on a guess about how your tablet treats the system bars, and I can't see your tablet.
+>
+> - **Bars (alpha51):** Kestrel no longer asks Android to hide the bars in full screen by default. The page now fills only the space between the status bar and the navigation bar, like every normal page, so a player's controls can't sit under the bar in either orientation. Settings has a new row, "System bars in full-screen video" (Keep is the default, Hide fills the whole screen).
+> - **Turning (alpha51):** when the screen turns, the page itself now pauses every video, including silent ones like Yahoo's autoplay. Before, only videos with sound were paused. It waits until the screen has stopped moving, gives the page one extra resize so a player that measured itself from the old shape redoes its size, and then plays again by itself. A video you had paused stays paused.
+> - **Wrong size for a few seconds (alpha52):** the emulator with the real Firefox engine showed that when a page goes full screen, the engine sizes it to the whole screen height (1024 px), not the space between the bars (947 px). It keeps that size until the next size change. That cuts off a player's bottom controls even with the bars kept, and it fits your third screenshot, a box left at the old landscape height. Now the page reports the size it really got, and if it is wrong the app gives the engine a real size change, at most three times per full screen.
+>
+> **What I have not checked:** none of this has run on your tablet. It was tested in headless browsers (453 tests), unit tests and the emulator, which is not your tablet's system. The clean emulator run of the alpha52 fix is still going, and I'll report what it shows.
+>
+> **Please try:** Yahoo Finance video, full screen, turn both ways. Then Menu > Diagnostics and send me these three lines:
+> - Full-screen system bars
+> - Turning, the page's own pause
+> - Full-screen page size
+>
+> **Still open:**
+> - your tablet test of alpha52
+> - the live Yahoo player in the emulator
+> - the 2-hour site-compatibility run (queued after the current emulator runs)
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:d033a5fc3872 -->
+
+## 2026-11-15T22:42:32Z
+> alpha53 is out and recorded. Here is my answer to your message 48.
+>
+> **Release (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha53
+>
+> **What your screenshots show (I measured them):**
+> - **Portrait:** the page is laid out as if the window were still landscape. The film is at the landscape height and cut off at the right screen edge, with empty space under it.
+> - **Landscape:** the page is laid out as if the window were still portrait. It is a 600 px wide box, the film is cut by the navigation bar, and there is empty space on the right.
+> - So after a turn, the page keeps the old orientation's layout for a few seconds. The good news is that the page sits between the bars now, which was the alpha51 change.
+>
+> **Why it happened:** your tablet's engine hands the new window size to the page late. The black cover from alpha51 and alpha52 went away as soon as Kestrel's own window was still, which is before the page had caught up. The emulator is much faster than your tablet, so it never showed this for seconds. It did show it once, on a quick double turn.
+>
+> **What alpha53 does:**
+> - The black cover and the video pause now stay until the page itself says it has the new size, for at most 7 seconds.
+> - A small progress ring shows after about a second so the black doesn't look frozen.
+> - A touch on the screen ends the wait.
+> - If the page still hasn't caught up after 2.5 seconds, the engine is given one real size change.
+> - I found and fixed a bug in my own first version: a page open in two tabs got mixed up with the other tab.
+> - Diagnostics: the line "Turning under a video" now says how long the page took to have the new size, the worst case, and how many turns gave up. The line "Full-screen page size" now also counts the pages that report their size.
+>
+> **What I have not checked:**
+> - None of this has run on your tablet.
+> - It passed 453 headless-browser tests, the unit tests, and the emulator with the real Firefox engine. There, every waited-for turn logged "the page had the new size after 0.35 to 0.9 s" and the run found no issues.
+> - I could not make the emulator's engine slow enough to reproduce your multi-second delay. So I can't promise the black screen won't last 3 to 7 s on your tablet. That is what the new Diagnostics line will tell me.
+>
+> **Please try:** the Yahoo Finance video in full screen, turned both ways. Tell me how long the black screen lasts, and send me three Diagnostics lines (Menu > Diagnostics):
+> - Turning under a video
+> - Full-screen page size
+> - Full-screen system bars
+>
+> **Still open:**
+> - your tablet test of alpha53
+> - the 2-hour site-compatibility run, which is running on the emulator now
+> - a stronger slow-engine emulator scene
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:00fe0dafcdb1 -->
+
+## 2026-11-15T22:46:36Z
+> alpha53 is out and your message 48 is answered above: the cover and pause now wait for the page to confirm the new size, and an independent review of the new code is running. Nothing has run on your tablet, so how long the black wait lasts there is still open.
+>
+> **While that review runs:**
+> - **Double rotation (ROT3, not released):** the emulator log showed the first manual rotation after full screen started turning the screen twice, with a portrait flash 0.45 s before landscape. Kestrel handed the screen back to the tablet's sensor before Android agreed on the new position. The fix waits 0.65 s for the tablet to stay in its position first. It is in the code with a test but not shipped, and I'll bundle it into alpha54 with the review fixes.
+> - **Site-compatibility run:** it is running on the emulator now, about 2 hours, with Shields on and off for about a hundred sites. I'll write up what it finds and fix the cheap issues.
+>
+> **Open:**
+> - your tablet test of alpha53 (the three Diagnostics lines: Turning under a video, Full-screen page size, Full-screen system bars)
+> - the review findings
+> - the compatibility-run findings
+> - the stronger slow-engine emulator scene, which has to wait for the compatibility run to finish because they share the lab
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:ed06d93199a5 -->
+
+## 2026-11-15T23:17:41Z
+> Here is an interim answer to your message 49. alpha54 is out, and the new video player is in progress.
+>
+> **alpha54 (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha54
+>
+> **What the audit found, one cause per observation:**
+> - **A tap doesn't hide the controls.** Kestrel's own bar only restarted its hide timer when you tapped, so it never toggled. Sites that draw their own controls (Yahoo's player) don't hide them on a tap by default either.
+> - **Pulling up the navigation bar covered the controls (alpha50).** That was the bar sliding over the page. Since alpha51 the bars stay and the page sits between them, which is why the controls now show in both orientations.
+> - **The "4 seconds" length.** Players show the length the page reports. For a streamed video that number grows as it downloads (4 s, 8 s, …), and an ad has its own short length. The new player will only show a length once it has stayed the same for 2 seconds and isn't smaller than what has been played or buffered. Until then it shows just the position.
+> - **The stretched picture on first full screen.** The engine sized the full-screen page to the whole screen height instead of the space between the bars. Turning fixed it by accident. alpha52 added the correction, and the new player will also keep the picture whole.
+> - **Rotation slow and buggy.** The engine hands the new size to the page seconds late on your tablet. alpha53 waits for the page, and alpha54 fixes three bugs an independent review found in that:
+>   - On Yahoo Finance and YouTube the black cover could stay up for the full 7 seconds on every turn.
+>   - The first manual turn after full screen began turned the screen twice.
+>   - A touch ending the wait counted as a failure.
+> - **The video is slow and laggy.** Kestrel's own scripts measured at no cost earlier. The usual causes are the page's own scripts and ads on a slow CPU, and the 5 Mbit/s hotspot. I can't see your tablet's CPU from here.
+>
+> **What I'm building now (alpha55):**
+> - Kestrel's own full-screen controls, drawn by the app over the video instead of inside the page, so the page can't hide or lay them out wrongly.
+> - **Tap:** each tap toggles the controls, and they hide by themselves 3.5 seconds after play starts.
+> - **Double-tap:** double-tapping a side jumps 10 seconds, and double-tapping the middle plays or pauses.
+> - **Controls:** a seek bar with times, mute, and an exit-full-screen button.
+> - **Rotation:** the controls disappear during a rotation and come back after.
+> - **Page buttons:** a site's own buttons, such as "Skip ad", keep working.
+> - **Setting:** Settings has a new row, "Full-screen video controls": Kestrel's (default) or The page's own.
+> - **Progress:** the page script has 12 browser tests, the rules have unit tests, and the Android view is written. I'm connecting it now and will prove it on the emulator with pictures before releasing.
+>
+> **What I have not run:** none of this has run on your tablet.
+>
+> **Still open:**
+> - the player build above
+> - your tablet test of alpha54 and then alpha55
+> - the 2-hour site-compatibility run, which is still running on the emulator
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:efd2cdceb2f7 -->
+
+## 2026-11-16T01:13:55Z
+> alpha55 is out, with Kestrel's own full-screen video controls. They passed all 22 emulator checks on the real Firefox engine, but I haven't run them on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha55
+>
+> It installs over alpha54. Your points from message 49:
+>
+> - **Tap toggles the controls.** Each tap on the picture shows or hides them, and they hide on their own after 3.5 seconds while the film plays. They stay up while the film is paused, ended or buffering.
+> - **No controls after rotating.** The app now draws the controls over the picture, so they are the same in portrait and landscape and don't depend on the page's layout.
+> - **Seeking and buttons.** Double-tap the left or right side to jump 10 seconds, and double-tap the middle to play or pause. There are also play/pause and 10-second buttons, a seek bar you can drag with the time and length, mute, and a button to leave full screen.
+> - **Navigation bar covering the controls.** With the default setting (bars kept) nothing can cover them. With "Hide", the controls keep room for the navigation bar you pull up.
+> - **"4 seconds" length.** A streamed film's length only shows once it has stayed the same for 2 seconds. Live streams say LIVE.
+> - **Stretched picture.** A film whose box has another shape than its picture is now shown whole.
+> - **The site's own bar.** It is put away while Kestrel's controls show, so there is one set of controls. I added Yahoo Finance's player bar to that list.
+> - **Slow and laggy.** I made the controls lighter (they redraw only when something shown changed, and the page reports once a second while they're hidden). I couldn't find or prove a cause, so I can't say it's fixed.
+> - **Rotation.** The slow, glitchy rotation was addressed in alpha52–54, not in this release.
+> - **Research.** The notes on how YouTube-style players, Chrome and Firefox do this are in `research/VIDEO_PLAYER_AUDIT.md`.
+>
+> The emulator found three real bugs, now fixed:
+>
+> - The page's address overwrote the film's "paused" flag, so the app thought every film was playing.
+> - A second press on the play button could repeat the first.
+> - Android 10 gives no signal when the navigation bar is pulled up over a film.
+>
+> An independent code review also found 12 more problems, and I fixed all of them. For testing: 479 browser-script tests and the Kotlin tests pass, and I probed the live Yahoo player in a headless browser.
+>
+> What I did not test on your tablet:
+>
+> - speed and smoothness, since the emulator's engine is much faster than yours
+> - the real navigation bar
+> - your hotspot
+> - YouTube's own player
+>
+> On the emulator, Yahoo's bar was still visible after a turn in the last run that opened the live player. I then hid its player bar, and a headless-browser check on the live page confirmed that. The last two emulator runs didn't open that player, so it isn't re-confirmed in Firefox.
+>
+> One trade-off: caption and quality buttons that sit inside a site's own bar go away with it. "Settings > Full-screen video controls > the page's own" brings them back for those. I can add a captions button to Kestrel's controls if you want one.
+>
+> Please try a video in full screen (tap, double-tap, turn the tablet, pause, drag the seek bar), then send me these Diagnostics lines:
+>
+> - Full-screen video controls
+> - Turning under a video
+> - Full-screen page size
+> - CPU by process
+>
+> Still open:
+>
+> - your tablet test of alpha55
+> - your tablet report on alpha53/54 (Diagnostics lines "Turning under a video", "Full-screen page size" and "Full-screen system bars")
+> - the captions-button question
+> - the 2-hour compat emulator run, which I dispatched and will read when it ends
+> - the three GitHub settings only you can change: a private signing key, a protected `release` environment, and the pin-actions-to-a-commit-SHA policy
+<!-- sha:643319a2f82c -->
+
+## 2026-11-16T01:23:42Z
+> I already answered this in the alpha55 reply, which crossed with your repeat. Here is it sentence by sentence, with what was already fixed in earlier alphas so nothing is redone.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha55
+>
+> - **"Falsely reported 4 seconds."** Fixed in alpha55. The old bar printed whatever length the stream had received so far, and an ad has its own length. The new controls show a length only when it has stayed the same for 2 seconds and is never shorter than what has played or buffered. Live streams say LIVE. This is covered by unit and browser tests, but I haven't seen it on the page you used.
+> - **"Stretched on first full screen, normal after landscape and back."** Fixed earlier, in alpha52. The engine sized the page to the whole display until the first real size change, so the app now gives it one. That was proven in the emulator then. Alpha55 adds a second guard that shows the whole picture when a page's box has the wrong shape. I haven't re-checked it on your tablet.
+> - **"Rotation buggy and slow."** Fixed in steps:
+>   - alpha51 paused the video and nudged the page.
+>   - alpha53 keeps the black cover and the pause until the page really has the new size.
+>   - alpha54 made one turn of the screen per move of the tablet.
+>   - alpha55 hides the controls under the cover and shows them again for 2.5 seconds afterwards, and they no longer depend on the page's layout.
+>   - In the emulator a turn settles in about 0.7 seconds. The live Yahoo page needed 1.7 to 3 seconds, and the cover waited for it. I haven't measured it on your tablet.
+> - **"Slow and laggy."** Not proven. I removed what Kestrel itself added around a playing video: the old bar measured layout four times a second and wrote to the page, and the new controls redraw only when something shown changed. The numbers that decide it are yours: the Diagnostics lines "Real video" and "CPU by process".
+> - **"Controls show up in both orientations."** Kept. Alpha55 draws them in the app, and the emulator pictures show both orientations.
+> - **"Tap hides the controls and gives the whole screen to the video."** Done in alpha55. It passed all 22 emulator checks twice on the real Firefox engine, and the site's own bar is put away so nothing else sits on the picture.
+> - **"Audit and research."** The three research files are in the repo. Your message made me check that the research and the code actually line up, so I did that now:
+>   - `research/VIDEO_PLAYER_AUDIT.md` section 1 now gives each of your observations its real status.
+>   - Section 5 compares 23 behaviours of the best players with Kestrel. Each is marked as matching, different on purpose, or a gap with a decision.
+>
+> The check found three small gaps, now fixed in code but not yet released, because I won't make you reinstall for them. I'll ship them with the next release.
+>
+> - **Failed video.** A video that fails (a flaky link) keeps the controls up and says "This video stopped", instead of a ring that spins forever.
+> - **Fade length.** The fade is 200 ms, as the research suggests.
+> - **Wake locks.** The emulator test now records whether the screen is kept awake while a film plays.
+>
+> Two things the big players have that Kestrel lacks: a captions button and a playback-speed button. Each adds a control to a small screen, so tell me if you want them. Captions matter most, because a site's own caption button goes away with its bar.
+>
+> I haven't run any of this on the tablet: speed and smoothness, rotation timing, the real navigation bar, your hotspot, or YouTube's own player.
+>
+> Still open:
+> - your test of alpha55 and its four Diagnostics lines
+> - your tablet report on alpha53/54 (the "Turning under a video", "Full-screen page size" and "Full-screen system bars" lines)
+> - your captions/speed decision
+> - the 2-hour compatibility emulator run, which I'll read when it ends
+<!-- sha:fec521e24be8 -->
+
+## 2026-11-16T01:27:20Z
+> Those two heartbeat reminders were stale. Everything they list is already done, so I redid nothing.
+>
+> Where things stand:
+>
+> - **alpha55** is released and answered. Your repeated message is answered too, point by point.
+> - **Compat emulator run** is still going. I set a reminder for 03:30 UTC to read it and write `research/COMPAT_RUN1.md`.
+> - **Next release, not shipped yet.** While waiting I added a few small fixes for the next release, with tests passing:
+>   - A video that fails now keeps its controls up and says "This video stopped", instead of a ring that spins forever.
+>   - The controls fade in 200 ms instead of 160.
+>   - The emulator test now records whether the screen is kept awake while a film plays.
+>   - A stuck-screen safety net: if the app ever stops taking a page's reports, the page gets its own bar and taps back after four refusals instead of being left with no controls.
+> - **Emulator check.** I queued one emulator run to prove these changes; it starts after the compat run finishes. I won't ask you to reinstall for these until that run passes.
+>
+> Still waiting on you: the tablet test of alpha55 with its four Diagnostics lines, and your decision on a captions or speed button.
+<!-- sha:419542fca405 -->
+
+## 2026-11-16T02:08:00Z
+> Nothing new needs doing at this 02:07 UTC heartbeat. The compat emulator run is still going (55 minutes in) and I have nothing new from you. alpha55 is released, your message is answered, and everything is saved and pushed. I'll read the compat run when my 03:30 UTC reminder fires.
+<!-- sha:d1c934c7cf53 -->
+
+## 2026-11-16T02:37:59Z
+> **Message 51, your tablet's Diagnostics of alpha55.** The new controls work on your tablet. Turning the tablet under a video is slow, and most of that slowness is not the controls.
+>
+> **What the numbers show**
+> - **Works:** The controls started in 4 of 4 full screens. Each tap showed or hid them (7 taps). The pause button reached the page. Yahoo's own play bar was put away (3 elements). The page had the right size every time (5 checks, 0 wrong). The film paused and played again at both turns.
+> - **Slow turns:** Each turn kept the black cover for about 3.1 s (3113 ms and 3086 ms).
+>   - Right after the size changed, the app's own screen froze for 0.9–2 s. The app shows the same kind of 1 s freeze at start, so I suspect the engine's surface resize rather than our views.
+>   - Android trimmed memory at those moments.
+>   - The Yahoo page then went silent for 3.5–14 s and sent no reports. The film only came back about 19 s after the first turn.
+> - **Automatic sideways turning never fired:** At the start of full screen the app did not know the film's shape (`video 0x0`), because Yahoo's player hides its video from the old finder. The player's own first report knew it 2.3 s later (1920x1080). You turned the tablet by hand both times, and each manual turn cost the 3.1 s cover.
+> - **Controls restarting:** The 3.5 s watchdog (the limit for a silent page) ended and restarted the controls session 4 times in 160 s. Each restart popped the controls up on their own.
+> - **Not measured at all:** Whether frames were dropped ("Real video" said nothing played) and what the page was busy with. "CPU by process" only sees the app's own process on Android 10.
+>
+> **Changed, coded and tested, shipping as alpha56 after one emulator check**
+> 1. Automatic turning now takes the film's size from the player's own first report.
+> 2. A busy page no longer ends the controls (limit 3.5 s → 12 s).
+> 3. Diagnostics now count turns where the page stays silent, and time the page's first report after the cover lifts.
+> 4. The controls script now reports numbers measured inside the page: how late its own timer runs, what the script itself costs, and frames shown and dropped (this also fills "Real video").
+> 5. Log lines now say how long the engine's part and the app's part of a turn take.
+>
+> I deliberately did not change the 3 s wait for a silent page or the 1 px size nudge. Your data can't say which way is better; the new numbers will.
+>
+> A tap shows or hides the controls 300 ms after the tap by design, because that is the double-tap window for seeking. Tell me if it feels slow and I'll make the first tap act at once.
+>
+> **Not proven:** Speed on your tablet, and whether the late automatic turn works on Yahoo's real page. The emulator check proves it on a lab page only.
+>
+> **What I need from you:** When alpha56 is out, please repeat the test on a light video page as well as Yahoo, and send the same Diagnostics lines.
+>
+> **Still open**
+> - The compat lab run is in progress.
+> - The kp lab run on this bundle is queued behind the compat run.
+> - VP12 (caption and quality buttons while Kestrel's controls own the film) still needs your decision.
+>
+> Next I'm having an independent reviewer read the alpha56 diff while the lab queue runs.
+<!-- sha:fe7264e02123 -->
+
+## 2026-11-16T02:41:56Z
+> Correction to my interim answer: your paste shows one full screen, not four. The controls session started four times inside it, and three of those were restarts after the 3.5 s watchdog (the limit for a silent page). The fix for that is in the alpha56 code.
+>
+> **Still running**
+> - The independent code review of the alpha56 changes.
+> - The compat lab run, which ends around 03:25 UTC.
+> - The kp lab run on this bundle, queued behind it. It now includes a check that the late automatic sideways turn works on the real engine.
+>
+> **One more fix from your log:** the page's "last look" picture was being read back twice while the film was full screen. That wasted CPU and saved the film's frame as the page's look. It no longer happens in full screen.
+>
+> **Next**
+> - Once the lab run is green and the review is handled, I ship alpha56 and send you the Release link with the final answer to message 51.
+> - A scheduled wake at 04:20 UTC picks this up in case this session is cut off.
+>
+> **Open from you**
+> - Please repeat the video test when alpha56 arrives, on Yahoo and on one light video page, and send the same four Diagnostics lines.
+> - Tell me if the 300 ms tap delay feels slow, so I can make the first tap act at once.
+> - VP12 (caption and quality buttons while Kestrel's controls own the film) still needs your decision.
+<!-- sha:c7a85d3a4736 -->
+
+## 2026-11-16T02:42:10Z
+> Everything is pushed. The branch on GitHub and the local branch are at the same commit (`fe7636f1`), so nothing is left only in this container.
+>
+> I'm still waiting on three things, and the session will be woken for each:
+> - **Code review:** the independent reviewer of the alpha56 changes is still running.
+> - **Compat lab run:** it ends around 03:25 UTC, and a scheduled wake at 03:30 UTC reads it.
+> - **kp lab run:** the check of the late automatic turn runs behind the compat run, and a scheduled wake at 04:20 UTC picks it up and ships alpha56 if it passes.
+<!-- sha:6dba3f1ff197 -->
+
+## 2026-11-16T04:14:25Z
+> **alpha56 is released.** It answers your Diagnostics paste (message 51) and your messages about the rotation lag and video lag (message 52, including the re-sent first paragraph). Nothing in it has been tried on your tablet yet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha56
+>
+> **One correction to my earlier reply:** your paste showed one full screen, not four. Kestrel's controls started four times inside it, and three of those were restarts after a page that was only busy.
+>
+> **Why the status bar icons stuck and the video cropped**
+> - When the tablet turns, Android freezes the screen until Kestrel has drawn its first frame at the new size.
+> - Kestrel's screen thread was blocked about 2 seconds inside the Firefox engine's surface resize, so the wait ran into Android's 2-second limit.
+> - Android then showed the old portrait pictures in the new landscape screen: icons at the old right edge, video cut at the old width.
+> - **Fix:** the engine's view keeps its old size for the first frame. The black cover and the bars are drawn at the new size at once, and the engine resizes behind the cover. On the emulator the first frame came 76–480 ms after the turn.
+>
+> **"Wrong size for a long pause"**
+> - That is a second, separate delay: your Yahoo page said nothing for 3.6 s to 14 s after a turn.
+> - The cover now waits up to 6 s (it was 3 s).
+> - The 1 px resize nudge now happens only for a page that answered with a wrong size. Both nudges in your log were for a page that was only busy.
+>
+> **Also in alpha56**
+> - A film in a web component (Yahoo's player) now turns the screen sideways by itself, using the size the player reports.
+> - A busy page no longer ends and restarts the controls (12 s limit instead of 3.5 s).
+> - The page's saved look is no longer read back from the graphics chip while a film is full screen. That happened twice in your log.
+>
+> **What other browsers do**
+> - Chrome puts the film on its own screen layer, so the screen hardware shows it without the graphics chip.
+> - Firefox has no such path on Android.
+> - Your tablet has hardware decoders for H.264, H.265 and VP9, so the lag is not the decoder.
+> - The more likely causes are your page's busy script thread, and VP9 1080p60, which is beyond the 1080p30 the chip declares. The engine settings cannot hide VP9 on this tablet.
+>
+> **Third-party code**
+> - Media3 (ExoPlayer) is already inside the app through the Firefox engine, so using it adds no new library.
+> - libVLC, ijkplayer, mpv and external players are not worth it.
+> - To try: the Save video sheet now has **"Play in Kestrel's player (test)"**. It plays plain video files and HLS streams on a SurfaceView with the hardware decoder and no page in the way. It is not offered for DASH or DRM, and it does not carry the page's cookies yet.
+> - On the emulator, the page's player dropped 18.7 % of 134 frames and Kestrel's own player dropped 0.3 % of 351. That is a rough look, since both decoded in software, and it says nothing about your tablet's speed.
+>
+> **Tested:** web tests, unit tests, an independent review (6 small findings fixed), 26 emulator checks on the real Firefox engine, and 13 emulator checks of the new player. **Not on your tablet.**
+>
+> **What I need from you**
+> - Turn the tablet under a film on the Yahoo page, and on a light video page too.
+> - Try "Play in Kestrel's player (test)" on the Yahoo film.
+> - Send these Diagnostics lines: Full-screen video controls, Turning under a video, Frames around turns, Real video, Video decoders, Heat and speed, and Kestrel's own player.
+>
+> **Still open**
+> - Page codec and frame-rate policy (I'll build it next).
+> - A 720p picture cap for HLS pages.
+> - DASH, cookies, and freezing the page behind the native player.
+> - Whether the first tap should show or hide the controls at once (it waits 300 ms for a double tap).
+> - Captions and quality buttons while Kestrel's controls own the film.
+<!-- sha:2290f1d9a234 -->
+
+## 2026-11-16T04:58:22Z
+> Alpha57 status: the page codec policy (ANS52g) and the HLS picture-size cap (ANS52h) are coded and unit-tested locally. The emulator proof run on the real Firefox engine (run 43806840560) is booting now. An independent review of the diff is running in parallel, and I'm woken at 05:08Z to read both.
+>
+> Nothing from alpha57 has been tried on the tablet yet, so I'm not asking you to test it.
+>
+> Open items I'm holding:
+> - Your tablet report on alpha56: the Diagnostics lines, and the Save video sheet's "Play in Kestrel's player (test)".
+> - After the lab read: alpha57 itself (codec policy + 720p HLS cap) and its release.
+> - Older rows: VP10, VP12, ROT2e, ANS48, SOAK1d, LAB2f.
+<!-- sha:92431e68186c -->
+
+## 2026-11-16T04:59:24Z
+> Waiting on two background jobs: the emulator proof run (43806840560, now running the lab suite) and the independent code review. I'll pick up when either finishes, or at the 05:08Z wake.
+<!-- sha:407d8142df8f -->
+
+## 2026-11-16T05:57:06Z
+> Alpha57 is not shipped yet. The code is written and passes every test I can run here. I'm waiting on two things before shipping.
+>
+> - **Emulator run on the real Firefox engine (run 43812820865):** it covers the controls, Kestrel's own player and the press-to-play rule. I'll read its report when it finishes.
+> - **Independent review of the press-to-play script:** it's read-only, and a bug there could stop videos playing on real sites.
+>
+> I also added a lab check for the Quality button in the page's full-screen controls. It needs a second lab run, since the one in flight started before I wrote it.
+>
+> What your message 53 gets so far, all coded:
+> - **No auto-playing:** a video starts only when you press play.
+> - **No video data before play:** only the picture the site shows for the video is downloaded.
+> - **Instant controls:** a tap on the picture shows or hides the full-screen controls with no wait and no fade.
+> - **Quality:** a Quality button in Kestrel's own player. The page's full-screen controls get the same button for films that offer two or more pictures, like the Yahoo one; picking one moves the film to Kestrel's player from the same second.
+> - **Download badge:** the button no longer stays lit on the Home screen.
+> - **Kestrel's own player:** it follows how you hold the tablet and has a rotate button.
+>
+> None of this has run on your tablet. The emulator proves behaviour, not how smooth it is on your hardware.
+>
+> Still open from earlier: your tablet test and Diagnostics numbers, a caption/speed/quality entry for films without a playlist address (VP12), and a few older lab-tuning rows (ROT2e, SOAK1d, LAB2f).
+<!-- sha:6dbf79de49f7 -->
+
+## 2026-11-16T05:57:26Z
+> Nothing new from you. The queued notification was an old routine telling me to read the earlier codec/picture-size lab run (43806840560). I'd already read it and fixed what it found, so there's nothing left to do on it.
+>
+> Still waiting on the current lab run (43812820865, "Run the lab" step in progress) and the press-to-play review. I'll pick both up when they finish.
+<!-- sha:102309bab3d7 -->
+
+## 2026-11-16T06:01:50Z
+> Still waiting on the emulator run, which is in its test phase, and on the press-to-play review. I'll check again when the next timer fires.
+<!-- sha:74988d508057 -->
+
+## 2026-11-16T06:42:16Z
+> Lab run 3 (id 43818471174) is running on the exact build I plan to ship, and I'm waiting on it before releasing alpha57. Once it's clean I'll ship, wait for GitHub to build and sign it, then answer message 53 point by point with the Release link.
+<!-- sha:544b4ded09db -->
+
+## 2026-11-16T06:51:38Z
+> The release note is drafted; I'm waiting for lab run 3 to finish before shipping.
+<!-- sha:9c7ba13a7abd -->
+
+## 2026-11-16T06:56:25Z
+> Still running (about 11 minutes in; the previous run took 9). I'll check again in three minutes.
+<!-- sha:9aaa2ee68c0f -->
+
+## 2026-11-16T07:01:38Z
+> Release build for alpha57 is running on GitHub (run 43820755532). I'll check it in about seven minutes.
+<!-- sha:3c51fa54534d -->
+
+## 2026-11-16T07:10:16Z
+> Alpha57 is built and signed by GitHub, ready to install over alpha56.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha57
+>
+> I have not run it on your tablet. I tested it on the emulator running the real Firefox engine.
+>
+> **Your first list**
+> 1. **No video starts by itself.** The engine blocks all autoplay, the app refuses every autoplay request, and a script in each page keeps every video closed until you press it. In the emulator, nine test pages never played without a press, including looping clips and script-driven players.
+>    - A looping clip with no play button stays still, and tapping it does not start it.
+>    - Music and sounds are not held, only video.
+>    - The switch is Settings > "Videos start only when I press play" (on by default). Turn it off and sites behave as before.
+> 2. **No video data before you press play.** Only the page's poster picture loads, and a video with no poster stays blank until you press play. The one exception is the app's own one-byte question about the file's size, used for the download list.
+> 3. **Controls at once.** A tap on the picture now shows or hides the full-screen controls with no wait and no fade. The app answers on the screen itself, between 4 and 104 ms in the emulator. A double tap on the left or right side still jumps 10 seconds.
+> 4. **Quality.**
+>    - Kestrel's own player has a Quality button listing every picture the stream offers, with size, frames a second and bit rate. Your pick is remembered.
+>    - The full-screen controls of a film in the page get the same button when it is an HLS stream with two or more pictures, which the Yahoo film should be. Picking one moves the film to Kestrel's player at the same second, and Back returns to the page.
+>    - The emulator tested this with a stand-in film, not your Yahoo film.
+>    - Films with no playlist address (YouTube-style players) get no list yet.
+>
+> **Your second list**
+> 1. **Download button lit on Home:** the Home screen sits over a page that stays alive underneath, and the button, the list and the menu entry ignored that. They now do not count a page under Home.
+> 2. **Kestrel's player in portrait:** it no longer forces landscape or stretches the first picture. It follows how you hold the tablet and has a rotate button at the top left. The emulator turned it both ways with the tablet and with the button.
+> 3. **Smoother than the page's player:** noted. That is why the Quality button hands films over to it.
+>
+> I also shipped the open parts of message 52: sites are told "no" to video formats this tablet cannot play smoothly (VP9 above 1080p30), and HLS pages are held to a picture size that fits the screen. Both are settings.
+>
+> An independent review of the press-to-play script found 12 problems. I fixed 8, confirmed 1 on the emulator, and left 3 on purpose:
+> - A player inside another site's frame may need a second tap inside the frame.
+> - After one press, a site can still queue its next film itself, because ad players need that.
+> - A Settings change reaches new pages within a minute.
+>
+> **Proof:** 551 web tests, all unit suites, and 243 emulator checks passed on the exact build. Nothing was run on your tablet.
+>
+> **Please send back:** the Diagnostics lines "Videos start only when pressed", "Full-screen video controls" and "Kestrel's own player". Also tell me about any video site that no longer plays after a press, or a film with no Quality button.
+>
+> **Still open:**
+> - Your tablet test of alpha57.
+> - A caption, speed and quality entry for films with no playlist address (VP12).
+> - A few older rows: VP10, ROT2e, ANS48, SOAK1d, LAB2f, and the optional video-speed experiments (ANS52j).
+<!-- sha:a6fec1c4bb30 -->
+
+## 2026-11-16T07:53:56Z
+> Hand-over lab run 43826954106 is running (about 8 minutes). Waiting on its results before the final full lab pass and the alpha58 release.
+<!-- sha:1f5f3c41de01 -->
+
+## 2026-11-16T08:01:22Z
+> Still running; I'll check the result in about two and a half minutes.
+<!-- sha:c3d6be92b07e -->
+
+## 2026-11-16T08:43:13Z
+> Status: the plain-video fix works on the real engine and I'm now in the verification stretch before alpha58.
+>
+> - **Running now:** the full emulator video run (about 12 more minutes) and an independent review of the new code.
+> - **Found and fixed on the way:**
+>   - A page script could have faked the "open Kestrel's player" question without you touching anything. Now only your own tap can start it.
+>   - A film you press play on again continues where you stopped.
+> - **Next:** read both results, fix anything they find, then ship alpha58 and answer your message 54 point by point with the download link.
+> - **Not yet verified:** nothing has run on your tablet; every result so far is from the emulator.
+<!-- sha:4303d0a887f5 -->
+
+## 2026-11-16T08:50:12Z
+> Waiting on the emulator run (ends about 08:58 UTC) and the code review; I'll pick up from whichever finishes first.
+<!-- sha:9e711009be91 -->
+
+## 2026-11-16T08:54:46Z
+> Still waiting on the emulator run and the review (both running); I'll read each as soon as it lands.
+<!-- sha:044cf0d04fd4 -->
+
+## 2026-11-16T08:58:58Z
+> Still waiting; the emulator run should finish within a few minutes.
+<!-- sha:890b63694e05 -->
+
+## 2026-11-16T09:02:07Z
+> Still running; checking again in a few minutes.
+<!-- sha:c70ff9ad45cd -->
+
+## 2026-11-16T09:04:22Z
+> The independent review found nine real problems in the new hand-over code, including a real security hole; I'm verifying each one against the code before changing anything. First, checking where the emulator run stands.
+<!-- sha:28befa47970a -->
+
+## 2026-11-16T09:14:29Z
+> Test suites running; I'll read their results in a few minutes, then start the final full emulator run.
+<!-- sha:db9111ca2216 -->
+
+## 2026-11-16T09:19:11Z
+> Final emulator run in progress (started 09:18 UTC, expected to end around 09:40). I'll check it in a few minutes.
+<!-- sha:07846e82f952 -->
+
+## 2026-11-16T09:24:08Z
+> Waiting for the emulator run; the next check is at about 09:35 UTC.
+<!-- sha:b9b2f925fb46 -->
+
+## 2026-11-16T09:28:59Z
+> Still waiting on the emulator run (no results yet).
+<!-- sha:f13b276a2df8 -->
+
+## 2026-11-16T09:33:51Z
+> Emulator run still going (lab job started 09:23, now nearly 20 minutes in); I'll look again in four minutes.
+<!-- sha:0d21988291c6 -->
+
+## 2026-11-16T09:41:20Z
+> Gates running; I'll read their result in a couple of minutes.
+<!-- sha:496109449eef -->
+
+## 2026-11-16T09:43:57Z
+> The release gates passed (alpha58, build 159, is staged). I'm waiting for the last emulator re-run before telling GitHub to build and publish it.
+<!-- sha:d4e081f1b632 -->
+
+## 2026-11-16T09:50:31Z
+> Waiting for the release build to finish; I'll verify the tag, all build jobs and the published APK before recording or announcing anything.
+<!-- sha:441450ac36c8 -->
+
+## 2026-11-16T09:58:07Z
+> Waiting for the release run (about five minutes between checks).
+<!-- sha:a0ffb8fc909d -->
+
+## 2026-11-16T10:03:08Z
+> Android build in progress; I'll confirm the tag and the published APK before recording or announcing anything.
+<!-- sha:2cf57785815d -->
+
+## 2026-11-16T10:09:42Z
+> Your message 54 is answered in alpha58, which is built, signed and published. I haven't run any of it on your tablet. Everything was tested on a Firefox-engine emulator and in headless browsers, so how it feels on the tablet (smoothness, decoder) is still unchecked.
+>
+> Open this page on the tablet and tap the `.apk`; it installs over your current Kestrel G:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha58
+>
+> **Your points, one by one**
+>
+> - **(a) The web player was slow and laggy.** When you press play on a video in a web page, Kestrel's own player now takes the film over. It's the smooth one from the download button's "Play in Kestrel's player". Back returns you to the page. Press play on the page again and it continues where you stopped.
+>   - **Works for:** a plain video file, a stream the page asked for (a player that loads a playlist), and a film that goes full screen.
+>   - **Stays in the page, as before:** YouTube-style players that hide their stream, and protected (DRM) films. Those can still lag.
+>   - **If Kestrel's player can't play a film,** it goes back to the page, which plays it for the next two minutes. A site that needs your login for the video file could do this.
+>   - **Setting:** Settings > "Web videos play in": Kestrel's player whenever it can (default), only in full screen, or the page's own player. It only works while "Videos start only when I press play" is on.
+>   - **Your tap only:** an independent review found that a page's script could have faked the request and opened the player without you. That is fixed. Only your own tap on the page can start it now.
+> - **(b) Full screen turned sideways by itself.** "Turn the screen for full-screen video" now starts as "Follow the tablet", so portrait stays portrait. "Automatic" is still there if you want it.
+> - **(c) The resolution box didn't close and froze.** That was the site's own box, and the freeze was the site's code on a busy page. Films that move to Kestrel's player use Kestrel's own Quality list instead, and it now has an x button that closes it.
+> - **(d) Your feedback** that Kestrel's player is smooth and upright is why I modelled the web player on it. Thank you.
+> - **(e) Your request** is what (a) delivers.
+>
+> **What was tested**
+> - Unit tests and 573 web tests in headless browsers.
+> - An independent code review: 9 real problems found, all fixed.
+> - About 270 emulator checks. Everything about the new hand-over passed on the emulator, including the plain video with the engine's own play button, a play button over the picture, a script player with a stream, a player with nothing to take over, a broken address, pressing again, and the setting.
+> - A few older emulator checks of Kestrel's controls missed on a timing detail in some runs (a different one each time). I widened their wait, and the one re-run still missed one, so those aren't fully clean.
+> - I have not tried your own sites, only test pages.
+>
+> **What I need from you:** the Diagnostics line "Web videos in Kestrel's own player" after you've watched a few videos, and which sites still play in the page.
+>
+> **Still open**
+> - Films with no playlist address (the YouTube-style ones: their quality and caption menus; VP12).
+> - Improving from the long-run soak findings (SOAK1d).
+> - The fast-wifi lab program (LAB2f).
+> - Older items still open in TASKS.md: VP10, ROT2e, ANS48, ANS52j.
+<!-- sha:75b6aab7ec25 -->
+
+## 2026-11-16T10:12:43Z
+> The owner-facing answer is already given; I'm saving the session handoff notes (done by a helper) and will confirm the saved paths when it reports back.
+<!-- sha:d264dac5b6b0 -->
+
+## 2026-11-16T15:31:19Z
+> Alpha58 is released and your message 54 is answered above. The session handoff is also saved and pushed (last checkpoint 2516), so a new session can pick up from the files alone.
+>
+> - **What the handoff tool did:** it replaced the auto-managed "Session Learnings" block in `CLAUDE.md` and `AGENTS.md` with this session's decisions. That would have dropped the earlier mini-panel, open-space and slow-script decisions from `CLAUDE.md`, so I put them back by hand in a separate section above the auto block, along with the emulator line. They also remain in the repo's history.
+> - **Not run on your tablet:** I only tested it on the emulator, so I'm waiting on your report for how it feels there.
+> - **What I need from you:**
+>   - the Diagnostics line "Web videos in Kestrel's own player" after you've watched a few videos
+>   - which sites still play in the page
+> - **Still open:**
+>   - films with no playlist address, such as YouTube-style ones (VP12)
+>   - improving from the long-run soak findings (SOAK1d)
+>   - the fast-wifi lab program (LAB2f)
+>   - VP10, ROT2e, ANS48 and ANS52j in `TASKS.md`
+<!-- sha:414ea24b1c97 -->
+
+## 2026-11-16T15:55:59Z
+> Waiting for the emulator run of the Yahoo fix (it started 15:52 and takes about 11 minutes).
+<!-- sha:b953e150cb5e -->
+
+## 2026-11-16T15:58:47Z
+> Still waiting on the emulator run.
+<!-- sha:ae6021afe55e -->
+
+## 2026-11-16T16:01:36Z
+> Web tests running for the alpha59 release; the next step is the release gates.
+<!-- sha:17f8ef987e65 -->
+
+## 2026-11-16T16:04:00Z
+> Waiting for the web tests and the emulator run.
+<!-- sha:01525dbab226 -->
+
+## 2026-11-16T16:05:21Z
+> The web tests pass (573 of 573); the emulator run for "a different video gets its own stream" is in progress.
+<!-- sha:e6e9f19fa4be -->
+
+## 2026-11-16T16:33:54Z
+> The report is done and sent as one Markdown file: `/tmp/claude-0/-home-user-Browser/12796fbc-bb0d-552d-b005-24654337a327/scratchpad/KEYBOARD-APP-PLAN.md`. It's about 20,000 words. I wrote no code and ran no tests, nothing was run on your tablet, and my web checks were search results only, not full pages.
+>
+> The new session should open with this: "Read KEYBOARD-APP-PLAN.md completely, then do section 11 (bootstrap) and continue with section 12 in order." Sections 0, 1, 2 and 12 are the minimum it needs.
+>
+> ## What I found
+> - **Most of the hard part already exists.** The browser has a complete glide engine in pure Kotlin: the decoder, an 83k-word list with word pairs, and learning of your words, pairs, triples, corrections, glide shapes and thumb habit. It has 122 unit tests and a learning-file export. It has no Android dependencies, so it moves to a new app unchanged.
+> - **The missing parts** are everything that makes it a system keyboard. That means the Android keyboard service, tap-typing prediction and autocorrect, suggestions, emoji, clipboard, and any layout beyond English QWERTY. I listed 12 specific gaps in the report, including that the code only handles letters a–z, which blocks Spanish accents and ñ until it's changed.
+>
+> ## What the plan recommends
+> - **Build on the browser's engine** instead of forking HeliBoard, FlorisBoard or FUTO. HeliBoard is GPL-3.0 and its glide engine is a closed library it doesn't ship. FUTO's licence restricts forks, and FlorisBoard uses Jetpack Compose, which is too heavy for 2 GB.
+> - **No internet permission in the keyboard.** A keyboard sees everything you type, so it can't send it anywhere. Translation therefore runs offline.
+> - **Learning upgrades** to get the "better the more I type" behaviour:
+>   - a per-key touch model;
+>   - shape memory that carries over between similar words, so a habit learned on "for" also helps "four" and "form";
+>   - word-pair and three-word context, plus a topic signal for the sentence so far;
+>   - a way to measure accuracy on your real thumb without the data leaving the device.
+> - **Translation to Mexican Spanish.** It uses an offline translation model in its own process, plus a Mexican-Spanish clean-up layer. A generic Latin-American model isn't Mexican by itself, and DeepL says so about its own. Whether such a model runs on a 32-bit ARM tablet is unverified, so the plan starts with a test on your tablet.
+> - **Phased task list** of about 30–40 sessions, with five checkpoints where it stops for you to test.
+>
+> ## What you should know
+> - **I didn't touch the Kestrel repo.** Its own hooks did write there. Its message-capture hook committed your message into `INBOX.md` on my session branch `claude/laughing-cori-u22au1`, and a similar hook will record this reply into `OUTBOX.md` on the same branch. That branch is mine, not the other account's, and you can delete it. The report itself was written outside the repo.
+> - **Your Spanish decision.** In the browser project you once said "Do not include Spanish". I treated your new translate request as overriding that, but whether you want to type in Spanish too is an open question in the report.
+> - **Safety and signing.** A broken keyboard on a tablet with no other keyboard locks you out of typing, so the plan builds the escape hatches first. The new app should be signed with a private key, not the browser's public one. Otherwise any APK could silently replace your keyboard, and changing keys later erases what it learned.
+> - **Questions to answer early.** Q1 is the app name. Q2 is a private or public GitHub repo, where I recommend private. Q3 is whether you want to type in Spanish or only translate. The full list, with defaults, is section 15.
+<!-- sha:03a0e0a3ae17 -->
+## 2026-11-16T16:07:10Z
+> Waiting for the emulator run (expected around 16:14 UTC).
+<!-- sha:7735f2ff8dd0 -->
+
+## 2026-11-16T16:10:09Z
+> Short wait, then I read the emulator results.
+<!-- sha:1cad998af89b -->
+
+## 2026-11-16T16:11:37Z
+> Almost done; I'll read the report as soon as it appears.
+<!-- sha:cc7c19ef4ee8 -->
+
+## 2026-11-16T16:11:56Z
+> Still running; checking again in two minutes.
+<!-- sha:ba39173a6388 -->
+
+## 2026-11-16T16:14:41Z
+> Waiting for the release checks to finish; the release build is dispatched right after.
+<!-- sha:3292d1b5ec5b -->
+
+## 2026-11-16T16:27:56Z
+> Your messages 55 and 56 are fixed in alpha59, except for the player inside the page, which isn't built yet. It still opens full screen. I also haven't run any of this on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha59
+>
+> **Message 55, the black Yahoo video: fixed.**
+> - **Cause:** Yahoo hands the browser one main list for the film, plus separate lists for the picture, the sound and the subtitles. All of them are as long as the film. Kestrel's player was given the sound or subtitles list, so it showed the time and no picture. I found this by loading the real Yahoo page from my build machine.
+> - **Fix:** Kestrel's player now always takes the main list, the one that offers pictures.
+> - **Safety net:** if a film plays for 7 seconds with no picture, Kestrel's player hands it back to the page, which plays it with a short message.
+>
+> **Message 55, switching to another video: fixed.**
+> - The newest main list the page asked for is now the film, so each video gets its own stream.
+> - A new video starts at the beginning. "Resume where I stopped" only applies when you press play on the same video again.
+>
+> **Message 56, an old video showing when you pick a different one: same fix.** The old video's list was being reused for the new press. Each press now takes its own list.
+>
+> **Message 55, the player inside the page: not in alpha59.**
+> - **What's coming:** the video will sit over the page's own video box, follow the page as you scroll, and have a full-screen button, so you still see the website around it.
+> - **Where it stands:** I'm building it now for the next release. The position-tracking rules are written and their unit tests pass. The page-side measuring, the view itself and the controls are not.
+> - **Until then:** it opens full screen as before. To keep the page's own player, use Settings > Web videos play in > The page's own player.
+>
+> **Tested:**
+> - Unit tests, 573 web tests in headless browsers, and 53 emulator checks of the hand-over on the real Firefox engine.
+> - The emulator copied Yahoo's list layout and covered the page moving on to another video, and a stream with sound but no picture.
+>
+> **Please do on the tablet:**
+> - Try the same Yahoo video again.
+> - Send the Diagnostics line "Web videos in Kestrel's own player". It now names the site of the list it took.
+>
+> **Still open:**
+> - the player inside the page (in progress)
+> - VP12: films with no playlist address, e.g. YouTube style
+> - VP10
+> - ROT2e
+> - ANS48
+> - SOAK1d
+> - LAB2f
+> - ANS52j
+<!-- sha:50a847bda896 -->
+
+## 2026-11-16T16:52:54Z
+> Your answers are clear, and the translation-quality requirement changes the plan, so I'll research it properly before updating the report. First I'm checking the strongest offline translation models, whether they fit your tablet, GitHub's private-repo limits, and the keyboard name.
+<!-- sha:a95e4167d154 -->
+
+## 2026-11-16T17:00:32Z
+> I've updated the plan with your three answers and sent it as `KEYBOARD-APP-PLAN.md`; use this one instead of the earlier file. I couldn't run any translation model here, so the translation quality claims are estimates and search results, and the plan tests quality before building anything.
+>
+> ## Your answers
+>
+> **Q1, the name: Swoop.** It fits glide typing, and kestrels swoop, so it echoes your browser. I found no Android keyboard with that name. The apps are `app.swoop.keyboard` and, if you want them, the translator add-ons `app.swoop.translate` and `app.swoop.online`. The repo name is `swoop-keyboard`. You can rename it later.
+>
+> **Q2, private repo.** Section 11.0 is a click-by-click list. The short version:
+> 1. On GitHub tap **+**, then **New repository**. Name it `swoop-keyboard`, choose **Private**, and leave README, .gitignore and license all off.
+> 2. Let Claude in at https://github.com/apps/claude/installations/select_target by choosing "Only select repositories" and adding it. Also check GitHub is connected at https://claude.ai/connect-github.
+> 3. Start a new Claude Code session on that repo, attach the file, and say the start phrase.
+>
+> A private repo has two side effects:
+> - **Downloading APKs:** a release link on a private repo only works while you're signed in to GitHub in that browser, so sign in once in the Kestrel browser. The plan describes a workaround if that's a nuisance.
+> - **Build minutes:** private repos get 2,000 free build minutes a month, which is plenty for building the app. That figure is from older GitHub docs, so check your usage page.
+>
+> **Q3, no Spanish typing, translation only when you turn it on.**
+> - I removed everything about Spanish layouts and dictionaries.
+> - The setting is off by default. When it's off there is no button, nothing running, and no network use.
+>
+> ## Translation quality (this is the part to read)
+>
+> A modern translator doesn't translate word by word; it translates whole sentences. The real risks are idioms translated literally, wrong politeness level, losing context between sentences, and Spain-style words in Mexican text.
+>
+> - **Offline on your tablet.** With 2 GB of RAM and a slow processor, the best model that fits is about 75–240 million parameters. It would be a good translator for ordinary messages, but not as good as a large AI model on idioms, slang and context.
+> - **Large AI models don't fit.** Google's new open TranslateGemma 4B needs about 2 GB on its own, so it doesn't fit.
+> - **Online option.** The tablet's weak spot is the one thing a large model fixes. Claude Sonnet 5.5 costs about a third of a cent per message, and Haiku 5.5 about 1/70 of a cent. It would sit in a separate app so the keyboard itself stays free of internet access. The catch is that it needs an Anthropic account and key, and your text goes to Anthropic.
+> - **Test before building.** The plan has no engine work until a blind test passes.
+>   - A session writes 150 test texts plus correct Mexican answers, and you fix them.
+>   - GitHub's servers 
+> [... 469 characters omitted ...]
+> lgar in Mexico) and handles "$" amounts and dates. It starts from a seed word list that you need to review.
+>
+> ## Not done
+> - I couldn't test the models hands-on. The sandbox's safety check blocked a script that tried to reach model sites, and I didn't work around it. That's why the test runs on GitHub's servers.
+> - Items I couldn't confirm are marked in the file's appendix.
+>
+> ## Open questions
+> Q4–Q14 in section 15 all have defaults, so none blocks starting. The ones that matter most:
+> - **Q4:** should translation use friendly "tú" or formal "usted" by default, and should it ever translate Spanish into English?
+> - **Q5:** are you willing to add the online app after you've seen the test results? I'd ask again then.
+> - **Q13:** what phone do you have, or how much RAM? A big-RAM phone could run a better offline translator than the tablet.
+>
+> Everything else from the first plan carries over unchanged.
+<!-- sha:53dc0e3b90d3 -->
+## 2026-11-16T16:53:27Z
+> Still waiting on the emulator run and the review. I'll continue when they finish.
+<!-- sha:af56b43a1f10 -->
+
+## 2026-11-16T17:04:31Z
+> Draft release note for alpha60 is written, with the test results still to be filled in; waiting for the emulator run.
+<!-- sha:deed9114c4b6 -->
+
+## 2026-11-16T17:26:30Z
+> Waiting for the background tests and the emulator run to finish.
+<!-- sha:bc2e2601950b -->
+
+## 2026-11-16T17:29:15Z
+> Waiting for the notification from the timer and the emulator run.
+<!-- sha:cfdc66926d90 -->
+
+## 2026-11-16T17:36:37Z
+> Waiting for the timer, the web tests and the emulator run.
+<!-- sha:dfbcf74a08d4 -->
+## 2026-11-16T17:19:46Z
+> I updated the plan with your answers and sent it as `KEYBOARD-APP-PLAN.md` (use this one; it replaces the earlier file). I read your `tjshea90/LinkMeter` repo read-only and changed nothing in it, and I didn't run any of its translation code or call the services.
+>
+> ## What LinkMeter uses, now in the plan
+> - **MyMemory first:** it's a free service with no account, asked for Mexican Spanish (`es-MX`). It allows about 5,000 characters a day, and each request is capped at 500 bytes.
+> - **Google Translate as the fallback:** the free endpoint behind Gboard's translation, used when MyMemory is used up or unreachable.
+> - **A Mexican-Spanish safety layer on every result:**
+>   - "coger" is vulgar in Mexico, so it becomes "agarrar".
+>   - "coche" becomes "carro".
+>   - "ordenador" becomes "computadora".
+>   - "vosotros" forms become "ustedes".
+> - **Plain texting words are spelled out before sending to Google:** "idk", "tbh" and so on.
+> - The plan tells the new session to port this code and its roughly 56,000 tests to Kotlin and require the same results.
+> - **Friendly "tú":** the services answer in "tú" for casual English. I added a test list and a guard that asks the other service if an answer comes back formal.
+>
+> ## "Enter translates, Enter again sends"
+> LinkMeter's Send logic is ported as is. The first Enter replaces your English with the Spanish for you to check, and Undo and "Send my English" are there. The second Enter sends. It follows the same rules as LinkMeter, and it's off everywhere until you switch an app on.
+>
+> ## What a keyboard cannot do (the plan says so plainly)
+> - **Apps with their own Send button:** most texting apps, including LinkMeter, have one. The keyboard can translate on Enter, but you tap the app's own Send yourself.
+> - **LinkMeter itself:** it already translates on its own, so the keyboard skips it. Otherwise the text would be translated twice.
+> - **Long-pressing any message in any app:** this is impossible for a keyboard. The plan gives three routes that do work:
+>   - the text-selection menu, which shows "Translate to English" wherever an app allows selecting text;
+>   - copy the message, then use the keyboard's translate button;
+>   - select text in the box you're typing in.
+>
+>   LinkMeter's own long press stays as it is.
+>
+> ## What I removed
+> All the offline-model, test-first, fine-tune, and large-AI-model translation material is gone. The old Spanish-typing material was already removed in the last round.
+>
+> ## Things to know
+> - **Internet permission:** I kept the keyboard free of any internet permission, so it can't send what you type anywhere. Translation lives in a second tiny app, Swoop Translate, which is the only one that can use the internet. If you'd rather have one app like LinkMeter, say so and the plan changes.
+> - **Service limits:** MyMemory's free allowance is small, and over a carrier hotspot the shared address may use it up faster. Google's endpoint is unofficial and could change or block you. The plan covers both with clear messages and tests, but I couldn't try live requests from here.
+> - **LinkMeter's own notes:** they say the translation hadn't been tried on your tablet when written, so your real use is the only real test.
+>
+> ## Questions for you
+> The new ones are in section 15, and the defaults let work start:
+> - **Q15:** keep the internet permission in the separate tiny app (my default) or put it in the keyboard?
+> - **Q16:** in which apps do you want translate-on-Enter? The default is none until you switch each one on.
+> - **Q17:** is it OK that in apps with their own Send button you tap Send yourself?
+> - **Q18:** is it OK to translate received messages through the selection menu or by copying, instead of long-pressing any bubble?
+> - **Q19:** should LinkMeter's message box change so Enter sends there too? The default is no. That would be a change in the other repo, and I'd only do it if you ask.
+>
+> Still open from before: your repo setup (steps in the plan), then a new session with the file attached.
+<!-- sha:998bcb1804a1 -->
+
+## 2026-11-16T17:48:43Z
+> Waiting for the emulator run to finish.
+<!-- sha:117df21e9e41 -->
+
+## 2026-11-16T18:00:25Z
+> Your answers change the architecture (one app, internet permission inside the keyboard) and the activation model (a Gboard-style toggle in any app, not a per-app list), and they set a goal of fewest presses for received messages. I'm finding every place in the plan that depends on the old design.
+<!-- sha:0ea3954a47b5 -->
+
+## 2026-11-16T18:04:43Z
+> I updated the plan with your five answers and sent it as `KEYBOARD-APP-PLAN.md`; use this one instead of the earlier file. I changed nothing in LinkMeter and ran no code or translation requests.
+>
+> ## What changed
+>
+> - **Q15, one app.** There is no second translator app. The keyboard now holds the internet permission, used only by translation. This drops the earlier promise that the keyboard can't send anything anywhere, so the plan replaces it with checks the build enforces:
+>   - The permission list must be exactly what's expected.
+>   - All network code stays in one place, and a scan fails the build if network code appears anywhere else.
+>   - Only the two services LinkMeter uses are ever contacted.
+>   - The keyboard uses no outside libraries.
+>   - One gate decides every request. It refuses password, web-address, email, number, phone and search fields.
+>   - A log counts every request but never records the words.
+>   - Any future change to that code is reported to you in plain words.
+> - **Q16, any app, only when you turn it on.** The keyboard gets a Translate button in its toolbar, like Gboard's. It is off until you tap it, and the first tap shows a short explanation. While it's on, the button is lit and Enter shows a small "ES" mark. There is no per-app list. An optional timer can switch it off by itself, and the default is that it stays on until you turn it off, as you asked. A short "never translate in these apps" list is pre-filled with LinkMeter, because LinkMeter already translates by itself and a second translation would garble the Spanish. You can remove it.
+> - **Q17, own Send button.** Accepted. Enter translates, then you tap the app's Send.
+> - **Q19, LinkMeter.** It stays untouched and read-only.
+>
+> ## Q18, fewest presses for a received Spanish message
+>
+> | Route | Presses |
+> | :- | :- |
+> | Long-press the message, then tap "Translate to English" in the text-selection menu. The English shows at once. | 2 |
+> | Copy the message, open the keyboard, tap a chip that appears by itself (only while Translate is on). This covers apps that offer only Copy. | 3, plus the reply-box tap you'd do anyway |
+> | Google's own Tap to Translate, for comparison | 3 |
+>
+> - **Two is the minimum.** Android decides where the "Translate to English" entry sits in the menu. If it lands under the "more" button, that route costs 3.
+> - **One press needs an accessibility service.** A long press anywhere in any app would need a service that reads other apps' screens. That is heavy on this tablet and invasive, so I left it out.
+> - **Measured on your tablet.** The plan counts the real presses in the apps you use and writes up which route is best where.
+>
+> ## Questions for you
+>
+> - **Q20:** do you want the one-press accessibility option later? I assumed no.
+> - **Q21:** should Translate switch itself off after a while, or stay on until you turn it off? I assumed it stays on, as you asked.
+>
+> The translation service, the Mexican-Spanish clean-up and the friendly-"tú" checks are unchanged from the previous version.
+<!-- sha:eea4b3e3c27e -->

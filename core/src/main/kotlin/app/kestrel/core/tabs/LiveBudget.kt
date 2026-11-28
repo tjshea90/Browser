@@ -37,6 +37,26 @@ object LiveBudget {
     const val MAX = 8
 
     /**
+     * ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a PRIVATE tab): may the memory handling put this tab to
+     * sleep (close its engine session) to keep the budget? Never the tab in front, never one with a live pop-up child (window.opener), and never a PRIVATE tab: the engine forgets everything private (cookies,
+     * logins) when its last private session closes, so a private tab that was put to sleep comes back logged out. It stays live whatever the budget says; the person closes it.
+     */
+    fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate
+
+    /** Android says every background app is about to be ended (ComponentCallbacks2.TRIM_MEMORY_COMPLETE). */
+    const val TRIM_COMPLETE = 80
+
+    /** A tab in front is put to sleep after the app was left only when the app has been away at least this long. */
+    const val AWAY_BEFORE_SLEEP_MS = 30L * 60_000L
+
+    /**
+     * ANS58c + ANS59 (owner message 59: "It should work for regular tabs in addition to private tabs"): may the tab in front be put to sleep because the app was left and Android wants memory? Switching to another app and
+     * coming back must find the page as it was, for a regular tab as much as for a private one. A private tab never (it would come back logged out). A regular tab only after a LONG absence ([AWAY_BEFORE_SLEEP_MS]) and
+     * only when Android says the background apps are about to be ended ([TRIM_COMPLETE]); below that the page stays in memory and Android may end its process itself (then it is brought back with its history, as before).
+     */
+    fun mayHibernateInBackground(isPrivate: Boolean, awayMs: Long, level: Int): Boolean = !isPrivate && level >= TRIM_COMPLETE && awayMs >= AWAY_BEFORE_SLEEP_MS
+
+    /**
      * How many live tabs to keep after a memory callback ([level] is `ComponentCallbacks2.onTrimMemory`'s argument), given the [budget] above and the available memory.
      * 10 RUNNING_LOW and 20 UI_HIDDEN ("the user left the app") do not mean the memory is short on a device with this little RAM (Android derives them from how many
      * cached processes there are), so they change nothing by themselves; the levels that say "the system is short" shrink the set only when the free memory agrees.

@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const SHIELDS = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
-const SRC = ['engine.js', 'redirects.js', 'background.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8')).join('\n'); // the order of the manifest's background scripts
+const SRC = ['engine.js', 'redirects.js', 'hlscap.js', 'background.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8')).join('\n'); // the order of the manifest's background scripts
 const IMAGE = fs.readFileSync(path.join(__dirname, 'fixtures', 'mini.kex'));
 const ID = '1.111.1700000000000.1.2.3.4.5.6';
 // objects built inside the vm context have another Object.prototype: compare them as JSON
@@ -48,12 +48,19 @@ function fakeIdb(store) {
   };
 }
 
-/** @param app (message) => reply string (may be async). @param opts { idb: Map } */
+/** A webRequest StreamFilter as the extension sees it: what the extension writes is collected, close() and disconnect() are noted. */
+function fakeStreamFilter(id) {
+  const f = { id, written: [], closed: false, disconnected: false, write(b) { f.written.push(Buffer.from(new Uint8Array(b))); }, close() { f.closed = true; }, disconnect() { f.disconnected = true; } };
+  f.body = () => Buffer.concat(f.written).toString('utf8');
+  return f;
+}
+
+/** @param app (message) => reply string (may be async). @param opts { idb: Map, noFilter: true = filterResponseData throws } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 };
+  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 }, filters = [];
   const ctx = {
-    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
+    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
@@ -78,7 +85,9 @@ function harness(app, opts) {
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
-        onHeadersReceived: { addListener: (f) => { listeners.headers = f; } },
+        // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
+        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } else listeners.headers = f; } },
+        filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
       },
@@ -88,7 +97,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, raws, ctx, listeners, clock, tabMsgs,
+    sent, raws, ctx, listeners, clock, tabMsgs, filters,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
@@ -1181,6 +1190,60 @@ test('RX3-G7: a report from the top frame of a tab whose page the extension neve
   assert.equal(got[1].p, '', 'a frame says nothing: the app then drops the report like one from a private tab');
 });
 
+test('RX4-M0a: a video look is forwarded as clamped whole numbers with the tab page, nothing else (no address of the video); from no tab, nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'vq', t: 400, d: 12, c: 0, s: 15, w: 1280, h: 720, junk: 'x'.repeat(4000), u: 'https://cdn.example/v.mp4', p: 'https://evil.example/' }, 1, PAGE, 0);
+  h.message({ k: 'vq', t: 99999999, d: -5, c: 'x', s: 99999, w: 1e9, h: 'q' }, 1, PAGE, 3);          // a frame of the tab, absurd numbers
+  assert.equal(h.message({ k: 'vq', t: 10 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('vq');
+  assert.equal(got.length, 2);
+  assert.deepEqual(got[0], { k: 'vq', t: 400, d: 12, c: 0, s: 15, w: 1280, h: 720, p: PAGE }, 'only the numbers and the page of the tab');
+  assert.deepEqual(got[1], { k: 'vq', t: 0, d: 0, c: 0, s: 0, w: 0, h: 0, p: PAGE }, 'absurd numbers become 0 and the page is the tab\'s, not the frame\'s');
+});
+
+test('RX4-M0e: a scroll burst is forwarded as clamped whole numbers with the tab page, from the top frame only; flag 32 of the page configuration is the guard answer\'s sg', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'sg', n: 120, a: 6, b: 2, mx: 180, junk: 'x'.repeat(4000), p: 'https://evil.example/' }, 1, PAGE, 0);
+  h.message({ k: 'sg', n: 99999, a: -1, b: 'x', mx: 1e9 }, 1, PAGE, 0);
+  h.message({ k: 'sg', n: 120, a: 6, b: 2, mx: 180 }, 1, 'https://player.example/embed', 4);        // a frame: never measured
+  assert.equal(h.message({ k: 'sg', n: 10 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('sg');
+  assert.equal(got.length, 2);
+  assert.deepEqual(got[0], { k: 'sg', n: 120, a: 6, b: 2, mx: 180, p: PAGE });
+  assert.deepEqual(got[1], { k: 'sg', n: 0, a: 0, b: 0, mx: 0, p: PAGE }, 'absurd numbers become 0');
+});
+
+test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive and when the request completes), a 304 is timed from its start, pages are counted; the text rides on the stats message', async () => {
+  const h = harness(standardApp());
+  const sub = (id, ts) => h.listeners.before({ type: 'script', url: 'https://cdn.example/' + id + '.js', tabId: 1, frameId: 0, requestId: id, timeStamp: ts, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+  h.mainFrame(PAGE, { requestId: '5', timeStamp: 1000 });
+  sub('6', 1010); sub('7', 1010); sub('8', 1010);
+  h.listeners.headers({ statusCode: 304, requestId: '6', url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', responseHeaders: [], timeStamp: 1140 });
+  h.listeners.completed({ requestId: '6', statusCode: 304, fromCache: false, url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1150 });
+  h.listeners.completed({ requestId: '7', statusCode: 200, fromCache: true, url: 'https://cdn.example/7.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1012 });
+  h.listeners.error({ requestId: '8', error: 'NS_ERROR_ABORT', url: 'https://cdn.example/8.js', tabId: 1, frameId: 0, type: 'script' });
+  // the stats timer is only set once something calls markStats(), which in this test happens when the image transfer ends: wait for it instead of flushing the timers once (a 4-in-6 flake before, found 2026-11-16)
+  for (let i = 0; i < 100 && h.of('st').length === 0; i++) { await tick(10); await h.flushTimers(); }
+  const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');
+  const rv = st[st.length - 1].rv;
+  assert.ok(/pages 1, requests 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
+});
+
+test('RX4-M0c: the wait before a navigation to a site that has scriptlet rules is timed and counted (and the answer still arrives)', async () => {
+  const { h, mine } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
+  await until(() => mine().length === 1, 'the site script');
+  eq(await h.mainFrame(SLSITE), {});
+  await h.flushTimers();
+  const st = h.of('st'); assert.ok(st.length > 0);
+  const rv = st[st.length - 1].rv;
+  assert.ok(/scriptlet waits before a page 1 \(\d+ ms in all, slowest \d+ ms, 0 hit the 250 ms ceiling\)/.test(rv), rv);
+});
+
 test('RX3-V1: the video report carries the element facts as clamped whole numbers; a report without them (an older script) stays as it was', async () => {
   const h = harness(standardApp());
   h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 25.4, l: '', p: PAGE, f: 27, rw: 300.7, rh: 170, vp: 80 }, 1, PAGE, 0);
@@ -1233,4 +1296,225 @@ test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library f
     assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
   }
   assert.ok(m.content_scripts[0].js.includes('content.js'), 'content.js comes first: it listens for the guard\'s ready event');
+});
+
+test('VP1: the full-screen film state is relayed as clamped numbers: the PAUSED flag is pa (p is the page address, as in every message), the number of the last carried-out command is ak, and the app\'s JSON answer comes back parsed', async () => {
+  const h = harness((m) => (m.k === 'vst' ? '{"s":1,"c":[{"a":"pause","i":3}]}' : standardApp()(m)));
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  const r = await h.message({ k: 'vst', t: 12.34, d: 60, b: 20, p: 1, e: 0, m: 1, v: 100, r: 1, rs: 4, ms: 0, l: 0, w: 640, h: 360, ak: 7, aw: 3, er: 1, lt: 3500, pc: 12, tf: 1200, df: 15, sh: 1, junk: 'x' }, 1, PAGE, 0);
+  assert.deepEqual(r, { s: 1, c: [{ a: 'pause', i: 3 }] }, 'the answer reaches the page parsed');
+  const got = h.of('vst')[0];
+  assert.deepEqual(Object.keys(got).sort(), ['ak', 'aw', 'b', 'd', 'df', 'e', 'er', 'h', 'k', 'l', 'lt', 'm', 'ms', 'p', 'pa', 'pc', 'r', 'rs', 'sh', 't', 'tf', 'v', 'w'], 'only the known numbers go on: ' + JSON.stringify(got));
+  assert.equal(got.pa, 1, 'paused'); assert.equal(got.ak, 7); assert.equal(got.aw, 3); assert.equal(got.er, 1); assert.equal(got.m, 1); assert.equal(got.t, 12.34);
+  assert.equal(typeof got.p, 'string', 'p is the page address'); assert.ok(got.p.indexOf('example.com') >= 0, got.p);
+  assert.equal(got.lt, 3500, 'ANS51e: how late the page timer ran'); assert.equal(got.pc, 12, 'the player script\'s own work'); assert.equal(got.tf, 1200, 'frames shown'); assert.equal(got.df, 15, 'frames dropped'); assert.equal(got.sh, 1, 'the film sits in a shadow tree');
+  await h.message({ k: 'vst', t: 1, d: 60, lt: -5, pc: 1e12, tf: 'x', df: 4e9, sh: 2, p: 0 }, 1, PAGE, 0);
+  const bad = h.of('vst')[1];
+  assert.equal(bad.lt, 0, 'a negative lateness is nothing'); assert.equal(bad.pc, 0, 'a huge cost is clamped away'); assert.equal(bad.tf, 0); assert.equal(bad.df, 0); assert.equal(bad.sh, 0);
+  await h.message({ k: 'vst', t: 1, d: 60, lt: 120000, p: 0 }, 1, PAGE, 0);
+  assert.equal(h.of('vst')[2].lt, 0, 'a lateness of minutes is a sleeping device or a clock step, not a stall (review of alpha56)');
+  const t = await h.message({ k: 'vst', t: 1e12, d: -2, b: -5, p: 0, ak: -3 }, 1, PAGE, 0);
+  const g2 = h.of('vst')[3];
+  assert.equal(g2.t, 0, 'clamped'); assert.equal(g2.d, -2, 'infinite is kept as -2'); assert.equal(g2.ak, 0); assert.equal(g2.pa, 0);
+  assert.ok(t);
+});
+
+test('VP1: a length of 2^32 seconds (the live marker) and a huge position reach the app as they are (review F8)', async () => {
+  const h = harness((m) => (m.k === 'vst' ? '{"s":0}' : standardApp()(m)));
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  await h.message({ k: 'vst', t: 1700000000, d: 4294967296, b: 4294967296, p: 0 }, 1, PAGE, 0);
+  const g = h.of('vst')[0];
+  assert.equal(g.d, 4294967296); assert.equal(g.t, 1700000000); assert.equal(g.b, 4294967296);
+  await h.message({ k: 'vst', t: 1e12, d: 1e12, b: -1, p: 0 }, 1, PAGE, 0);
+  const g2 = h.of('vst')[1];
+  assert.equal(g2.d, 0, 'still clamped beyond ten billion seconds'); assert.equal(g2.t, 0);
+});
+
+// ---------------------------------------------------------------- ANS52g: the video format policy (codec-main.js) and what it refused
+const VPOLICY = '00|2048x1088@522000|2048x1088@522000|2048x1088@244800|-';
+
+test('ANS52g: the video format policy rides in the fifth field of the page answer and comes back as `cx` in the guard answer', async () => {
+  let policy = VPOLICY;
+  const h = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1:${policy}` : standardApp()(m)));
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await h.message({ k: 'guard', h: 'movie.example' })).cx, VPOLICY);
+  // a new policy (a Settings change) arrives with the next answer for any host; an empty one means none
+  policy = '10|-|-|-|-';
+  assert.equal((await h.message({ k: 'guard', h: 'other.example' }, -1)).cx, '10|-|-|-|-');
+  policy = '';
+  assert.equal((await h.message({ k: 'guard', h: 'third.example' }, -1)).cx, '', 'told "none"');
+});
+
+test('ANS52g: an answer of an older app (four fields) keeps the policy that was told before; nobody has a policy before the first answer', async () => {
+  const h = harness((m) => (m.k === 'cfg' ? (m.h === 'old.example' ? `1:1:${ID}:1` : `1:1:${ID}:1:${VPOLICY}`) : standardApp()(m)));
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await h.message({ k: 'guard', h: 'new.example' }, -1)).cx, VPOLICY);
+  assert.equal((await h.message({ k: 'guard', h: 'old.example' }, -1)).cx, VPOLICY, 'four fields: nothing new was said');
+  const fresh = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1` : standardApp()(m)));
+  fresh.mainFrame(PAGE);
+  await until(() => fresh.of('cfg').length >= 1, 'cfg');
+  assert.equal((await fresh.message({ k: 'guard', h: 'old.example' }, -1)).cx, '');
+});
+
+test('ANS52g: what the pages refused is summed, clamped and handed to the app as `vx` of the stats message; nothing is said until a page reports', async () => {
+  const h = await onPage();
+  await h.flushTimers();
+  assert.ok(h.of('st').every((m) => m.vx === ''), 'no report, no text');
+  h.message({ k: 'vcx', a: 7, s: 5, m: 1, f: 0, w: 'vp9 3840x2160@60' }, 1, PAGE, 0);
+  h.message({ k: 'vcx', a: 3, s: 0, m: 0, f: 2, w: 'avc 1280x720@60' }, 1, PAGE, 3);
+  h.message({ k: 'vcx', a: -5, s: 'x', m: 1e12, f: NaN, w: '<script>alert(1)</script> ' + 'z'.repeat(100) }, 1, PAGE, 0);
+  await h.flushTimers();
+  const st = h.of('st'), vx = st[st.length - 1].vx;
+  assert.match(vx, /^questions 10 \(counted when something was refused\), refused 8: above the decoder's limit 5, not H\.264 1, above 30 fps 2; last: [a-z0-9 x@.]{0,30}$/);
+  assert.ok(vx.length <= 240 && vx.indexOf('<') < 0);
+});
+
+// ---------------------------------------------------------------- ANS52h: the picture size cap for HLS master playlists
+const HLS_MASTER = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2"', 'v1080.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3500000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"', 'v720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n');
+const HLS_MEDIA = ['#EXTM3U', '#EXT-X-TARGETDURATION:6', '#EXTINF:6.0,', 'seg1.ts', '#EXT-X-ENDLIST', ''].join('\n');
+const hlsApp = (cap) => (m) => (m.k === 'cfg' ? `1:1:${ID}:1:${VPOLICY}${cap === undefined ? '' : ':' + cap}` : standardApp()(m));
+const hlsReq = (id, extra) => Object.assign({ url: 'https://cdn.example/v/master.m3u8?t=1', requestId: id, statusCode: 200, method: 'GET', tabId: 1, frameId: 0, type: 'xmlhttprequest' }, extra || {});
+const buf = (x) => { const b = Buffer.isBuffer(x) ? x : Buffer.from(String(x), 'utf8'); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+/** feeds [chunks] through the filter of a request and stops it */
+function runFilter(h, id, chunks, extra) {
+  const before = h.filters.length;
+  const r = h.listeners.hlsHeaders(hlsReq(id, extra));
+  const fl = h.filters[before];
+  if (fl) { for (const c of chunks) fl.ondata({ data: buf(c) }); fl.onstop(); }
+  return { r, fl };
+}
+const stText = async (h) => { await h.flushTimers(); const st = h.of('st'); return st.length ? st[st.length - 1].hx : ''; };
+
+test('ANS52h: the listener is blocking, narrow (addresses that name a .m3u8, the three request kinds a player uses) and does nothing while no cap is told', async () => {
+  const h = await onPage(hlsApp(0));
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsSpec)), ['blocking', 'responseHeaders']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.urls)), ['http://*/*.m3u8*', 'https://*/*.m3u8*']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.types)).sort(), ['media', 'other', 'xmlhttprequest']);
+  const { r } = runFilter(h, 'a1', [HLS_MASTER]);
+  eq(r, {}, 'the response is not touched');
+  assert.equal(h.filters.length, 0, 'cap 0 = off: no filter at all');
+  const old = await onPage(guardApp());                                 // an app that sends no 6th field
+  runFilter(old, 'a2', [HLS_MASTER]);
+  assert.equal(old.filters.length, 0);
+  for (const nonsense of ['abc', '5', '-1', '99999999', '']) { const x = await onPage(hlsApp(nonsense)); runFilter(x, 'a3', [HLS_MASTER]); assert.equal(x.filters.length, 0, 'told "' + nonsense + '": off'); }
+});
+
+test('ANS52h: with the cap on, the master playlist reaches the page without the rungs above it, written once, then closed', async () => {
+  const h = await onPage(hlsApp(1313));
+  const { r, fl } = runFilter(h, 'b1', [HLS_MASTER.slice(0, 90), HLS_MASTER.slice(90, 250), HLS_MASTER.slice(250)]);   // the playlist arrives in three pieces
+  eq(r, {});
+  assert.equal(h.filters.length, 1);
+  assert.equal(fl.written.length, 1, 'nothing was written while the playlist was still coming');
+  assert.equal(fl.body(), ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=3500000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"', 'v720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n'));
+  assert.equal(fl.closed, true); assert.equal(fl.disconnected, false);
+  const hx = await stText(h);
+  assert.match(hx, /^playlists looked at 1, cut 1 \(1 rungs taken out, last 3 -> 2 at 1313\), left as they were: not a master list 0, nothing above the cap 0, not text 0, too big 0, errors 0$/);
+});
+
+test('ANS52h: a list that is no master list, a master list within the cap and bytes that are no text go through exactly as they came', async () => {
+  const h = await onPage(hlsApp(1313));
+  const a = runFilter(h, 'c1', [HLS_MEDIA.slice(0, 20), HLS_MEDIA.slice(20)]).fl;
+  assert.equal(a.body(), HLS_MEDIA); assert.equal(a.closed, true);
+  const small = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n');
+  const b = runFilter(h, 'c2', [small]).fl;
+  assert.equal(b.body(), small); assert.equal(b.closed, true);
+  const gz = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad, 0xbe, 0xef, 0xff, 0xfe]);   // gzip bytes (an invalid UTF-8 text)
+  const c = runFilter(h, 'c3', [gz]).fl;
+  assert.deepEqual([...Buffer.concat(c.written)], [...gz]); assert.equal(c.closed, true);
+  const html = runFilter(h, 'c4', ['<html>not a playlist at all</html>']).fl;
+  assert.equal(html.body(), '<html>not a playlist at all</html>');
+  const empty = runFilter(h, 'c5', []).fl;
+  assert.equal(empty.written.length, 0); assert.equal(empty.closed, true);
+  const hx = await stText(h);
+  assert.match(hx, /cut 0 \(0 rungs taken out\), left as they were: not a master list 1, nothing above the cap 1, not text 3, too big 0, errors 0/);
+});
+
+test('ANS53 review 6: the page gate (flag 1024) stays CLOSED when the app gives no answer, and follows the flag when it does', async () => {
+  const silent = harness((m) => (m.k === 'cfg' ? '' : standardApp()(m)));          // an app that cannot answer (not ready, a bridge error): not an answer
+  silent.mainFrame(PAGE);
+  await tick(20);
+  assert.equal((await silent.message({ k: 'guard', h: 'a.example' }, -1)).gt, true, 'no answer: the person\'s rule is the default');
+  const ruleOff = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:0` : standardApp()(m)));
+  ruleOff.mainFrame(PAGE);
+  await until(() => ruleOff.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await ruleOff.message({ k: 'guard', h: 'movie.example' })).gt, false, 'answered, flag 1024 not set: the rule is off');
+  const ruleOn = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1024` : standardApp()(m)));
+  ruleOn.mainFrame(PAGE);
+  await until(() => ruleOn.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await ruleOn.message({ k: 'guard', h: 'movie.example' })).gt, true, 'answered, flag 1024 set: the rule is on');
+});
+
+test('ANS52h: a body above 512 KB is passed on untouched from the first byte (no playlist is that big), also the part that came after', async () => {
+  const h = await onPage(hlsApp(1313));
+  const big = 'x'.repeat(300000);
+  const { fl } = runFilter(h, 'd1', [big, big, 'tail'], {});
+  assert.equal(fl.body(), big + big + 'tail');
+  assert.equal(fl.closed, true);
+  assert.match(await stText(h), /too big 1/);
+});
+
+test('ANS52h: only a 200 answer to a GET from a tab is filtered', async () => {
+  const h = await onPage(hlsApp(1313));
+  for (const extra of [{ statusCode: 206 }, { statusCode: 304 }, { statusCode: 404 }, { method: 'POST' }, { tabId: -1 }]) {
+    const n = h.filters.length;
+    eq(h.listeners.hlsHeaders(hlsReq('e' + Math.random(), extra)), {});
+    assert.equal(h.filters.length, n, JSON.stringify(extra));
+  }
+  assert.equal(h.filters.length, 0);
+});
+
+test('ANS52h: whatever goes wrong, the page is not the one to notice: no stream filters in this engine, a stream error, a throw while rewriting', async () => {
+  const none = harness(hlsApp(1313), { noFilter: true });
+  none.mainFrame(PAGE); await until(() => none.of('cfg').length >= 1, 'cfg'); await tick(10);
+  eq(none.listeners.hlsHeaders(hlsReq('f1')), {});
+  const h = await onPage(hlsApp(1313));
+  h.listeners.hlsHeaders(hlsReq('f2'));
+  const fl = h.filters[0];
+  fl.ondata({ data: buf(HLS_MASTER) });
+  fl.onerror();                                                          // the connection broke
+  assert.equal(fl.disconnected, true);
+  const h2 = await onPage(hlsApp(1313));
+  h2.listeners.hlsHeaders(hlsReq('f3'));
+  const f3 = h2.filters[0];
+  f3.ondata({ data: buf('#EXTM3U\n') });
+  f3.ondata({ data: 'not a buffer' });                                   // a data event the extension cannot read
+  assert.equal(f3.disconnected, true);
+  assert.equal(f3.body(), '#EXTM3U\n', 'what had been read goes on as it came');
+  assert.match(await stText(h2), /errors 1/);
+});
+
+test('ANS52h: the cap follows the app\'s newest answer (a Settings change reaches the next page that asks)', async () => {
+  let cap = 1313;
+  const h = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1:${VPOLICY}:${cap}` : standardApp()(m)));
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length >= 1, 'cfg'); await tick(10);
+  assert.equal(runFilter(h, 'g1', [HLS_MASTER]).fl.body().indexOf('v1080') < 0, true);
+  cap = 0;
+  await h.message({ k: 'guard', h: 'another.example' }, -1);             // a host the extension has not asked about yet: the app's answer carries the new cap
+  const n = h.filters.length;
+  runFilter(h, 'g2', [HLS_MASTER]);
+  assert.equal(h.filters.length, n, 'off again: no filter');
+  cap = 1920;
+  await h.message({ k: 'guard', h: 'third.example' }, -1);
+  assert.equal(runFilter(h, 'g3', [HLS_MASTER]).fl.body(), HLS_MASTER, 'a cap above every rung changes nothing');
+});
+
+test('ANS52h review: a response that says it is bigger than a master list is not held at all, and a throw while rewriting hands the bytes over as they came', async () => {
+  const h = await onPage(hlsApp(1313));
+  eq(h.listeners.hlsHeaders(hlsReq('r1', { responseHeaders: [{ name: 'Content-Type', value: 'video/mp2t' }, { name: 'Content-Length', value: '9000000' }] })), {});
+  assert.equal(h.filters.length, 0, 'no filter, no buffering for a body that announces itself as big');
+  h.listeners.hlsHeaders(hlsReq('r2', { responseHeaders: [{ name: 'Content-Length', value: '812' }] }));
+  assert.equal(h.filters.length, 1, 'a small one is filtered');
+  const h2 = await onPage(hlsApp(1313));
+  h2.ctx.KestrelHls.rewriteMaster = () => { throw new Error('boom'); };      // a bug in the rewrite must not reach the page
+  const { fl } = runFilter(h2, 'r3', [HLS_MASTER]);
+  assert.equal(fl.body(), HLS_MASTER); assert.equal(fl.closed, true);
+  assert.match(await stText(h2), /errors 1/);
 });

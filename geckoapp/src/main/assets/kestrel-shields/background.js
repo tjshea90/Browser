@@ -21,6 +21,8 @@ var cfgMode = new Map();   // page host -> MODE_*
 var cfgAt = new Map();     // page host -> when the answer arrived
 var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies, 2 = embeds wait for a tap, 4 = stand-ins for blocked files and scriptlets are allowed)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
+var hlsCap = 0;            // ANS52h: pixels of the LONGER side above which a rung of an HLS master playlist is taken out (0 = off); the app's 6th field of every page answer
+var codecCfg = '';         // ANS52g: the video format policy the app last sent with a page answer (5th field; "" = none), handed to the pages as `cx` (codec-main.js)
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
 function askCfg(host) {
@@ -35,6 +37,8 @@ function askCfg(host) {
     // generation 0 = the app's lists are still loading: the answer is provisional (the site allow-list is not known yet), so it is asked again in a few seconds instead of after a minute
     cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
     cfgFlags.set(host, parseInt(parts[3], 10) || 0);
+    if (parts.length > 4) codecCfg = String(parts[4]).slice(0, 160); // an answer of an older app (or for no host) has no 5th field: the last policy stays
+    if (parts.length > 5) { var hc = parseInt(parts[5], 10); hlsCap = (hc >= 320 && hc <= 20000) ? hc : 0; } // ANS52h: the 6th is the picture size cap in pixels (nothing sensible = off)
     noteGeneration(parseInt(parts[1], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
@@ -155,6 +159,14 @@ function lstText() {
   for (var i = 0; i < names.length; i++) { var s = LST[names[i][0]]; if (s[0] > 0) out.push(names[i][1] + ' ' + s[0] + ' (' + Math.round(s[1]) + ' us)'); }
   return out.join(', ');
 }
+// RX4-M0b / M0c (research/REVIEW-EXTERNAL-4.md): what do revalidations and the scriptlet wait cost on this tablet? A conditional request (If-None-Match / If-Modified-Since, answered 304) costs a whole round trip
+// on a hotspot; the first navigation to a site that has scriptlet rules waits up to SL_WAIT_MS for the app. Counters only, sent as one text with the stats message (Diagnostics > Blocker). Which webRequest event
+// carries the 304 in Gecko is not known (headers received, or completed): both are counted, so the first Diagnostics paste says which one it is.
+var rv = { pages: 0, all: 0, cache: 0, h304: 0, c304: 0, ms304: 0, wn: 0, ws: 0, wx: 0, wc: 0 }, rvStart = new Map();
+function rvText() {
+  if (rv.all === 0 && rv.wn === 0) return '';
+  return 'pages ' + rv.pages + ', requests ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
+}
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
   statsDirty = true;
@@ -163,7 +175,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), vx: vcxText().slice(0, 240), hx: hlsText().slice(0, 300), vg: vgtText().slice(0, 300), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -213,12 +225,18 @@ function logFailed(d, what) {
 }
 browser.webRequest.onErrorOccurred.addListener(lstTimed(LST.err, function (d) {
   noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
+  rvStart.delete(d.requestId);
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
 }), { urls: ['http://*/*', 'https://*/*'] });
 browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   noteDone(d);
+  var rvT = rvStart.get(d.requestId);                                                // RX4-M0b: cache hits and revalidations (304) of this tablet
+  if (rvT !== undefined) rvStart.delete(d.requestId);
+  rv.all++;
+  if (d.fromCache) rv.cache++;
+  if (d.statusCode === 304) { rv.c304++; if (rvT !== undefined) rv.ms304 += Math.max(0, Math.round(d.timeStamp - rvT)); }
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
 }), { urls: ['http://*/*', 'https://*/*'] });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
@@ -273,12 +291,31 @@ function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + a
 var skipAsked = 0, skipYes = 0, skipReports = 0; // RX3-Y2 / RX3-G7: how often the ad skippers (youtube.js, players.js) asked whether they may run, how often the answer was yes, how many of their reports reached the app
 function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked ' + skipAsked + ', allowed ' + skipYes + ', reports ' + skipReports : ''; }
 var guardBlocked = 0;
+// ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
+var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
+// ANS53a / ANS53b: what the page-side gate (gate-main.js) held back and opened, summed over all pages and frames since the extension started ("Videos start only when pressed" in Diagnostics)
+var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0 };
+function vgtText() {
+  if (!vgt.reports) return '';
+  return 'held back ' + vgt.held + ' (preload / autoplay of the markup), ' + vgt.deferred + ' script players kept from starting to fetch, refused ' + vgt.refused + ' plays that nobody pressed; opened by the person: ' + vgt.opened + ' (play button ' + vgt.play + ', a tap on the picture ' + vgt.press + ', Kestrel\'s controls ' + vgt.kestrel + ')';
+}
+// ANS52h: what the picture size cap did to the HLS master playlists the pages asked for (shown in Diagnostics: "Picture size cap")
+var hls = { seen: 0, cut: 0, rungs: 0, media: 0, within: 0, notText: 0, big: 0, err: 0, last: '' };
+function hlsText() {
+  if (!hls.seen) return '';
+  return 'playlists looked at ' + hls.seen + ', cut ' + hls.cut + ' (' + hls.rungs + ' rungs taken out' + (hls.last ? ', last ' + hls.last : '') + '), left as they were: not a master list ' + hls.media + ', nothing above the cap ' + hls.within + ', not text ' + hls.notText + ', too big ' + hls.big + ', errors ' + hls.err;
+}
+function vcxText() {
+  if (!vcx.reports) return '';
+  return 'questions ' + vcx.asked + ' (counted when something was refused), refused ' + (vcx.size + vcx.mode + vcx.fps) + ': above the decoder\'s limit ' + vcx.size + ', not H.264 ' + vcx.mode + ', above 30 fps ' + vcx.fps + '; last: ' + vcx.last;
+}
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
-  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0 }; }
+  // gt (ANS53, flag 1024: videos start only when pressed): an app that did not answer (not ready, a bridge error) leaves the gate CLOSED: the person's rule is the default (review of the gate, finding 6: that used to open everything)
+  function answer(f, told) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: !told || (f & 1024) !== 0, ho: told && (f & 2048) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
-  if (f !== undefined) return Promise.resolve(answer(f));
-  return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
+  if (f !== undefined) return Promise.resolve(answer(f, true));
+  return askCfg(host).then(function () { var g = cfgFlags.get(host); return answer(g || 0, g !== undefined); });
 }
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m) return undefined;
@@ -288,6 +325,19 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var gh = (top && pageHost(top)) || m.h;
     if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
     return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
+  }
+  if (m.k === 'vgt') { // ANS53a / ANS53b: what the page-side gate did (seven numbers: held, opened, by play(), by a tap on the picture, by Kestrel's controls, sources held, plays refused; content.js checked them)
+    var gn = Array.isArray(m.n) ? m.n : [], gv = function (i) { var x = +gn[i]; return x >= 0 && x <= 1000000 ? Math.floor(x) : 0; };
+    vgt.reports++; vgt.held += gv(0); vgt.opened += gv(1); vgt.play += gv(2); vgt.press += gv(3); vgt.kestrel += gv(4); vgt.deferred += gv(5); vgt.refused += gv(6);
+    markStats();
+    return undefined;
+  }
+  if (m.k === 'vcx') { // ANS52g: what the page-side video format policy refused (numbers and one short word; content.js checked them), summed over all pages and frames
+    var vn = function (x) { x = +x; return x >= 0 && x <= 1000000000 ? Math.floor(x) : 0; };
+    vcx.reports++; vcx.asked += vn(m.a); vcx.size += vn(m.s); vcx.mode += vn(m.m); vcx.fps += vn(m.f);
+    vcx.last = String(m.w || '').replace(/[^a-z0-9 x@.]/g, '').slice(0, 30);
+    markStats();
+    return undefined;
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var fid = sender ? sender.frameId : 0;
@@ -408,7 +458,13 @@ function slBefore(host, frame) {
   if (cur) {
     slReg.delete(host); slReg.set(host, cur); // most recently used
     if (frame && Date.now() - cur.at < SL_TTL) return null;
-    return Promise.race([slAsk(host), later(SL_WAIT_MS)]);
+    var w0 = performance.now();                                                      // RX4-M0c: how long this navigation waited for the app's answer (the ceiling is SL_WAIT_MS)
+    return Promise.race([slAsk(host), later(SL_WAIT_MS)]).then(function (r) {
+      var ms = Math.round(performance.now() - w0);
+      rv.wn++; rv.ws += ms; if (ms > rv.wx) rv.wx = ms; if (ms >= SL_WAIT_MS - 5) rv.wc++;
+      markStats();
+      return r;
+    });
   }
   var t = slNone.get(host);
   if (t !== undefined && Date.now() - t < SL_TTL) return null;
@@ -530,8 +586,11 @@ function decide(d, page, host, mode) {
 }
 
 function onRequest(d) {
+  if (rvStart.size > 600) rvStart.clear();                                           // RX4-M0b: when this request started (a 304 is timed from here to its end)
+  rvStart.set(d.requestId, d.timeStamp);
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
+    rv.pages++;
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId);
@@ -757,6 +816,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
 }
 
 browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) {
+  if (d.statusCode === 304) rv.h304++;                                               // RX4-M0b
   var rh = reqHdr.get(d.requestId), ref = '', org = '';
   if (rh !== undefined) { reqHdr.delete(d.requestId); var nlp = rh.indexOf('\n'); ref = rh.slice(0, nlp); org = rh.slice(nlp + 1); }
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
@@ -793,6 +853,49 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), n: cd, rf: ref, og: org }).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
+
+// ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
+// sees them. Only requests whose address names a .m3u8 reach this (a narrow filter: the response of every other request is never held for this listener), only while the app's cap is on, and the filter is
+// attached before any byte is read. Doubt is never the page's problem: a body that is not text, too big, not a master list, or a stream error leaves the bytes exactly as they came. Whether Gecko hands the
+// filter the bytes before or after the content decoding does not matter for that: compressed bytes are no text, so they are written back untouched, decoded text is rewritten and written back as it is.
+var HLS_MAX_BYTES = 524288;
+function hlsWrite(f, chunks) { for (var i = 0; i < chunks.length; i++) f.write(chunks[i]); }
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  try {
+    if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};
+    var rh = d.responseHeaders || [], i;
+    for (i = 0; i < rh.length; i++) if (rh[i].name.length === 14 && rh[i].name.toLowerCase() === 'content-length') { var cl = parseInt(rh[i].value, 10); if (cl > HLS_MAX_BYTES) { hls.seen++; hls.big++; markStats(); return {}; } }   // it says it is big: not a master list, not held for a moment
+    var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, rest = false, cap = hlsCap;
+    hls.seen++; markStats();
+    f.ondata = function (e) {
+      try {
+        if (!e || !e.data || typeof e.data.byteLength !== 'number') throw new Error('no data');
+        if (rest) { f.write(e.data); return; }
+        total += e.data.byteLength;
+        if (total > HLS_MAX_BYTES) { rest = true; hls.big++; hlsWrite(f, chunks); chunks = []; f.write(e.data); return; } // too big for a master list: everything goes through, as it came
+        chunks.push(e.data);
+      } catch (x) { hls.err++; try { if (!rest) hlsWrite(f, chunks); chunks = []; rest = true; f.disconnect(); } catch (y) { /* gone */ } } // what was buffered goes on as it came, the rest is not filtered any more
+    };
+    f.onstop = function () {
+      try {
+        if (rest) { f.close(); return; }
+        var all = new Uint8Array(total), at = 0, i;
+        for (i = 0; i < chunks.length; i++) { var c = new Uint8Array(chunks[i]); all.set(c, at); at += c.length; }
+        var text = null;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(all); } catch (x) { text = null; }
+        if (text === null || text.indexOf('#EXTM3U') < 0) { hls.notText++; hlsWrite(f, chunks); f.close(); return; }
+        var r = KestrelHls.rewriteMaster(text, cap);
+        if (!r) { if (text.indexOf('#EXT-X-STREAM-INF') < 0) hls.media++; else hls.within++; hlsWrite(f, chunks); f.close(); return; }
+        f.write(new TextEncoder().encode(r.text).buffer);
+        hls.cut++; hls.rungs += r.dropped; hls.last = (r.kept + r.dropped) + ' -> ' + r.kept + ' at ' + cap;
+        markStats();
+        f.close();
+      } catch (x) { hls.err++; try { hlsWrite(f, chunks); f.close(); } catch (y) { try { f.disconnect(); } catch (z) { /* gone */ } } }
+    };
+    f.onerror = function () { hls.err++; try { f.disconnect(); } catch (x) { /* gone */ } };
+  } catch (e) { hls.err++; }
+  return {};
+}, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 browser.runtime.onMessage.addListener(function (m) {
@@ -868,6 +971,98 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   send({ k: 'sbk', t: n(m.t), s: n(m.s), f: n(m.f), o: n(m.o), u: n(m.u), r: String(m.r || '').slice(0, 24), n: String(m.n || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// VC1 / LP1 (owner message 44): a tap or long press that lands inside a FRAME (the ad overlays of Google IMA lie over a player and take every touch) is invisible to the page above it. The frame's script says
+// how big the frame is (it cannot see its own element); the top frame's script looks for a video that a frame of that size lies over (vfind.js covered()) and answers {video: true|false}. Only frames
+// ask (frameId > 0), only the top frame (frameId 0) is asked, sizes are clamped. Nothing about the page leaves the tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'ft' || !sender || !sender.tab || !(sender.frameId > 0)) return undefined;
+  var w = m.w | 0, h = m.h | 0;
+  if (w < 40 || h < 30 || w > 5000 || h > 5000 || !browser.tabs || typeof browser.tabs.sendMessage !== 'function') return Promise.resolve({ video: false });
+  // RW4: for a long press the top frame also names the film's web address (only http(s), clamped): the FRAME then sends the video menu itself, so it can still choose the panel instead
+  return browser.tabs.sendMessage(sender.tab.id, { k: 'ftq', t: m.t === 'lp' ? 'lp' : 'tap', w: w, h: h }, { frameId: 0 }).then(function (r) {
+    var src = (r && typeof r.src === 'string' && /^https?:\/\//i.test(r.src) && r.src.length <= 2000) ? r.src : '';
+    return { video: !!(r && r.video), src: src };
+  }, function () { return { video: false, src: '' }; });
+});
+
+// LAB2: a DEBUG build (flag 256 in the guard answer) asks every page for a page-health probe (vfind.js probe()): numbers only, clamped; the page of the tab goes along so that the app drops a private tab's.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'probe' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v) { v = v | 0; return v > 0 ? Math.min(v, 9999999) : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'probe', h: String(m.h || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 60), t: n(m.t), im: n(m.im), ib: n(m.ib), iv: n(m.iv), fr: n(m.fr), vd: n(m.vd), vp: n(m.vp), hh: n(m.hh), ww: n(m.ww), iw: n(m.iw), sc: n(m.sc), nd: n(m.nd), rs: n(m.rs), rd: String(m.rd || '').replace(/[^a-z]/g, '').slice(0, 12), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// VP1 (owner message 49): player.js (the frame that has a full-screen film under Kestrel's own controls) tells the film's state (`vst`) and the taps on the picture (`vtap`): numbers only, clamped. The app
+// answers with JSON: what the controls want done (c), whether they are shown (s), on = 0 when the controls are not Kestrel's here; the answer goes back to the frame that asked, so there is no second channel.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || (m.k !== 'vst' && m.k !== 'vtap') || !sender || !sender.tab) return undefined;
+  function n(v, lo, hi) { v = +v; return (v >= lo && v <= hi) ? v : lo; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  var o = m.k === 'vtap' ? { k: 'vtap', x: n(m.x, 0, 1000), pg: m.pg === 1 ? 1 : 0, ts: n(m.ts, 0, 4e12) } : {
+    k: 'vst', t: n(m.t, 0, 1e10), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e10), b: n(m.b, 0, 1e10), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
+    r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000), ak: n(m.ak, 0, 2000000000), aw: n(m.aw, 0, 1000), er: m.er === 1 ? 1 : 0,
+    lt: n(m.lt, 0, 60000), pc: n(m.pc, 0, 60000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000), sh: m.sh === 1 ? 1 : 0 };   // ANS51e: lt = how late the page's own timer ran (ms), pc = the player script's own work in a report (ms), tf / df = frames shown / dropped by the film
+  o.p = String(page).slice(0, 300);                       // (`p` is the page's address in every message the app gets; the film's PAUSED flag is `pa`: lab run 43776782679 found the app reading the address as "not paused" for ever)
+  return send(o).then(function (r) { try { return r ? JSON.parse(r) : undefined; } catch (e) { return undefined; } }, function () { return undefined; });
+});
+
+// ANS54e (owner message 54): the page gate asks whether Kestrel's own player takes the film the person pressed (content.js checked the numbers and the address). The app answers {h: 1} when it started its own player; the top
+// page of the tab and the frame the film is in (the document of an embedded player) go along so that the app can pick the stream THAT frame asked for. No answer, or anything else: {h: 0}, the page plays the film itself.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vhand' || !sender || !sender.tab) return undefined;
+  function n(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : ''), frame = sender.frameId === 0 ? '' : docOf(sender.url);
+  var o = { k: 'vh', y: (m.y === 'press' || m.y === 'kestrel') ? m.y : 'play', s: (typeof m.s === 'string' && /^https?:\/\//i.test(m.s) && m.s.length <= 2000) ? m.s : '', b: m.b === 1 ? 1 : 0,
+    m: String(m.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: m.l === 1 ? 1 : 0, w: Math.round(n(m.w, 20000)), h: Math.round(n(m.h, 20000)), t: n(m.t, 1e7), d: n(m.d, 1e7),
+    p: String(page).slice(0, 300), f: String(frame).slice(0, 2000),       // (the frame is matched against the sniffed streams of that frame, whose address is not cut at 300: knownIn compares them whole)
+    tp: sender.frameId === 0 ? 1 : 0, g: null };                          // ANS55f: tp = the film is in the top document (a frame's box cannot be placed on the page); g = its box, eleven numbers (the content script checked their ranges)
+  if (Array.isArray(m.g) && m.g.length === 11) { var g = [], j, v; for (j = 0; j < 11; j++) { v = +m.g[j]; if (!isFinite(v)) { g = null; break; } g.push(v); } o.g = g; }
+  return send(o).then(function (r) { try { var j = r ? JSON.parse(r) : null; return { h: (j && j.h === 1) ? 1 : 0 }; } catch (e) { return { h: 0 }; } }, function () { return { h: 0 }; });
+});
+
+// FB4: turn.js (top frame only) tells the viewport the engine gave a full-screen page, in device pixels: numbers only, clamped; the app compares it with its view and gives the engine a real size change when they differ.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vpt' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v) { v = v | 0; return v > 0 && v < 20000 ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'vpt', w: n(m.w), h: n(m.h), f: m.f === 1 ? 1 : 0, p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full); FB2: turn.js reports a
+// turn of the screen (e 'turn', a = played | skipped | none, n = videos). Numbers
+// and a few words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' ? m.e : '';
+  var a = /^(play|pause|seek|mute|full|played|skipped|none)$/.test(String(m.a || '')) ? String(m.a) : '';
+  var n = Math.max(0, Math.min(99, m.n | 0));                    // (turn.js: how many videos a turn of the screen paused)
+  if (e) send({ k: 'vbk', e: e, a: a, n: n, p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// RX4-M0a: content.js reports how a playing video did since its last look: frames shown, dropped, corrupted, seconds, picture size (numbers only). The top page of the tab goes along so that the app can drop the
+// numbers of a private tab; the address of the video itself never leaves the page.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vq' || !sender || !sender.tab) return undefined;
+  function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  send({ k: 'vq', t: n(m.t, 20000), d: n(m.d, 20000), c: n(m.c, 20000), s: n(m.s, 600), w: n(m.w, 20000), h: n(m.h, 20000), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// RX4-M0e: content.js (top frame, only while the Settings switch "Measure scrolling on real pages" is on, flag 32) reports one scroll burst as numbers: frames, gaps over 50 ms, gaps over 100 ms, the longest gap.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'sg' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'sg', n: n(m.n, 5000), a: n(m.a, 5000), b: n(m.b, 5000), mx: n(m.mx, 10000), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 

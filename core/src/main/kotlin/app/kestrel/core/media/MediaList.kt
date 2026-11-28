@@ -39,6 +39,10 @@ class MediaCandidate(
     val verified: Boolean get() = touched || !fromMarkup || (kind == MediaKind.FILE && length >= MediaList.MIN_FILE)
     /** RX3-V5: the early look at this stream's playlist happened. [live] and [drm] streams cannot be saved; [adMs] / [adBreaks] are the advertising its markers or foreign runs give away. */
     var looked = false
+    /** ANS55: the early look (or the quality list) read this playlist as a MASTER (it lists variants), not as a media list of one rendition (video, sound or subtitles of the same film). */
+    var master = false
+    /** ANS55: when the page last asked for this address (a player that moves on to another video asks for that video's master last); [seenAt] is the first time. */
+    var lastSeenAt = seenAt
     var live = false
     var drm = false
     var adMs = 0L
@@ -143,6 +147,7 @@ class MediaList(private val max: Int = 48) {
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
             if (c.frame.isNotEmpty() && old.frame != c.frame) { old.frame = c.frame; old.page = c.page; changed = true }
+            if (c.seenAt > old.lastSeenAt) old.lastSeenAt = c.seenAt                       // (ANS55: not a change of the list, only of its order of news)
             if (changed) version++
             return changed
         }

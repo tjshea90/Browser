@@ -54,6 +54,8 @@ class Tab(@JvmField val id: Long) {
     val dangerOkHosts = HashSet<String>()
     var findOpen = false
     var pendingNav: String? = null // an address WE asked the engine to load that has not committed yet (a download never commits)
+    /** RV5: when [pendingNav] was set (uptime ms): the excuse "the owner just navigated" for a download that nobody tapped lasts 15 s, not for as long as the old page lives. */
+    @JvmField var pendingNavAt = 0L
     var prevUrl = ""               // what the tab showed before that
     var showHome = false // the Home screen is laid over this tab's page (the Home button); the page's session stays alive underneath
     var thumb: Bitmap? = null // small snapshot of the page for the tab grid (RGB_565, about 240 px wide); never written to disk for a private tab

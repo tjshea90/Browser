@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY (never in a release: this file is only merged into the debug variant). The emulator lab drives Kestrel's own player screen with `am start` from the shell
+  (debug commands: qopen, qpick, rotate; NativePlayerActivity.onNewIntent ignores them unless the build is debuggable), and the shell may not start an activity that is not exported
+  (lab run 43812820865: every command was refused, so the rotate button and the quality list were never reached). The release manifest keeps exported="false".
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <activity
+            android:name="app.kestrel.browser.NativePlayerActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+</manifest>

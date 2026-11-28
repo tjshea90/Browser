@@ -63,6 +63,12 @@ class LastLookTest {
         assertTrue("1500 ms after the first paint at the latest", h(true, 640, 0, false, 1500)); assertFalse(h(true, 640, 0, false, 1499))
     }
 
+    @Test fun aSlowReadBackSilencesTheNextOnesForAWhile() {
+        assertEquals(0L, LastLookRules.readBackBackoffMs(0)); assertEquals(0L, LastLookRules.readBackBackoffMs(399))
+        assertEquals(120_000L, LastLookRules.readBackBackoffMs(400)); assertEquals(120_000L, LastLookRules.readBackBackoffMs(1_999))
+        assertEquals(600_000L, LastLookRules.readBackBackoffMs(2_000)); assertEquals(600_000L, LastLookRules.readBackBackoffMs(20_000))
+    }
+
     @Test fun thePictureOfTheFrontPageAndTheTwoMostRecentOthersStay() {
         val keep = LastLookRules.keep(7L, mapOf(1L to 100L, 2L to 500L, 3L to 300L, 7L to 50L, 9L to 400L))
         assertEquals(setOf(7L, 2L, 9L), keep)

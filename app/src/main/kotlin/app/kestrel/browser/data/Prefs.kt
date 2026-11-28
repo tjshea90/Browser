@@ -99,12 +99,37 @@ class Prefs private constructor(ctx: Context) {
     // ---- Video (research/VIDEO_AUDIT.md, owner message 18)
     /** Muted videos may start by themselves, as in every other browser (a site's player shows its loading symbol until that muted start happens, so refusing it leaves the symbol up). Sound without a tap stays blocked. ON. */
     var videoMutedAutoplay: Boolean get() = bool("vid_muted_auto", true); set(v) = put("vid_muted_auto", v)
+    /** ANS53a / ANS53b (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it" and "No data should ever be used downloading or buffering videos on web sites unless I press play"): no video loads or starts before the person presses it (kestrel-shields/gate-main.js, the engine's autoplay and preload preferences, no autoplay permission). ON; the switch is the way out for a site that breaks. While it is on [videoMutedAutoplay] does nothing. */
+    var videoPressToPlay: Boolean get() = bool("vid_press_play", true); set(v) = put("vid_press_play", v)
+    /** ANS54e (owner message 54: "I want the web video players to use this"): where a film of a web page plays: 0 = in Kestrel's own player whenever it can (default), 1 = there only in full screen, 2 = in the page's own player (core/media/WebHandOver). */
+    var webVideoMode: Int get() = app.kestrel.core.media.WebHandOver.cleanMode(sp.getInt("web_in_kestrel", app.kestrel.core.media.WebHandOver.ALWAYS)); set(v) = put("web_in_kestrel", app.kestrel.core.media.WebHandOver.cleanMode(v))
+    /** ANS55f (owner message 55): a film Kestrel's own player takes over from a page plays INSIDE the page, over the page's own video box (default), instead of in the full-screen player. */
+    var webInline: Boolean get() = bool("web_inline", true); set(v) = put("web_inline", v)
+    /** ANS57 (owner message 57): VLC-style touch gestures in Kestrel's own players: long press then drag = precise seek, a vertical drag on the left = brightness, on the right = volume (default on). */
+    var videoGestures: Boolean get() = bool("video_gestures", true); set(v) = put("video_gestures", v)
     /** Protected video (Widevine DRM, Netflix-style players): 0 ask each time a site wants it (only when the device has Widevine), 1 never. */
     var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
     /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
     var videoCodecs: Int get() = sp.getInt("vid_codecs", 0).coerceIn(0, 2); set(v) = put("vid_codecs", v.coerceIn(0, 2))
+    /** ANS52g: sites are told "no" to any video with a stated frame rate above 30 (the page-side policy, codec-main.js / core/media/VideoLimits): half the pictures to decode and draw on a slow tablet and half the data. OFF by default: the tablet's own decoder limits (Automatic above) already apply, this is the owner's A/B switch. */
+    var videoFps30: Boolean get() = bool("vid_fps30", false); set(v) = put("vid_fps30", v)
+    /** ANS52h: the picture size cap for HLS pages (core/media/PictureCap): 0 Automatic (no picture bigger than the screen can show, with a little to spare), 1 off, 2 480p, 3 720p, 4 1080p. A master playlist is answered without the rungs above it. */
+    var videoCap: Int get() = sp.getInt("video_cap", 0).coerceIn(0, 4); set(v) = put("video_cap", v.coerceIn(0, 4))
+    /** ANS53d: the picture class (shorter side in pixels: 480, 720, 1080) the owner picked last in Kestrel's own player; 0 = Automatic. The next film starts at no more than that. */
+    var nativeMaxH: Int get() = sp.getInt("native_max_h", 0).coerceIn(0, 4320); set(v) = put("native_max_h", v.coerceIn(0, 4320))
+    /** FS1 (owner message 43): how the screen turns while a page shows a video full screen: 0 follow the tablet (also with auto-rotate off) and turn a wide video sideways when the tablet is held upright, 1 follow the tablet only, 2 only what a site asks for (core/media/FullscreenTurn). */
+    /** ANS54e.1 (owner messages 53 and 54: "even though I was holding my tablet in portrait orientation and didn't rotate it"): the key is `fs_turn2` and the default is FOLLOW THE TABLET, so nobody keeps the old default "a wide video turns the screen sideways by itself" in a saved value (the old key `fs_turn` is not read any more); Automatic stays one tap away in Settings. */
+    var fullscreenTurn: Int get() = app.kestrel.core.media.FullscreenTurn.cleanMode(sp.getInt("fs_turn2", app.kestrel.core.media.FullscreenTurn.MODE_FOLLOW)); set(v) = put("fs_turn2", app.kestrel.core.media.FullscreenTurn.cleanMode(v))
+    /** FB1 (owner message 47): what a full-screen page does with the system bars: 0 keep them (the page is laid out between the status bar and the navigation bar, nothing of a player is ever under them; the default: the owner's tablet kept drawing both bars over a page that had asked for them to go), 1 hide them (the picture fills the screen; only where the system really hides them). */
+    var fullscreenBars: Int get() = sp.getInt("fs_bars", 0).coerceIn(0, 1); set(v) = put("fs_bars", v.coerceIn(0, 1))
+    /** VP1 (owner message 49): 0 = Kestrel's own controls over a full-screen video (the default), 1 = the page's own controls. */
+    var fsControls: Int get() = sp.getInt("fs_controls", 0).coerceIn(0, 1); set(v) = put("fs_controls", v.coerceIn(0, 1))
     /** Calm pages: sites see "reduce motion" and GIFs play once (the owner's "have no animations", now for pages too). OFF since alpha27: a site that hides its loading symbol from an animation, or whose reduce-motion style leaves one frozen, kept it on screen. */
     var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
+    /** RX4-M0e: count the late screen updates while a real page scrolls (a frame callback that runs only during a scroll) and show the totals in Diagnostics. OFF: nothing runs. */
+    var measureScroll: Boolean get() = bool("measure_scroll", false); set(v) = put("measure_scroll", v)
+    /** VC1 (owner message 44): Kestrel's own video bar for videos that have no controls: 0 automatic (only where the page shows none), 1 always, 2 off. */
+    var videoControls: Int get() = sp.getInt("video_controls", 0).let { if (it in 0..2) it else 0 }; set(v) = put("video_controls", if (v in 0..2) v else 0)
 
     /** Kestrel G: double-tap to zoom a page. OFF by default: while it is allowed, Firefox holds every tap on a page wider than the screen (Desktop site, no viewport tag) for about a quarter of a second to see whether a second tap follows (research/REVIEW-EXTERNAL-1.md 3.1, EX-3). Pinch zoom is separate and always works. */
     var doubleTapZoom: Boolean get() = bool("tap_zoom", false); set(v) = put("tap_zoom", v)

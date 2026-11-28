@@ -34,6 +34,10 @@ object Flavor {
     @JvmField var hasAdSkipper = false
     /** Kestrel G (YS1): a tap on a video player's progress bar moves the video when the page does not (seekbar.js): Settings shows its switch. */
     @JvmField var hasTapSeek = false
+    /** Kestrel G (FS1): the screen turns with the tablet while a video is full screen, and a small rotate button shows there: Settings shows the "Turn the screen for full-screen video" choice. */
+    @JvmField var hasFullscreenTurn = false
+    /** Kestrel G (VC1): a video that has no controls of its own gets Kestrel's bar (videobar.js): Settings shows the "Video controls" choice. */
+    @JvmField var hasVideoBar = false
 
     /** The browser engine bundled in this build ("160.0", empty on the WebView build, whose engine is the system's) and where Mozilla lists the newest one; the daily look tells the owner when a newer one exists. */
     @JvmField var engineVersion = ""

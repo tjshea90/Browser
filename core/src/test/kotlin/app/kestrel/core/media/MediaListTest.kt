@@ -10,6 +10,19 @@ class MediaListTest {
     private fun file(url: String, len: Long, mime: String = "video/mp4") = MediaCandidate(url, MediaKind.FILE, mime, len, "https://site.test/watch")
     private fun hls(url: String) = MediaCandidate(url, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch")
 
+    @Test fun aRepeatedSightingKeepsTheFirstTimeAndLearnsTheLastWithoutChangingTheList() {
+        // ANS55: a player that moves on to another video asks for that video's master list last; the same master asked for again is the newest news
+        val l = MediaList()
+        fun seenAt(url: String, at: Long) = MediaCandidate(url, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch", "", at)
+        assertTrue(l.add(seenAt("https://c.test/a/master.m3u8", 100)))
+        assertTrue(l.add(seenAt("https://c.test/b/master.m3u8", 200)))
+        assertFalse("nothing in the list changed", l.add(seenAt("https://c.test/a/master.m3u8", 300)))
+        val a = l.usable().first { it.url.contains("/a/") }
+        assertEquals(100L, a.seenAt); assertEquals(300L, a.lastSeenAt)
+        assertEquals(200L, l.usable().first { it.url.contains("/b/") }.lastSeenAt)
+        assertFalse("not read as a master until the early look says so", a.master)
+    }
+
     @Test fun theSameUrlIsOneEntryAndLearnsItsSize() {
         val l = MediaList()
         assertTrue(l.add(file("https://c.test/a.mp4", -1)))

@@ -3,6 +3,7 @@ package app.kestrel.browser.web
 import android.app.AlertDialog
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.Io
+import app.kestrel.browser.NativePlayerActivity
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.ui.VideoPanel
 import app.kestrel.browser.download.DownloadController
@@ -19,6 +20,11 @@ import app.kestrel.core.media.MediaNames
 import app.kestrel.core.media.MediaRank
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.media.Mp4Probe
+import app.kestrel.core.media.PageQuality
+import app.kestrel.core.media.WebHandOver
+import org.json.JSONObject
+import android.os.SystemClock
+import app.kestrel.core.media.QualityLabel
 import app.kestrel.core.media.SizeEstimate
 import app.kestrel.core.media.StreamSource
 import app.kestrel.core.url.UrlParts
@@ -42,6 +48,8 @@ class VideoFlow(private val a: BrowserActivity) {
     private val sized = HashSet<String>()               // files whose length was already asked for (found in the page markup, never requested)
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private val childUrls = HashMap<String, List<String>>() // master key -> its children (forgotten together with it)
+    private val masterRungs = HashMap<String, List<QualityLabel.Rung>>() // ANS53d.2: master key -> the pictures its playlist offers (the quality list of a film that plays in the page)
+    private val masterAsked = HashSet<String>()          // ANS53d.2: masters whose pictures were already asked for
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
     private var panelPressed: String? = null
@@ -58,10 +66,10 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
+    fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null }
 
     private fun forget(keys: List<String>) {
-        for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
+        for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); masterRungs.remove(k); masterAsked.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
     }
 
     /**
@@ -116,6 +124,8 @@ class VideoFlow(private val a: BrowserActivity) {
                 when (val pl = text?.let { Hls.parse(it, c.url) }) {
                     is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
+                        c.master = true
+                        noteMaster(c, pl.master)
                         val vs = pl.master.variants
                         val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
                         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
@@ -134,6 +144,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val live = problem == Hls.Problem.LIVE
         val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
         if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
+        if (!drm && durationMs >= WebHandOver.FILM_MS) lateHandOver(t, c)       // ANS54e: a film-length stream the sniffer saw right after a press that was refused for want of one
         Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size} playing=${t.media.primary()?.let { (it.durationMs / 1000).toString() + "s" } ?: "none"}")
     }
 
@@ -196,6 +207,11 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?, facts: app.kestrel.core.media.VideoFacts? = null, played: Boolean = false, element: Int = 0) = Io.ui {
         val t = tabOf(page) ?: return@ui
+        if (width > 0 && height > 0 && (played || !t.gecko.picturePlayed) && (played || t.gecko.pictureW == 0 || width.toLong() * height >= t.gecko.pictureW.toLong() * t.gecko.pictureH)) { // FS1: what shape the picture is decides whether full screen starts sideways
+            val first = t.gecko.pictureW == 0
+            t.gecko.pictureW = width; t.gecko.pictureH = height; if (played) t.gecko.picturePlayed = true
+            if (first || played) a.fullscreenPictureKnown()
+        }
         // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
         val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
         val area = if (facts == null) 0L else facts.widthPx.toLong() * facts.heightPx * facts.viewPercent / 100   // the part of its picture that is on screen
@@ -212,7 +228,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** Anything worth offering on this tab's page? (the menu shows its entry only then) */
-    fun available(t: Tab?): Boolean = t != null && !t.isNewTab && t.media.usableCount() > 0
+    fun available(t: Tab?): Boolean = t != null && !a.onHomeScreen(t) && t.media.usableCount() > 0   // ANS53e: not under the Home screen either
 
     /**
      * A long press on a video or audio element goes straight to the sheet, aimed at THAT file: its own address (when the page gave one) is the exact match, everything else the page loaded
@@ -226,27 +242,205 @@ class VideoFlow(private val a: BrowserActivity) {
         val extras = ArrayList<Pair<String, () -> Unit>>()
         if (direct != null) extras.add("Copy video address" to { a.copyText(direct) })
         if (linkUri != null) extras.add("Open link in new tab" to { a.sheet.dismiss(); onLink(linkUri) })
-        show(tab, direct, extras)
+        show(tab, direct, extras, fromPress = true)
     }
 
-    /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. */
-    fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList()) {
+    /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. [fromPress]: it opened because of a long press on a video (the words of the empty answer say so). */
+    fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList(), fromPress: Boolean = false) {
         val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl, tab.media.primary())
         if (ranked.main.isEmpty() && ranked.other.isEmpty()) {
-            a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
+            if (!tab.isPrivateTab) Health.log("video", "sheet-empty")
+            a.toast(if (fromPress) "No video file found on this page yet. Some sites only show it once the video plays: press play, then long press the video again." else "No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
         }
         val p = VideoPanel(a, a.pal, object : VideoPanel.Listener {
             override fun download(choice: VideoPanel.Choice, stem: String) { when (val t = choice.tag) { is MediaCandidate -> pick(tab, t, stem); is StreamPick -> pickStream(tab, t, stem) } }
+            override fun canPlay(choice: VideoPanel.Choice): Boolean = nativeTarget(choice) != null
+            override fun play(choice: VideoPanel.Choice) { playNative(tab, choice) }
         })
         panel = p; panelTab = tab; panelPressed = pressedUrl; panelExtras = extras
         render(p, tab)
         a.sheet.show("Save video", p)
+        if (!tab.isPrivateTab) Health.log("video", "sheet-shown", "main=${ranked.main.size} other=${ranked.other.size}")
         for (c in ranked.main + listOfNotNull(ranked.exact)) { // only what is on top is looked into: a few hundred KB each, never the files tucked away
             if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
             else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { tab.media.setLength(c.url, n); a.refreshDownloadButton(); refresh(tab) } }) { }
         }
+    }
+
+    // ---- ANS52i (research/VIDEO_ACCELERATION.md plan item 6): "Play in Kestrel's player": the film's own address goes to NativePlayerActivity (Media3 on a SurfaceView, the hardware decoder), the page is left alone and stops
+    // with its screen. What can be handed over: a plain video file, or an HLS stream (its master playlist: the player picks the quality, capped at the row's height, 720 p when the row has none). Never DASH (no module in the
+    // APK), never audio only, never what has no address (an MSE blob): those rows have no second button.
+    private class NativeTarget(val url: String, val cand: MediaCandidate?, val maxH: Int, val w: Int, val h: Int)
+    private val PLAYABLE_FILES = setOf("mp4", "m4v", "mov", "webm", "mkv")
+
+    private fun nativeTarget(choice: VideoPanel.Choice): NativeTarget? {
+        return when (val t = choice.tag) {
+            is MediaCandidate -> {
+                if (t.kind != MediaKind.FILE || t.audioOnly) return null
+                val ext = MediaSniff.extension(t.url)
+                if (ext !in PLAYABLE_FILES && !t.mime.startsWith("video/")) return null
+                NativeTarget(t.url, t, 1080, t.width, t.height)
+            }
+            is StreamPick -> {
+                val c = t.cand ?: return null
+                if (c.kind != MediaKind.HLS || t.audioOnly) return null
+                val h = Regex("(\\d{3,4})\\s*p", RegexOption.IGNORE_CASE).find(t.label)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                NativeTarget(c.url, c, if (h > 0) h else 720, 0, h)
+            }
+            else -> null
+        }
+    }
+
+    private fun playNative(tab: Tab, choice: VideoPanel.Choice) {
+        val target = nativeTarget(choice) ?: return
+        val headers = target.cand?.let { MediaHeaders.sets(it, tab.url).firstOrNull() }?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may not have a media session (it is silent): then nothing is playing sound */ }
+        a.sheet.dismiss()
+        if (!tab.isPrivateTab) Health.log("video", "native-play", "${if (target.cand?.kind == MediaKind.HLS) "HLS" else "file"} cap ${target.maxH}")
+        NativePlayerActivity.launch(a, target.url, headers, 0L, target.maxH, tab.isPrivateTab, target.w, target.h)
+    }
+
+    // ---- ANS53d.2 (owner message 53: "put a setting for video quality in the player controls for as many videos as possible"; research/ANS53_DESIGN.md): the quality list of a film that plays in the PAGE. The page's own
+    // player cannot be told to change its picture, so the list is a hand-over to Kestrel's own player, which can: the pictures the film's HLS master playlist offers, a pick starts it at the page's position with that picture.
+    class PageFilm(val cand: MediaCandidate, val rungs: List<QualityLabel.Rung>)
+
+    /** A master playlist was read: remember the pictures it offers; the Quality button of an open full screen follows. */
+    private fun noteMaster(c: MediaCandidate, master: Hls.Master) {
+        val r = PageQuality.rungs(master.variants)
+        if (masterRungs.put(c.key, r) != r) a.refreshPlayerQuality()
+    }
+
+    /**
+     * The film the page plays and the pictures it offers; null when no film is known, it is no HLS stream, or the stream offers one picture only (nothing to choose). The film is the one that really plays
+     * ([MediaList.primary]), else the longest counted HLS stream of the page. A playlist the app has not read yet is asked for once (the early look reads the first few, a page with more may not get to it). UI thread.
+     */
+    fun pageFilm(tab: Tab): PageFilm? {
+        if (tab.isNewTab || a.onHomeScreen(tab)) return null
+        val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.maxByOrNull { it.durationMs } ?: return null   // (clip-sized streams are not counted: the longest counted one is the film)
+        val r = masterRungs[c.key]
+        if (r == null) {
+            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ -> (text?.let { Hls.parse(it, c.url) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
+            return null
+        }
+        return if (PageQuality.hasChoice(r)) PageFilm(c, r) else null
+    }
+
+    // ---- ANS54e (owner message 54: "I want the web video players to use this"; research/ANS54_DESIGN.md): the film a page is about to play is played by Kestrel's own player when it can. The page's gate asks (`vh`: the
+    // element, what the person did), WebHandOver (core, tested) decides, and a yes starts NativePlayerActivity; the page keeps its element closed. Catch-alls: a film that went full screen in the page, and a playlist the
+    // sniffer sees within 6 s after a press that had to be refused for want of a stream. UI thread.
+    private class Refused(val tabId: Long, val page: String, val at: Long, val frame: String, val el: WebHandOver.Element)   // (the page too: a link tapped a moment later is not the page whose press was refused)
+    private var lastRefused: Refused? = null
+
+    private fun elementOf(m: JSONObject) = WebHandOver.Element(m.optString("s"), m.optInt("b") == 1, m.optString("m"), m.optInt("l") == 1, m.optInt("w"), m.optInt("h"), m.optDouble("t", 0.0), m.optDouble("d", 0.0))
+
+    /** The streams the sniffer saw in [frame] ("" = the page itself) that a hand-over may use: playlists of films (the variants listed in a master are no films of their own), not DRM, not flagged as decoys. */
+    private fun knownIn(tab: Tab, frame: String): List<WebHandOver.Known> =
+        tab.media.usable().filter { it.frame == frame && it.kind == MediaKind.HLS && it.url !in children }.map {
+            // ANS55: a MASTER list is the film (the early look read it as one; before that the address may say master), a bare list is one rendition (the picture, the sound, the subtitles: Brightcove / Yahoo)
+            WebHandOver.Known(it.url, it.kind, it.durationMs, !it.drm && !it.decoy, it.master || (!it.looked && WebHandOver.looksLikeMaster(it.url)), it.lastSeenAt)
+        }
+
+    /** The page's gate asks whether Kestrel's own player takes the film the person pressed: true = it has been started (or is up already), the page keeps its element closed. */
+    fun handOver(m: JSONObject): Boolean {
+        val tab = tabOf(m.optString("p")) ?: return decline(null, "page not found")
+        val why = when (m.optString("y")) { "press" -> WebHandOver.Why.PRESS; "kestrel" -> WebHandOver.Why.KESTREL; else -> WebHandOver.Why.PLAY }
+        if (!tab.isPrivateTab) WebHandStats.asked++
+        return start(tab, why, elementOf(m), m.optString("f"), pageOf(m))
+    }
+
+    /** ANS55f: where the pressed element's box is (the gate's eleven numbers; only for a film in the top document that moves with the page's own scroll), or null: the film then plays in the full-screen player. */
+    private fun pageOf(m: JSONObject): app.kestrel.core.media.InlineBox.Page? {
+        val g = m.optJSONArray("g") ?: return null
+        if (g.length() != 11 || m.optInt("tp") != 1) return null
+        val v = DoubleArray(11) { g.optDouble(it, Double.NaN) }
+        if (v.any { it.isNaN() || it.isInfinite() }) return null
+        return app.kestrel.core.media.InlineBox.Page(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], follows = v[10] == 0.0)
+    }
+
+    private fun decline(tab: Tab?, why: String): Boolean {
+        if (tab == null || !tab.isPrivateTab) { WebHandStats.declined++; WebHandStats.lastDeclined = why }
+        return false
+    }
+
+    private fun start(tab: Tab, why: WebHandOver.Why, el: WebHandOver.Element, frame: String, geometry: app.kestrel.core.media.InlineBox.Page? = null): Boolean {
+        val mode = a.prefs.webVideoMode
+        if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
+        if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
+        if (!a.pageInFront()) return decline(tab, "the app is not in front or a screen lies over the page")      // a late answer after Home or the power button, or a page script's question, starts nothing
+        val now = SystemClock.uptimeMillis()
+        if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
+        if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
+        val pressed = a.lastPressAt != 0L && now - a.lastPressAt <= WebHandOver.pressWindowMs(why)
+        if (a.inline.active && !pressed) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }                 // ANS55f: the film plays inside the page: a question without a tap of the person (the page's own play() again) keeps the element closed
+        if (!pressed) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
+        val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
+        val d = WebHandOver.decide(mode, why, el, known)
+        if (d == null) {
+            // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
+            if (why != WebHandOver.Why.LATE) lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
+            return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
+        }
+        lastRefused = null
+        if (a.inline.active && a.inline.url == d.url) { if (!tab.isPrivateTab) WebHandStats.repeats++; a.lastPressAt = 0L; return true }   // ANS55f: the same film is up inside the page already
+        val seed = tab.media.find(d.url) ?: MediaCandidate(d.url, d.kind, "", -1, tab.url, frame, System.currentTimeMillis())
+        val headers = MediaHeaders.sets(seed, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may have no media session */ }
+        // pressed again on the same page (Back from Kestrel's player, play once more): it continues where the person stopped, not from the page's own start (RAM only, never for a private tab)
+        val startMs = if (tab.isPrivateTab) d.startMs else WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+            if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt)
+        if (!tab.isPrivateTab) {
+            when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }
+            WebHandStats.lastTaken = "${if (d.kind == MediaKind.HLS) "a stream" else "a file"}, ${d.note}, from ${startMs / 1000} s"
+            Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${startMs / 1000} s (${d.note}) on ${UrlParts.hostOf(d.url) ?: "?"} ${d.url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').take(40)}")   // (the host and the last piece of the address name which list was chosen: the Diagnostics of owner message 55 could not tell)
+        }
+        // ANS55f (owner message 55): INSIDE the page when the box can be told (the person's choice, Settings > Play web videos inside the page): the film plays over the page's own video box; else (a frame, a
+        // fixed or scrolling box, a zoomed page, a small thumbnail, a film that came late or went full screen) the full-screen screen takes it as before
+        if (a.prefs.webInline && geometry == null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !tab.isPrivateTab) Health.log("inline", "not-inline", "the page told no box (a film in a frame, or the question carried no numbers): full-screen player")
+        if (a.prefs.webInline && geometry != null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !a.isFullscreenOf(tab)) {
+            val box = a.inline.boxFor(geometry)
+            if (box != null && a.inline.start(tab, d.url, headers, startMs, geometry, box)) { a.lastPressAt = 0L; return true }
+            if (!tab.isPrivateTab) Health.log("inline", "not-inline", if (box == null) "the box cannot be placed (frame, fixed or scrolling box, zoomed page, small or off screen): full-screen player; page box ${geometry.w.toInt()}x${geometry.h.toInt()} at ${geometry.x.toInt()},${geometry.y.toInt()}, visual viewport scale ${"%.3f".format(geometry.vvScale)} width ${geometry.vvW.toInt()}, scroll ${geometry.pageX.toInt()},${geometry.pageY.toInt()}, follows ${geometry.follows}, view ${a.inline.viewSize()}" else "the inline player did not start: full-screen player")
+        }
+        NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
+        a.lastPressAt = 0L
+        if (a.isFullscreenOf(tab)) a.exitFullscreenFromControls()                  // a film that was full screen in the page: the page's full screen ends, Kestrel's player takes the screen
+        return true
+    }
+
+    /** A page film went full screen in the page and was not handed over before (its stream was not known at the press): at the first report of the film (its position is known now) it moves to Kestrel's player. */
+    fun handOverFullscreen(tab: Tab, timeS: Double, lengthS: Double): Boolean {
+        if (a.prefs.webVideoMode == WebHandOver.NEVER) return false
+        val p = tab.media.primary()
+        val src = if (p != null && p.kind == MediaKind.FILE) p.url else ""
+        return start(tab, WebHandOver.Why.FULLSCREEN, WebHandOver.Element(src, false, p?.mime.orEmpty(), false, 0, 0, timeS, lengthS), p?.frame.orEmpty())
+    }
+
+    /** A film-length playlist the sniffer saw within 10 s after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
+    private fun lateHandOver(tab: Tab, c: MediaCandidate) {
+        val r = lastRefused ?: return
+        if (r.tabId != tab.id || r.page != tab.url.substringBefore('#') || SystemClock.uptimeMillis() - r.at > 10_000L || c.frame != r.frame) return
+        lastRefused = null
+        if (start(tab, WebHandOver.Why.LATE, r.el, c.frame)) try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* none */ }
+    }
+
+    /** Kestrel's own player ended with an error before its first picture for a film of this page: the page's own player plays its films for two minutes, and the person is told. */
+    fun nativeFailed() {
+        val t = a.current ?: return
+        t.gecko.handOverOffUntil = SystemClock.uptimeMillis() + 120_000L
+        NativePlayerStats.launchedAt = 0L                                              // (it is over: a press now is a new one, not the same launch)
+        if (!t.isPrivateTab) WebHandStats.failed++
+        a.toast("Kestrel's own player could not play this film. Press play again: the page's own player will.")
+    }
+
+    /** A row of the page's quality list was picked ([rung] null = Automatic): the page's film stops and Kestrel's own player goes on from [startMs] with that picture. */
+    fun playPicked(tab: Tab, film: PageFilm, rung: QualityLabel.Rung?, startMs: Long) {
+        val c = film.cand
+        val headers = MediaHeaders.sets(c, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* a page film without a media session is silent: nothing plays sound */ }
+        if (!tab.isPrivateTab) Health.log("video", "native-quality", "${if (rung == null) "Automatic" else QualityLabel.text(rung)} from ${startMs / 1000} s")
+        NativePlayerActivity.launch(a, c.url, headers, startMs, 720, tab.isPrivateTab, tab.gecko.pictureW, tab.gecko.pictureH, rung, rung == null)
     }
 
     /** What the page loaded that is worth considering, plus the pressed element's own file even when the usual size rules would hide it. */
@@ -379,7 +573,7 @@ class VideoFlow(private val a: BrowserActivity) {
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
-                is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, requestHeaders(tab, c))
+                is Hls.MasterPlaylist -> { c.master = true; noteMaster(c, pl.master); loadVariants(tab, c, pl.master, requestHeaders(tab, c)) }
             }
         }
         return Loaded.Loading
@@ -573,6 +767,28 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** "MP4 - 48.2 MB - 1:02" */
     private fun detail(c: MediaCandidate): String = listOf(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)).filter { it.isNotEmpty() }.joinToString("  ·  ")
+
+    /**
+     * SOAK1 (the emulator lab, debug builds only, BrowserActivity.labIntent "videodl"): what the "Save video" sheet would offer on this tab, and what one tap on its first row does.
+     * One Health line says what was found; a plain file is then saved exactly as the sheet would save it.
+     */
+    fun labDownloadBest(tab: Tab) {
+        val ranked = MediaRank.rank(candidates(tab, null), null, tab.media.primary())
+        val c = ranked.main.firstOrNull() ?: ranked.exact
+        Health.log("lab", "videodl", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p ${c.length / 1024}KB"}")
+        if (c != null && c.kind == MediaKind.FILE) pick(tab, c, "lab-found-video")
+    }
+
+    /** LAB (ANS52i): the best row of the Save video sheet, played in Kestrel's own player (the lab cannot press the sheet's button). */
+    fun labPlayBest(tab: Tab) {
+        val ranked = MediaRank.rank(candidates(tab, null), null, tab.media.primary())
+        val c = ranked.main.firstOrNull() ?: ranked.exact
+        Health.log("lab", "nativeplay", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p"}")
+        if (c != null && c.kind == MediaKind.FILE) {
+            val headers = MediaHeaders.sets(c, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+            NativePlayerActivity.launch(a, c.url, headers, 0L, 1080, tab.isPrivateTab, c.width, c.height)
+        }
+    }
 
     private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
