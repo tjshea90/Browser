@@ -68,15 +68,15 @@ object GeckoPrefs {
      * texture upload at a time, no partial presents. A little more graphics work per frame (the picture is 600 x 973), no change to what a page does. Every name exists in the pinned GeckoView (tools/check-gecko-prefs.sh).
      */
     internal fun drawLines(p: app.kestrel.browser.data.Prefs): String = buildString {
-        if (p.labDraw) {
-            append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
-            append("  gfx.webrender.batched-texture-uploads: false\n")
-            append("  gfx.webrender.max-partial-present-rects: 0\n")
-            append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
-            // PERF10b: the alpha94 uploads proved the four above reached the engine (engine draw-prefs line) and the bands stayed. Texture uploads through mapped upload buffers (PBO) are the next shortcut that can
-            // leave some rows of a glyph or tile not yet written when the page is busy: plain uploads instead (research/PAINT_GLITCH.md, 2026-11-22).
-            append("  gfx.webrender.pbo-uploads: false\n")
-        }
+        // GL2b (owner 2026-11-26, research/PAINT_GLITCH.md): ALWAYS written, whatever the old "Safe drawing" switch says. The alpha108 uploads showed the tablet drawing with the switch OFF = every engine shortcut at its
+        // default, the mode that cut text and pictures into bands; nothing measured says the shortcuts buy speed, and they cost nothing while the processor draws.
+        append("  gfx.webrender.scissored-cache-clears.enabled: false\n")
+        append("  gfx.webrender.batched-texture-uploads: false\n")
+        append("  gfx.webrender.max-partial-present-rects: 0\n")
+        append("  gfx.webrender.allow-partial-present-buffer-age: false\n")
+        // PERF10b: the alpha94 uploads proved the four above reached the engine (engine draw-prefs line) and the bands stayed. Texture uploads through mapped upload buffers (PBO) are the next shortcut that can
+        // leave some rows of a glyph or tile not yet written when the page is busy: plain uploads instead (research/PAINT_GLITCH.md, 2026-11-22).
+        append("  gfx.webrender.pbo-uploads: false\n")
         // PERF25: the hardware drawing TRIAL (core DrawTrial): the graphics chip draws with the Mali paths Mozilla's own bugs name switched off. A trial and CPU drawing exclude each other: while a trial runs, Software drawing is not written.
         for ((name, value) in app.kestrel.core.gfx.DrawTrial.lines(p.drawTrial)) append("  ").append(name).append(": ").append(value).append('\n')
         // PERF10b: CPU drawing (software WebRender). Mozilla's own text-band bug threads name it as the one switch that always removes this fault family; slower, so OFF unless the person turns it on.
@@ -89,19 +89,41 @@ object GeckoPrefs {
      * PERF25: once per process, BEFORE the config file is written. A trial start leaves a mark ([app.kestrel.browser.data.Prefs.drawTrialStart]) that the engine's first steady picture takes away; a mark that is still
      * there means the last start with the trial never steadied (the graphics driver killed the app or hung it): the trial switches itself off now, so the person never meets a browser that will not open.
      */
-    private fun guardTrial(p: app.kestrel.browser.data.Prefs) {
+    private fun guardTrial(ctx: Context, p: app.kestrel.browser.data.Prefs) {
         if (trialGuarded) return
         trialGuarded = true
+        // GL2b: a tablet found drawing with the plain graphics chip (trial off, Software drawing off: an old setting or an old backup) is moved to the trial with the fixes, once per start. Not while an Auto-tune run
+        // is active: the run owns the configuration of its steps and puts the person's own back by itself.
+        if (!autoTuneActive(ctx)) app.kestrel.core.gfx.DrawGuard.leavePlain(p.labSoft, p.drawTrial)?.let { to ->
+            p.drawTrial = to; p.drawTrialStart = 0L; p.drawNote = app.kestrel.core.gfx.DrawGuard.LEFT_PLAIN_NOTE
+            app.kestrel.browser.diag.Health.log("engine", "draw-guard", "left plain mode: " + app.kestrel.core.gfx.DrawGuard.LEFT_PLAIN_NOTE)
+        }
         val trial = p.drawTrial
         if (trial == 0) { if (p.drawTrialStart != 0L) p.drawTrialStart = 0L; return }
         if (app.kestrel.core.gfx.DrawTrial.startFailed(trial, p.drawTrialStart)) {
-            p.drawTrialWhy = "the last start with '" + app.kestrel.core.gfx.DrawTrial.label(trial) + "' never steadied, so it was switched off"
-            p.drawTrial = 0; p.drawTrialStart = 0L
-            app.kestrel.browser.diag.Health.log("engine", "draw-trial", "reverted: " + p.drawTrialWhy)
+            trialSwitchedOff(ctx, p, "the last start with '" + app.kestrel.core.gfx.DrawTrial.label(trial) + "' never steadied, so it was switched off")
         } else {
             p.drawTrialStart = System.currentTimeMillis()
             app.kestrel.browser.diag.Health.log("engine", "draw-trial", "start: " + app.kestrel.core.gfx.DrawTrial.label(trial))
         }
+    }
+
+    /** An Auto-tune run that has not finished owns the drawing configuration of its steps. */
+    internal fun autoTuneActive(ctx: Context): Boolean =
+        try { app.kestrel.browser.optimizer.OptimizerStore.load(ctx)?.let { it.status != app.kestrel.core.optimizer.Status.DONE } == true } catch (e: Exception) { false }
+
+    /**
+     * GL2b: the hardware trial ends itself (a start that never steadied, an early crash of the page process). It lands on the PROCESSOR (Software drawing on), never on the plain graphics chip: the trial's old
+     * fallback was "the setting above", which was the mode that cut text and pictures. During an Auto-tune run only the trial number goes back (the run restores the person's own settings itself).
+     */
+    internal fun trialSwitchedOff(ctx: Context, p: app.kestrel.browser.data.Prefs, why: String) {
+        p.drawTrialWhy = why
+        p.drawTrial = 0; p.drawTrialStart = 0L
+        if (!autoTuneActive(ctx)) {
+            p.labSoft = app.kestrel.core.gfx.DrawGuard.TRIAL_FALLBACK_SOFT
+            p.drawNote = "the graphics chip stopped drawing steadily ($why); Kestrel draws with the processor until you choose the graphics chip again in Settings"
+        }
+        app.kestrel.browser.diag.Health.log("engine", "draw-trial", "reverted: $why")
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
@@ -112,7 +134,7 @@ object GeckoPrefs {
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
         if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
         app.kestrel.browser.optimizer.OptimizerGuard.beforeEngine(ctx)      // OPT1: a run that is active decides the start configuration (and puts the person's own back after a failed start or a closed app)
-        guardTrial(app.kestrel.browser.data.Prefs.get(ctx))     // PERF25: before anything reads the trial number
+        guardTrial(ctx, app.kestrel.browser.data.Prefs.get(ctx))     // PERF25: before anything reads the trial number
         var yaml = yaml(text, sweep + labOverrides(app.kestrel.browser.data.Prefs.get(ctx))) + labLines(app.kestrel.browser.data.Prefs.get(ctx)) + drawLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.

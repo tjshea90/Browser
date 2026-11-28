@@ -630,6 +630,66 @@ def focus_report(batches):
         print('  WATCH many loads failed: compatibility or network, see the PAGE COMPATIBILITY section')
 
 
+def drawing_analysis(batches):
+    """GL2d (owner 2026-11-26: "Today i saw undrawn cut off pictures and text"; research/PAINT_GLITCH.md): which way the tablet drew the pages in each upload, and the "Parts of the page are missing" reports per mode.
+    The mode is read back from the engine's own `engine draw-prefs` line (what really reached the engine); the saved settings are the fallback when the line was masked by a private tab or is missing.
+      processor                   = software=true (never left a part of a page undrawn on this tablet)
+      graphics chip with fixes    = software=false and the Mali fixes (use-optimized-shaders=false) with the shortcut switches off
+      graphics chip, safe only    = software=false, shortcuts off, no Mali fixes (alpha92-95: bands were still seen)
+      PLAIN graphics chip         = software=false and a shortcut at its engine default (the mode that cut text and pictures; alpha108 ran in it)"""
+    rows = []
+    reports = Counter()
+    for b in batches:
+        ev = [e for e in b.get('events', []) if isinstance(e, str)]
+        pref = None
+        for e in ev:
+            if ' engine draw-prefs ' in e:
+                pref = e.split(' engine draw-prefs ', 1)[1]
+        st = b.get('settings', {}) if isinstance(b.get('settings'), dict) else {}
+        mode, src = None, 'settings'
+        if pref and 'software=' in pref:
+            soft = 'software=true' in pref
+            short_off = ('scissored-cache-clears.enabled=false' in pref) and ('max-partial-present-rects=0' in pref) and ('pbo-uploads=false' in pref)
+            fixes = 'use-optimized-shaders=false' in pref
+            if soft:
+                mode = 'processor'
+            elif short_off and fixes:
+                mode = 'graphics chip with fixes'
+            elif short_off:
+                mode = 'graphics chip, safe only'
+            elif 'scissored-cache-clears.enabled=true' in pref or 'pbo-uploads=true' in pref or 'max-partial-present-rects=1' in pref:
+                mode = 'PLAIN graphics chip (FAILING MODE)'
+            if mode:
+                src = 'engine read-back'
+        if mode is None:
+            trial = str(st.get('draw_trial') or '0')
+            if trial not in ('0', ''):
+                mode = 'graphics chip with fixes'
+            elif st.get('lab_soft') == 'true':
+                mode = 'processor'
+            else:
+                mode = 'graphics chip, no trial (saved settings; before alpha109 this was the plain mode)'
+        rep = [e for e in ev if ' paint report ' in e]
+        for e in rep:
+            m = re.search(r'mode=(\S+)', e)
+            reports[m.group(1) if m else '?'] += 1
+        rows.append((str(b.get('at', ''))[:19], str(b.get('app', '?')).replace('0.3.0-', ''), mode, src, len(rep), sum(1 for e in ev if ' paint fallback ' in e)))
+    print('\n== DRAWING (GL2d: how each upload drew the pages; "Parts of the page are missing" reports; %d upload(s)) ==' % len(rows))
+    last = None
+    for at, app, mode, src, nrep, nfall in rows[-12:]:
+        flag = '  <-- the mode that cut text and pictures' if mode.startswith('PLAIN') else ''
+        print('  %s %-9s %s [%s]%s%s%s' % (at, app, mode, src, flag, ('  reports=%d' % nrep) if nrep else '', ('  FELL BACK to the processor' if nfall else '')))
+        last = mode
+    if len(rows) > 12:
+        print('  (%d older uploads not listed)' % (len(rows) - 12))
+    plain = sum(1 for r in rows if r[2].startswith('PLAIN'))
+    print('  uploads in the failing mode: %d of %d%s' % (plain, len(rows), '' if not plain else '  (alpha109 and later cannot reach it: Settings has one choice and the engine always gets the shortcut switches)'))
+    if reports:
+        print('  "Parts of the page are missing" taps by mode: ' + ', '.join('%s x%d' % (k, v) for k, v in reports.most_common()))
+    else:
+        print('  "Parts of the page are missing" taps: none yet (the menu tile exists from alpha109)')
+
+
 def tab_analysis(batches):
     """PERF15: tab switching. `tabs hibernate tab= live= max= avail=` (a tab was put to sleep: its next switch loads the page again), `tabs switch-done tab= kind=live|revive first-frame=Nms` (how long the switch took to the first frame) and the engine kills."""
     hib, sw, kills, trims = [], [], 0, 0
@@ -932,6 +992,7 @@ def main(argv):
     for x in problems:
         print('  FILE PROBLEM: ' + x)
     focus_report(batches)
+    drawing_analysis(batches)
     print('\n== SETTINGS TO CHANGE: tell the owner in plain words (from the tablet\'s own advisor; judge the numbers before you relay them) ==')
     for k, v in r['advice'].most_common(10):
         print('  %3dx on %d day(s): %s' % (v, len(r['advice_days'][k]), r.get('advice_sample', {}).get(k, k)))
