@@ -20,6 +20,12 @@
     try {
       var seen = Object.create(null), fresh = [], timer = 0, batches = 0, sent = 0, off = false;
       var MAX_BATCHES = 60, MAX_SENT = 8000, BATCH = 300, DELAY = 350; // a page that keeps inventing names (generated ids) stops being asked
+      // RX3-S3: a TIME budget as well (the procedural observer below has one): this callback runs on the page's own main thread for as long as the page keeps adding nodes with names it has not seen, so on a page that
+      // never stops it costs time for ever. Now: 300 ms of its own work in total, or 20 s after the page was parsed, whichever comes first; nothing while the page is hidden (looked at again when it is shown);
+      // nothing for what happens inside an editable region (typing in a rich editor adds nodes all the time). The tests shorten the limits through window.__kstTokCfg (a page's globals are not visible here in the real extension).
+      var TC = (window.__kstTokCfg && typeof window.__kstTokCfg === 'object') ? window.__kstTokCfg : {};
+      var BUDGET_MS = TC.budgetMs || 300, WINDOW_MS = TC.windowMs || 20000, spent = 0, startedAt = 0;
+      function nowMs() { if (typeof TC.now === 'function') return TC.now(); return (window.performance && performance.now) ? performance.now() : Date.now(); }   // (TC.now: the tests' own clock, so a slow or busy machine cannot change what they prove)
       function note(t) {
         if (t.length > 81 || seen[t]) return;
         seen[t] = 1; fresh.push(t);
@@ -47,13 +53,18 @@
         if (fresh.length && !off) timer = setTimeout(flush, DELAY);
       }
       function later() { if (!timer && !off) timer = setTimeout(flush, DELAY); }
-      function first() { scan(document); later(); }
+      function first() { if (!startedAt) startedAt = nowMs(); scan(document); later(); }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
       window.addEventListener('load', first);
       if (window.MutationObserver) {
         var mo = new MutationObserver(function (recs) {
           if (off) { mo.disconnect(); return; }
+          if (document.hidden) return;                                        // nobody sees the page: visibilitychange looks again when it is shown
+          var t0 = nowMs();
+          if (spent > BUDGET_MS || (startedAt && t0 - startedAt > WINDOW_MS)) { off = true; mo.disconnect(); return; }
           for (var r = 0; r < recs.length && r < 200; r++) {
+            var tg = recs[r].target;
+            if (tg && tg.isContentEditable) continue;                         // typing in an editor
             var added = recs[r].addedNodes;
             for (var k = 0; k < added.length && k < 50; k++) {
               var n = added[k];
@@ -63,8 +74,10 @@
             }
           }
           if (fresh.length) later();
+          spent += nowMs() - t0;
         });
         mo.observe(document, { childList: true, subtree: true }); // the document itself: its root element may not exist yet
+        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off) { scan(document); later(); } });
       }
     } catch (e) { /* never break the page */ }
   }
@@ -230,16 +243,47 @@
         return { f: f, rw: Math.max(0, Math.min(20000, rw)), rh: Math.max(0, Math.min(20000, rh)), vp: vp };
       } catch (e) { return { f: f, rw: 0, rh: 0, vp: 0 }; }
     }
+    // RX3-V4: a player that feeds a blob: address (a MediaSource: hls.js, shaka, dash.js, most embeds) has no address worth sending, but its length and picture height can be matched to a playlist the app has read. Only the
+    // word "blob" goes (never the blob: address); the app's core MediaList.applyBlob does the matching.
+    function isBlob(src) { return src.indexOf('blob:') === 0; }
     function report(v) {
       var src = v.currentSrc || v.src || '';
-      if (!src || src.indexOf('http') !== 0) return;
-      var key = src + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
+      var blob = isBlob(src);
+      if (!src || (!blob && src.indexOf('http') !== 0)) return;
+      var key = (blob ? 'blob|' + elId(v) : src) + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
       if (sent[key]) return;
       sent[key] = true;
       var x = factsOf(v);
-      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp }).catch(function () {});
+      browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
+    // RX3-V3 (research/FINDER_LAB.md section 4): which element really PLAYS. `el` names an element for the page's lifetime (a small whole number, nothing else about it), so the app can tell "the same player went from a
+    // 15 s clip to the film" (a pre-roll) from "two different videos". After 3 s of real playback of a file, once per element and file, the same report goes again with ev:'played'.
+    var elIds = (typeof WeakMap === 'function') ? new WeakMap() : null, elNext = 1, playedKeys = {};
+    function elId(v) { try { if (!elIds) return 0; var i = elIds.get(v); if (!i) { i = elNext++; elIds.set(v, i); } return i; } catch (e) { return 0; } }
+    document.addEventListener('playing', function (e) {
+      try {
+        var v = e.target;
+        if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO') || !e.isTrusted) return;
+        var src = v.currentSrc || v.src || '';
+        var blob = isBlob(src);
+        if (!src || (!blob && src.indexOf('http') !== 0)) return;
+        var dur0 = Math.round(v.duration || 0);
+        var key = elId(v) + '|' + src + (blob ? '|' + dur0 : '');       // a blob: player may go from an advertisement to the film without a new address: the length tells them apart
+        if (playedKeys[key]) return;
+        var t0 = v.currentTime, tries = 0;
+        var check = function () {
+          try {
+            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src || (blob && Math.round(v.duration || 0) !== dur0)) return;
+            if (v.currentTime < t0 + 2.5) { if (++tries < 8) setTimeout(check, 1500); return; }   // playing, but slowly (a slow tablet): look again a few times before giving up
+            playedKeys[key] = true;
+            var x = factsOf(v);
+            browser.runtime.sendMessage({ k: 'vid', ev: 'played', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
+          } catch (err) { /* ignore */ }
+        };
+        setTimeout(check, 3000);
+      } catch (err) { /* ignore */ }
+    }, true);
   } catch (e) { /* never break the page */ }
 })();
 

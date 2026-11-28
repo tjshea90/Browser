@@ -54,6 +54,8 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
     private var selectedId = 0L
     var showingPrivate = false
         private set
+    /** Tests: the Private box at the top is on screen. */
+    internal val privateBoxShownForTest: Boolean get() = segPrivate.visibility == VISIBLE
     private var pendingBuild = false
     private val thumbViews = HashMap<Long, ThumbView>()
 
@@ -181,6 +183,10 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         val ctx = context
         val nRegular = tabs.count { !isPrivate(it) }
         val nPrivate = tabs.size - nRegular
+        // PT1 (owner message 41, item 2): "when I close all private tabs, make the private tab box at the top of the tab selector disappear, because there are no more private tabs, then automatically default to the
+        // regular 'tabs' page". A private tab is opened from the menu ("New private tab"), so the box is only needed while there is a private tab to go to.
+        segPrivate.visibility = if (nPrivate > 0) VISIBLE else GONE
+        if (nPrivate == 0 && showingPrivate) { showingPrivate = false; l.paneChanged(false) }
         segTabs.text = "Tabs  $nRegular"
         segPrivate.text = "Private  $nPrivate"
         paintChrome()

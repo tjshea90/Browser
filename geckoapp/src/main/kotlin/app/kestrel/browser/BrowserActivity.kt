@@ -277,7 +277,7 @@ open class BrowserActivity : Activity(), DockListener {
         val h = UrlParts.hostOf(page)
         if (h == null || t.topHost != h) return // the press was on another tab's page
         val now = SystemClock.uptimeMillis()
-        if (pressMovedFar || (!pressActive && now - pressEndAt > OPEN_SPACE_FRESH_MS)) return // not the press that was just made
+        if (pressMovedFar || (!pressActive && now - pressEndAt > OPEN_SPACE_FRESH_MS)) { Health.log("panel", "open-space-dropped", "moved=$pressMovedFar active=$pressActive late=${now - pressEndAt}"); return } // not the press that was just made
         if (pressActive) { // the finger is still down: the page's touch is over (nothing is clicked or selected when it lifts), and the rest of it is ours
             val cancel = android.view.MotionEvent.obtain(pressDownTime, now, android.view.MotionEvent.ACTION_CANCEL, pressX, pressY, 0)
             window.superDispatchTouchEvent(cancel); cancel.recycle()
@@ -285,6 +285,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         Health.count("panel.openSpace")
+        Health.log("panel", "open-space", "x=${pressX.toInt()} y=${pressY.toInt()} finger=$pressActive")
         miniNav.showAt(pressX, pressY)
     }
     private val hotCorner by lazy { app.kestrel.browser.ui.HotCorner(Io.main, touchSlop.toFloat(), hotCornerHost) }
@@ -367,6 +368,9 @@ open class BrowserActivity : Activity(), DockListener {
             window.navigationBarColor = pal.chromeBg
         }
         buildUi()
+        if (savedInstanceState == null) { // SP1 (owner message 41): the app's own symbol glows for about 0.4 s over the first frame, after the launch window that shows it; it takes no touch and nothing waits for it
+            root.addView(app.kestrel.browser.ui.LaunchLogo(this, debugLogoStretch()) { v -> root.removeView(v) }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
         DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
         UpdateManager.addListener(updateListener)
@@ -384,7 +388,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f -> video.info(p, u, w, h, d, l, f) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -862,7 +866,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun show(tab: Tab) {
         val prev = current
-        if (prev != null && prev !== tab) { prev.session?.setActive(false); tab.showHome = false } // coming back to a tab shows its page, not the Home overlay
+        if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
         if (restoringTab != null && restoringTab !== tab) hideRestoring("other-tab") // another tab came to the front: the overlay belonged to the one that died
         tab.lastActive = System.currentTimeMillis()
@@ -877,6 +881,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
     private var secureWindow = false
+
+    /** DEBUG builds only (never a release): `adb shell setprop debug.kestrel.logostretch 25` makes the start-up logo flourish 25 times slower, so an emulator screenshot can catch it. 1 in every release. */
+    private fun debugLogoStretch(): Float {
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return 1f
+        return try { ((Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.logostretch") as? String)?.toFloatOrNull() ?: 1f).coerceIn(1f, 60f) } catch (e: Throwable) { 1f }
+    }
 
     /** DEBUG builds only (never a release): `adb shell setprop debug.kestrel.nosecure 1` lets screenshots show private tabs, so the private skin can be checked on an emulator. */
     private val debugAllowsScreenshots: Boolean by lazy {

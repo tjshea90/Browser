@@ -25,15 +25,22 @@ object MediaRank {
 
     private val SCRIPT_EXTS = setOf("php", "php3", "php4", "php5", "asp", "aspx", "jsp", "jspx", "cgi", "pl", "do", "action")
     private val HINT_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(track|tracking|tracker|pixel|beacon|analytics|telemetry|metrics?|adserv\w*|advert\w*|ads?|banner|preroll|pre-roll|sponsor\w*|promo|teaser|preview|thumb\w*|sprite|ping|stat|stats)(?:$|[/._\-=&?])""")
+    /**
+     * RX3-V6: words that only SOMETIMES mean "not the film" (an advertisement's own plumbing, decoration, a trailer or an intro that can be wanted). They hide a file only when it is ALSO clearly smaller than the biggest
+     * one ([SOFT_REL]); never alone, never the biggest, never a file of unknown size. Whatever they hide stays one tap away under "Other files".
+     */
+    private val SOFT_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(vast|vpaid|imasdk|adunit|ad_type|adid|creative|bumper|intro|idle|loop|bg|hero|background|snippet|trailer)(?:$|[/._\-=&?])""")
+    private const val SOFT_REL = 0.25
     private val RES_TOKEN = Regex("""(?i)[_\-. ]?(?<![0-9a-z])\(?\d{3,4}p?\)?(?![0-9a-z])""")      // "_1080p", "-480", " (720p)"
     private val QUALITY_WORD = Regex("""(?i)[_\-. ](hd|sd|fhd|uhd|high|low|medium|mobile)(?![0-9a-z])""")
     private val PIECE_PARAMS = setOf("range", "bytestart", "byteend", "start", "end", "sq", "seg", "segment", "rn", "rbuf", "offset", "byte_range", "bytes")
 
-    fun rank(items: List<MediaCandidate>, pressedUrl: String? = null): Result {
+    /** [primary] (RX3-V3): the file that really plays ([MediaList.primary]); it goes to the top of the sheet. */
+    fun rank(items: List<MediaCandidate>, pressedUrl: String? = null, primary: MediaCandidate? = null): Result {
         val all = dedupe(items)
         val pressedKey = pressedUrl?.takeIf { it.startsWith("http", true) }?.let { MediaCandidate.keyOf(it) }
         val exact = pressedKey?.let { k -> all.firstOrNull { it.key == k } ?: all.firstOrNull { normKey(it.url) == normKey(k) } }
-        return if (exact != null) byExact(all, exact) else byRank(all)
+        return if (exact != null) byExact(all, exact) else byRank(all, primary)
     }
 
     // ---- the element the owner pressed is known: that file, its other qualities, nothing else on top
@@ -63,7 +70,7 @@ object MediaRank {
 
     // ---- nothing pressed (the download icon, a player that hands out a blob: address): the best guess
 
-    private fun byRank(all: List<MediaCandidate>): Result {
+    private fun byRank(all: List<MediaCandidate>, primary: MediaCandidate? = null): Result {
         val files = all.filter { it.kind == MediaKind.FILE && !it.audioOnly }
         val real = files.filter { !it.decoy && it.verified }                    // RX3-V1 / V2: a big hero loop, an ad or an address nobody has seen must not make the real video look small
         val ref = real.filter { it.length > 0 }.maxByOrNull { it.length }
@@ -72,7 +79,7 @@ object MediaRank {
         val hasVideo = all.any { it.kind != MediaKind.FILE || !it.audioOnly }
         val main = ArrayList<MediaCandidate>(); val other = ArrayList<MediaCandidate>()
         for (c in all) {
-            if (c.decoy || !c.verified || c.unfit) { other.add(c); continue }                              // RX3-V1: the page's own element says decoration or advertisement; the fallback below keeps the sheet from being empty
+            if (c.decoy || !c.verified || c.unfit || MediaList.clipNextToFilm(c, all)) { other.add(c); continue }   // RX3-V4: a clip under a minute next to a film of five minutes or more                              // RX3-V1: the page's own element says decoration or advertisement; the fallback below keeps the sheet from being empty
             if (c.kind != MediaKind.FILE) { main.add(c); continue }
             // a lower quality of the biggest file is small by nature (a 360p is a tenth of a 1080p): never junk because of its size
             if (ref != null && c !== ref && sameVideo(ref, c)) main.add(c)
@@ -84,6 +91,7 @@ object MediaRank {
             if (best != null) { other.remove(best); main.add(best) }
         }
         main.sortWith(order()); other.sortWith(order())
+        if (primary != null) main.firstOrNull { it === primary || it.key == primary.key }?.let { p -> main.remove(p); main.add(0, p) }   // RX3-V3: what really plays comes first
         return Result(main, other, null)
     }
 
@@ -97,6 +105,7 @@ object MediaRank {
         if (script && (len < 0 || len < SCRIPT_BIG)) return true                              // "get.php" is a video only when it is big
         if (hint && len in 0 until maxOf(SMALL_ABS, (biggest * 0.4).toLong())) return true      // "preview.mp4", "teaser", "ad": a clip, not the video
         if (hint && len < 0 && biggest > 0) return true
+        if (biggest > 0 && len in 0 until (biggest * SOFT_REL).toLong() && !c.touched && !c.played && !c.interest && SOFT_WORDS.containsMatchIn(pathAndQuery(c.url))) return true   // RX3-V6: a soft word AND clearly smaller than the biggest file, and no player or owner vouches for it
         if (c.frame.isNotEmpty() && topFrame > 0 && len in 0 until (topFrame * 0.25).toLong()) return true   // asked for by another frame (an advert) and small next to the page's own
         return false
     }

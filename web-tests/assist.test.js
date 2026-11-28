@@ -24,7 +24,7 @@ after(async () => { await browser.close(); });
 const AD = 'https://ads.example/landing?x=1';
 const STUB_PLAY = 'HTMLMediaElement.prototype.play = function () { window.__plays = (window.__plays || 0) + 1; return Promise.resolve(); };';
 const FRAME = '<iframe id="f" src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>';
-// these layers are VISIBLE (a faint tint): RX3-G4 switches an INVISIBLE layer off before the press, which would leave nothing for the assist (the path under test here) to do
+// these layers carry a faint tint (visible): the assist (the path under test here) works the same for an invisible one, the tint only makes the layer easy to see in a failure
 const LAYER_AD = `<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)" onclick="window.open('${AD}')"></div>`;
 const LAYER_QUIET = '<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)"></div>';
 
@@ -134,7 +134,7 @@ test('RX3-G3: the frame never presses on a button, a link or a form control, how
   const page = await open(FRAME + LAYER_AD, embedOf('<button id="b" style="width:400px;height:150px" onclick="window.__clicks=(window.__clicks||0)+1">Allow</button><a id="a" href="https://player.example/x" onclick="window.__clicks=(window.__clicks||0)+10;return false" style="display:block;width:400px;height:150px">a link</a>'));
   await settle(900);
   await page.mouse.click(100, 60);                                // refused ad, assist -> the frame is asked to press at (100, 60), which is the button
-  await settle(800);
+  await settle(2000);                                             // (the layer is given back after the assist's 1.5 s: a real click inside that window would reach the frame itself)
   await page.mouse.click(100, 220);                               // ... and then the link
   await settle(800);
   assert.equal(await child(page).evaluate(() => window.__clicks || 0), 0);
