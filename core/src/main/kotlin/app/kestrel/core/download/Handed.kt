@@ -146,11 +146,12 @@ class HandedFetcher(private val real: Fetcher, private val handed: HandedStreams
         val head = ByteArray(PEEK)
         val n = try { body.read(head, 0, head.size) } catch (e: IOException) { return null }
         if (n <= 0 || ContentSniff.looksLikeHtml(head, 0, n)) return null // a server that labels its web page "application/octet-stream"
-        return Peeked(resp, head, n)
+        return Peeked(resp, head, n, body)
     }
 
-    private class Peeked(private val inner: FetchResponse, head: ByteArray, n: Int) : FetchResponse by inner {
-        override val body: InputStream? = SequenceInputStream(ByteArrayInputStream(head, 0, n), inner.body!!)
+    /** The reply with the first bytes we looked at put back in front; [rest] is the very stream they were read from (read once, so a getter that opens a stream is not asked twice). */
+    private class Peeked(inner: FetchResponse, head: ByteArray, n: Int, rest: InputStream) : FetchResponse by inner {
+        override val body: InputStream? = SequenceInputStream(ByteArrayInputStream(head, 0, n), rest)
     }
 
     private companion object { const val PEEK = 512 }
