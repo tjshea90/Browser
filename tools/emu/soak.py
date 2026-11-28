@@ -74,6 +74,13 @@ class Phone:
     def tap(self, x, y):
         self.a.sh("input tap %d %d" % (x, y), timeout=15)
 
+    def double_tap(self, x, y, gap_ms=90):
+        """Two taps with an EXACT gap, played by the app on its own clock (the in-app DebugTouch receiver, the same path as hold_drag). Two `input tap` processes started at once landed 0.3 s apart or never on the busy
+        2-core emulator (lab runs 43960432251 and 43966056564 both lost the kp double tap this way: 'commands []'), and a double tap is judged against a 300 ms window."""
+        script = "D%d,%d W40 U%d,%d W%d D%d,%d W40 U%d,%d" % (x, y, x, y, gap_ms, x, y, x, y)
+        self.a.sh("am broadcast -a app.kestrel.browser.DEBUG_TOUCH -p %s --es script %s" % (self.pkg, shlex.quote(script)), timeout=30)
+        time.sleep(0.4)                                                              # (the script is 170 ms long)
+
     def swipe(self, x1, y1, x2, y2, ms=350):
         self.a.sh("input swipe %d %d %d %d %d" % (x1, y1, x2, y2, ms), timeout=15)
 
@@ -313,18 +320,45 @@ class Phone:
         at = 0
         for c, pause in chunks:
             n = len(c) // 24
-            cmds.append("dd if=/data/local/tmp/kp.bin of=%s bs=24 skip=%d count=%d 2>/dev/null" % (path, at, n))
+            cmds.append("dd if=/data/local/tmp/kp.bin of=%s bs=24 skip=%d count=%d 2>&1" % (path, at, n))
             if pause > 0:
                 cmds.append("sleep %s" % pause)
             at += n
         cmds.append("rm -f /data/local/tmp/kp.bin")
-        self.a.sh("; ".join(cmds), timeout=60)
+        self.a.sh("; ".join(cmds), timeout=60)          # (needs a ROOT adb shell: 'Permission denied' otherwise; the lab uses hold_drag instead)
         return True
 
-    def hold_drag(self, screen, x, y, dx, dy=0, hold_s=0.5, steps=14, step_s=0.035, end_hold_s=0.0):
-        """The raw path of a long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags."""
+    # ---- ANS57 lab: a finger that RESTS first and then moves (`input swipe` cannot rest).
+    # Lab runs 43918159286, 43921764750 and 43925029376 (2026-11-16): a path written with dd to the touch device (raw_path) failed with 'Permission denied' (the lab's adb shell is not root) and Android 10's `input` has no
+    # `motionevent`; `input swipe` and `input tap` always worked. The debug build plays the finger path itself (geckoapp web/DebugTouch: real MotionEvents handed to the Activity in front, an `am broadcast` to the screen with the window focus).
+    touch_log = []
+
+    def touch_script(self, points, hold_s=0.5, step_s=0.1, end_hold_s=0.0):
+        """DebugTouch words: finger down at points[0], rest hold_s, the other points step_s apart, rest end_hold_s at the last, finger up."""
+        pts = [(int(round(px)), int(round(py))) for px, py in points]
+        words = ["D%d,%d" % pts[0]]
+        if hold_s > 0:
+            words.append("W%d" % int(hold_s * 1000))
+        for px, py in pts[1:]:
+            words.append("M%d,%d" % (px, py))
+            if step_s > 0:
+                words.append("W%d" % int(step_s * 1000))
+        if end_hold_s > 0:
+            words.append("W%d" % int(end_hold_s * 1000))
+        words.append("U%d,%d" % pts[-1])
+        return " ".join(words)
+
+    def hold_drag(self, screen, x, y, dx, dy=0, hold_s=0.5, steps=10, step_s=0.1, end_hold_s=0.0, target="main"):
+        """A long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags. [target] is only a note for the reader ('native' = Kestrel's
+        own player, 'main' = the browser): the screen that has the window focus plays the path. Returns when the path is over (the app plays it on its own clock)."""
         pts = [(x, y)] + [(x + dx * (i + 1) / float(steps), y + dy * (i + 1) / float(steps)) for i in range(steps)]
-        return self.raw_path(pts, screen, hold_s=hold_s, step_s=step_s, end_hold_s=end_hold_s)
+        script = self.touch_script(pts, hold_s=hold_s, step_s=step_s, end_hold_s=end_hold_s)
+        # a BROADCAST, not `am start` (starting the screen again pauses it: a film inside the page stopped with 'the app was left', lab run 43927135769); only the screen with the window focus plays it
+        self.a.sh("am broadcast -a app.kestrel.browser.DEBUG_TOUCH -p %s --es script %s" % (self.pkg, shlex.quote(script)), timeout=30)
+        lasts = hold_s + steps * step_s + end_hold_s
+        self.touch_log.append(script[:60])
+        time.sleep(lasts + 0.4)
+        return lasts
 
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
@@ -804,6 +838,8 @@ class Soak:
         self.pv_results = []                  # ANS58c: a private tab keeps its login when the app is left (suite pv)
         self.gp_results = []                  # ANS57: VLC-style gestures (suite gp)
         self.gp_nums = []
+        self.iq_results = []                  # ANS60c: the quality list inside the page (suites ip, gp, gv, vp)
+        self.iq_nums = []
         self.ip_results = []                  # ANS55f: the film plays INSIDE the page over the page's own video box (suite ip)
         self.ip_nums = []                     # the numbers behind the checks (the boxes, the pixel differences): for tuning from one run
         self.ap_table = []
@@ -1738,8 +1774,8 @@ class Soak:
             lk = self.ph.look()
             land = bool(lk and lk["w"] > lk["h"])
             return (973, 574, land) if land else (600, 947, land)
-        def double_tap(x, y):                                                       # two `input tap` processes at once: their taps land a few tens of ms apart (one after the other costs 150-300 ms each, too slow)
-            self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
+        def double_tap(x, y):                                                       # the app plays both taps 90 ms apart on its own clock (Phone.double_tap); two parallel `input tap` processes landed 0.3 s apart on a busy emulator
+            self.ph.double_tap(x, y)
         def ensure_shown():                                                         # a tap on an empty place of the picture (away from every control) when they are hidden
             if is_shown():
                 return
@@ -2033,6 +2069,7 @@ class Soak:
             pass
         line = [ln for ln in diag.splitlines() if ln.startswith("Kestrel's own player:")]
         check("Diagnostics says how it went (frames shown, decoder)", bool(line) and "frames shown" in line[-1], "line: %s" % (line[-1][:200] if line else "none"))
+        check("ANS60d: the Diagnostics line carries the new playback numbers (playable after, waited for the network, link estimate)", bool(line) and "playable" in line[-1] and "waited for the network" in line[-1] and "link estimate" in line[-1], "line: %s" % (line[-1][-260:] if line else "none"))
         self.np_line = line[-1] if line else ""
         self.np_results = self.np_results + checks
         self.record({"kind": "player", "name": "kestrel-native-player-hls" if hls else "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
@@ -2066,6 +2103,11 @@ class Soak:
         for label, arg in self.CP_CASES:
             self.ph.debug("vfmt", arg)
             time.sleep(2.5)
+            # ANS60 lab finding (vp run 43960432251: 14 cp checks failed, the page had seen the PREVIOUS mode's policy, in both of its passes): the extension asks the app for the policy when a page STARTS and answers the page's own
+            # first question from what it knew before that answer came back ("the answer beats the document's first bytes over a hotspot"). The lab's localhost server has the first bytes in under a millisecond, so on a busy
+            # 2-core emulator the page now and then wins that race. So a first page (any page of the same host) lets the extension learn the new policy; the page that is JUDGED is the second one.
+            self.ph.open_url("%s/page/text" % self.lab_base)
+            time.sleep(3.0)
             rmark = self.lab.size()
             self.ph.open_url("%s/formats?tag=%s" % (self.lab_base, label))
             t0 = time.time()
@@ -2612,7 +2654,7 @@ class Soak:
         self.ph.a.sh("media volume --stream 3 --set 4 2>/dev/null", timeout=15)
         sw, sh = self.screen
         def double_tap(x, y):
-            self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
+            self.ph.double_tap(x, y)
         def jumps(lines):
             out = []
             for e in lines:
@@ -2641,7 +2683,7 @@ class Soak:
         self.shot("gp-A-1-playing")
         # a vertical drag on the right side: volume (no hold in full screen)
         m = self.log.size()
-        with_shot("gp-A-2-volume-while-dragging", lambda: self.ph.hold_drag(self.screen, int(sw * 0.85), 760, 0, dy=-340, hold_s=0.0, steps=14, step_s=0.12), 1.3); time.sleep(1.5)
+        with_shot("gp-A-2-volume-while-dragging", lambda: self.ph.a.sh("input swipe %d %d %d %d 2200" % (int(sw * 0.85), 760, int(sw * 0.85), 420), timeout=30), 1.2); time.sleep(1.5)
         vol = levels(ev("native", "gesture-level", m), "volume")
         nums.append("A volume levels %s" % vol[:12])
         check("A: a drag UP on the right side raises the volume (%s)" % (vol[:1] + vol[-1:],), len(vol) >= 2 and vol[-1] > vol[0], "volume lines %s" % vol)
@@ -2652,7 +2694,7 @@ class Soak:
         check("A: a drag DOWN on the right side lowers it", len(vol2) >= 2 and vol2[-1] < vol2[0], "volume lines %s" % vol2)
         # the left side: brightness
         m = self.log.size()
-        with_shot("gp-A-3-brightness-while-dragging", lambda: self.ph.hold_drag(self.screen, int(sw * 0.15), 760, 0, dy=-280, hold_s=0.0, steps=14, step_s=0.12), 1.3); time.sleep(1.5)
+        with_shot("gp-A-3-brightness-while-dragging", lambda: self.ph.a.sh("input swipe %d %d %d %d 2200" % (int(sw * 0.15), 760, int(sw * 0.15), 480), timeout=30), 1.2); time.sleep(1.5)
         bri = levels(ev("native", "gesture-level", m), "brightness")
         nums.append("A brightness levels %s" % bri[:12])
         check("A: a drag up on the left side changes the brightness (%s)" % (bri[:1] + bri[-1:],), len(bri) >= 2 and bri[-1] > bri[0], "brightness lines %s" % bri)
@@ -2661,31 +2703,43 @@ class Soak:
         m = self.log.size()
         self.ph.a.sh("input swipe %d %d %d %d 600" % (sw // 2, 760, sw // 2, 420), timeout=20); time.sleep(1.2)
         check("A: a vertical drag in the middle changes nothing (VLC's dead zone)", not ev("native", "gesture-level", m), "lines %s" % [e["rest"] for e in ev("native", "gesture-level", m)][:3])
-        # a plain sideways drag does nothing (the owner's rule: the long press first)
+        # ANS60a (owner message 60: "make the seek, brightness, and volume gestures in the video player work without a long press"): a plain sideways drag SEEKS
         m = self.log.size()
-        self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 450, 500), timeout=20); time.sleep(1.5)
-        check("A: a sideways drag WITHOUT the long press does not seek", not jumps(ev("native", "gesture-seek", m)) and not any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s" % [e["rest"] for e in ev("native", "gesture-seek", m)][:3])
-        # long press, then drag right: the precise seek; the film moves when the finger lets go
+        self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 350, 500), timeout=20); time.sleep(1.5)                  # 3 cm: about 15 s (the five-minute film must not reach its end before the 6 cm test)
+        j0 = jumps(ev("native", "gesture-seek", m))
+        check("A: a plain sideways drag (no long press at all) seeks forward (%s)" % j0[-1:], bool(j0) and 8 <= j0[-1] <= 30 and any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s, cmd lines %s" % ([e["rest"] for e in ev("native", "gesture-seek", m)][:3], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
+        # ANS60b (owner message 60: "it should say slide up or down for brightness or volume respectively"): a finger that rests is told what it can do on ITS side
+        for label, hx, words in (("left", 150, "Slide up or down for brightness"), ("right", 450, "Slide up or down for volume"), ("middle", 300, "Slide left or right to seek")):
+            m = self.log.size()
+            self.ph.hold_drag(self.screen, hx, 500, 0, steps=1, hold_s=0.6, target="native")
+            hl = [e["rest"] for e in ev("native", "gesture-hint", m)]
+            check("A: a finger resting on the %s is told '%s'%s" % (label if label == "middle" else label + " side", words, "" if label == "middle" else " (never 'slide left or right to seek' on a side)"), any(words in h for h in hl) and (label == "middle" or not any("left or right" in h for h in hl)), "hint lines %s" % hl[:3])
+        # the rest first (as in alpha60) still works, then drags without it
         m = self.log.size()
-        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0), 2.0); time.sleep(2.0)
+        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0, target="native"), 2.6); time.sleep(0.5)
         j1 = jumps(ev("native", "gesture-seek", m))
-        nums.append("A hold + 4 cm right: jumps %s" % j1)
-        check("A: a long press and a drag right of about 4 cm jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
+        nums.append("A rest + 4 cm right: jumps %s" % j1)
+        check("A: after a rest, a drag right of about 4 cm still jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
         check("A: the film really got the command (a skip)", any('"skip"' in c["rest"] and '"d":' in c["rest"] for c in ev("native", "cmd", m)), "cmd lines %s" % [c["rest"][:30] for c in ev("native", "cmd", m)][:4])
         self.shot("gp-A-4-after-seek")
+        m = self.log.size()
+        self.ph.hold_drag(self.screen, 150, 500, XCM, hold_s=0.0, target="native"); time.sleep(1.0)
+        j5 = jumps(ev("native", "gesture-seek", m))
+        nums.append("A no rest + 4 cm right: jumps %s" % j5)
+        check("A: and with no rest at all the same drag jumps the same (%s s against %s s)" % (j5[-1:], j1[-1:]), bool(j5) and bool(j1) and abs(j5[-1] - j1[-1]) <= 4, "jumps %s %s" % (j1, j5))
         # a longer drag jumps farther
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5)); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5), hold_s=0.0, target="native"); time.sleep(1.0)
         j2 = jumps(ev("native", "gesture-seek", m))
         check("A: the farther the drag the bigger the jump (6 cm: %s s against 4 cm: %s s)" % (j2[-1:], j1[-1:]), bool(j2) and bool(j1) and j2[-1] > j1[-1], "jumps %s %s" % (j1, j2))
         # left = rewind
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 450, 500, -XCM); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 450, 500, -XCM, hold_s=0.0, target="native"); time.sleep(1.0)
         j3 = jumps(ev("native", "gesture-seek", m))
-        check("A: a long press and a drag LEFT rewinds (%s)" % j3[-1:], bool(j3) and j3[-1] < -20, "jumps %s" % j3)
+        check("A: a drag LEFT rewinds (%s)" % j3[-1:], bool(j3) and j3[-1] < -20, "jumps %s" % j3)
         # moving also up or down: finer
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170, hold_s=0.0, target="native"); time.sleep(1.0)
         j4 = jumps(ev("native", "gesture-seek", m))
         nums.append("A fine: plain %s s, with 1 inch up %s s" % (j1[-1:], j4))
         check("A: a drag that also goes an inch up is finer (about a third: %s s against %s s)" % (j4[-1:], j1[-1:]), bool(j4) and bool(j1) and 0 < j4[-1] < j1[-1] * 0.6, "jumps %s %s" % (j1, j4))
@@ -2701,42 +2755,49 @@ class Soak:
         time.sleep(1.0); mB = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
         check("A: Back ends the player and the brightness is the tablet's again", bool(ev("native", "stop", mB)), "no 'native stop' line")
         # ---------------------------------------------------------------- B: the film inside the page
-        rm = self.lab.size()
-        self.ph.debug("webinline", "1"); time.sleep(1.5)
-        self.ph.open_url("%s/ho?v=inlinelong&tag=gpi" % self.lab_base)
-        t0 = time.time(); L = None
-        while time.time() - t0 < 40:
-            lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith("gpi")]
-            if lay and time.time() - t0 > 7:
-                L = lay[-1]; break
-            time.sleep(1)
-        if L is None:
+        def inline_page(tag):
+            """Loads the inline-film page and returns (vx, vy, vw, vh, bx, by) of its film (screen pixels), or None."""
+            rmx = self.lab.size()
+            self.ph.open_url("%s/ho?v=inlinelong&tag=%s" % (self.lab_base, tag))
+            t0 = time.time()
+            while time.time() - t0 < 40:
+                lay = [r for r in self.lab.since(rmx) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]
+                if lay and time.time() - t0 > 7:
+                    L = lay[-1]
+                    return tuple(int(float(L.get(k) or 0)) for k in ("vx", "vy", "vw", "vh", "bx", "by"))
+                time.sleep(1)
+            return None
+        self.ph.debug("webinline", "1"); self.ph.debug("gesturehold", "0"); time.sleep(1.5)
+        geo = inline_page("gpi")
+        if geo is None:
             check("B: the page told where its film is", False, "no layout row")
         else:
-            vx, vy, vw, vh = (int(float(L.get(k) or 0)) for k in ("vx", "vy", "vw", "vh"))
-            bx, by = int(float(L.get("bx") or 0)), int(float(L.get("by") or 0))
+            vx, vy, vw, vh, bx, by = geo
             m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(8)
             check("B: the film plays inside the page", bool(ev("inline", "start", m1)) and bool(ev("inline", "first-picture", m1)), "inline lines %s" % [e["ev"] for e in health_events(self.log.since(m1), "inline")][:6])
             time.sleep(4.0)
-            # held first: a vertical drag on the right = volume
+            # ANS60a: no long press inside the page either. The film is as wide as the screen: its right side is x = 85 %, its left side 15 %, its middle strip 50 %
             m = self.log.size()
-            self.ph.hold_drag(self.screen, int(sw * 0.85), vy, 0, dy=-130); time.sleep(1.8)
+            self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 90), timeout=20); time.sleep(2.0)
             vol = levels(ev("inline", "gesture-level", m), "volume")
-            check("B: long press, then a drag up on the right side of the film raises the volume (%s)" % (vol[:1] + vol[-1:],), len(vol) >= 1 and vol[-1] >= vol[0], "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
+            check("B: a plain drag up on the right side of the film raises the volume (%s) and the page does not scroll" % (vol[:1] + vol[-1:],), len(vol) >= 1 and vol[-1] >= vol[0] and not ev("inline", "scroll", m), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
             m = self.log.size()
-            self.ph.hold_drag(self.screen, int(sw * 0.15), vy + 60, 0, dy=-120); time.sleep(1.8)
+            self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw * 0.15), vy + 60, int(sw * 0.15), vy - 90), timeout=20); time.sleep(2.0)
             bri = levels(ev("inline", "gesture-level", m), "brightness")
-            check("B: long press, then a drag up on the left side changes the brightness", len(bri) >= 1, "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
-            # held first: sideways = the precise seek
+            check("B: a plain drag up on the left side changes the brightness (%s) and the page does not scroll" % (bri[:1] + bri[-1:],), len(bri) >= 1 and not ev("inline", "scroll", m), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
             m = self.log.size()
-            self.ph.hold_drag(self.screen, 150, vy, XCM); time.sleep(2.0)
+            self.ph.a.sh("input swipe %d %d %d %d 500" % (150, vy, 450, vy), timeout=20); time.sleep(2.0)
             ji = jumps(ev("inline", "gesture-seek", m))
-            check("B: long press, then a drag right in the film seeks by tens of seconds (%s)" % ji[-1:], bool(ji) and 20 <= ji[-1] <= 70, "inline lines %s" % [e["ev"] + ":" + e["rest"][:40] for e in health_events(self.log.since(m), "inline")][:6])
+            check("B: a plain sideways drag on the film seeks by tens of seconds (%s)" % ji[-1:], bool(ji) and 20 <= ji[-1] <= 120, "inline lines %s" % [e["ev"] + ":" + e["rest"][:40] for e in health_events(self.log.since(m), "inline")][:6])
             self.shot("gp-B-1-inline-after-seek")
-            # a plain vertical drag in the page is the PAGE's: it scrolls and changes no level
             m = self.log.size()
-            self.ph.a.sh("input swipe %d %d %d %d 900" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 40), timeout=20); time.sleep(3.0)
-            check("B: a plain drag on the film still scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
+            self.ph.hold_drag(self.screen, int(sw * 0.85), vy, 0, steps=1, hold_s=0.6)
+            hl = [e["rest"] for e in ev("inline", "gesture-hint", m)]
+            check("B: a finger resting on the right side of the film is told to slide up or down for the volume", any("Slide up or down for volume" in h for h in hl), "hint lines %s" % hl[:3])
+            # the middle strip of the film is the page's: a vertical drag that starts there scrolls the page and changes no level
+            m = self.log.size()
+            self.ph.a.sh("input swipe %d %d %d %d 900" % (sw // 2, vy + 60, sw // 2, vy - 40), timeout=20); time.sleep(3.0)
+            check("B: a vertical drag that starts in the middle strip of the film scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
             # a double tap on the right side of the film: 10 s forward and the controls away
             time.sleep(4.5)
             m = self.log.size()
@@ -2744,6 +2805,24 @@ class Soak:
             sh_n, hid_n = len(ev("inline", "shown", m)), len(ev("inline", "hidden", m))
             check("B: a double tap on the right side of the film puts the controls away (shown %d, hidden %d)" % (sh_n, hid_n), hid_n >= 1 and hid_n >= sh_n, "shown %d hidden %d" % (sh_n, hid_n))
             self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+            # the older rule is a Settings switch: with it on a plain drag on the film scrolls the page and the gestures need the rest first
+            self.ph.debug("gesturehold", "1"); time.sleep(1.5)
+            geo2 = inline_page("gpj")
+            if geo2 is None:
+                check("B (long press first): the page told where its film is", False, "no layout row")
+            else:
+                vx, vy, vw, vh, bx, by = geo2
+                m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(8); time.sleep(4.0)
+                m = self.log.size()
+                self.ph.a.sh("input swipe %d %d %d %d 900" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 40), timeout=20); time.sleep(3.0)
+                check("B (Settings: gestures need a long press): a plain drag on the right side scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
+                time.sleep(4.0)
+                m = self.log.size()
+                self.ph.hold_drag(self.screen, int(sw * 0.85), vy - 40, 0, dy=-110)
+                vol2 = levels(ev("inline", "gesture-level", m), "volume")
+                check("B (Settings: gestures need a long press): rest first, then a drag up on the right side changes the volume (%s)" % (vol2[:1] + vol2[-1:],), bool(vol2) and bool(ev("inline", "gesture-armed", m)), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
+                self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+            self.ph.debug("gesturehold", "0"); time.sleep(1.0)
         self.ph.a.sh("media volume --stream 3 --set 7 2>/dev/null", timeout=15)
         self.dump_diag("gp")
         self.gp_nums = nums
@@ -2751,6 +2830,86 @@ class Soak:
         self.record({"kind": "video-gestures", "name": "vlc-style-gestures", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks, "numbers": nums})
         self.check_alive("vlc-style-gestures")
 
+
+    # ANS60c (owner message 60: "put the video quality controls in the regular player size when it is not in full screen. Right now I can only select quality in full screen."): the film INSIDE the page has the quality list.
+    # An HLS film with two pictures (page /ho?v=inlinehls): the Quality button is drawn left of the full-screen button, a real tap opens the list, a real tap on a row picks that picture, Back closes the list before the film.
+    def iq_scene(self):
+        checks, nums = [], []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "inline-quality", "%s %s" % (name, detail))
+        ev = lambda layer, name, since: health_events(self.log.since(since), layer, name)
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.physical(0, 9.81, 0); self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); self.ph.debug("gesturehold", "0"); time.sleep(2.5)
+        rm = self.lab.size()
+        self.ph.open_url("%s/ho?v=inlinehls&tag=iq" % self.lab_base)
+        t0 = time.time(); L = None
+        while time.time() - t0 < 40:
+            lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith("iq")]
+            if lay and time.time() - t0 > 7:
+                L = lay[-1]; break
+            time.sleep(1)
+        if L is None:
+            check("the page told where its film is (layout row)", False, "no row")
+            self.iq_results = checks
+            self.record({"kind": "inline-quality", "name": "quality-inside-the-page", "status": "failed", "checks": checks})
+            return
+        vx, vy = int(float(L.get("vx") or 0)), int(float(L.get("vy") or 0)); bx, by = int(float(L.get("bx") or 0)), int(float(L.get("by") or 0))
+        vw, vh = int(float(L.get("vw") or 0)), int(float(L.get("vh") or 0))
+        tx, ty = vx - vw // 3, vy - vh // 4                                         # (a place on the picture that is no button: the middle holds the play button, a tap there pauses the film)
+        m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(9)
+        check("the film (an HLS stream with two pictures) plays INSIDE the page", bool(ev("inline", "start", m1)) and bool(ev("inline", "first-picture", m1)), "inline lines %s, native start %d" % ([e["ev"] for e in health_events(self.log.since(m1), "inline")][:8], len(ev("native", "start", m1))))
+        tr = ev("inline", "tracks", m1)
+        mt = re.search(r"(\d+) picture", tr[-1]["rest"]) if tr else None
+        nums.append("tracks line: %s" % (tr[-1]["rest"][:140] if tr else None))
+        check("the stream offers more than one picture ('inline tracks')", bool(mt) and int(mt.group(1)) >= 2, "tracks lines %s" % [e["rest"][:80] for e in tr])
+        def show_controls():
+            for _ in range(3):
+                mm0 = self.log.size(); self.ph.tap(tx, ty); time.sleep(1.5)
+                sh, hd = ev("inline", "shown", mm0), ev("inline", "hidden", mm0)
+                if sh and (not hd or sh[-1]["t"] > hd[-1]["t"]):
+                    return sh[-1]
+            return None
+        shown = show_controls()
+        mq = re.search(r"quality at (\d+),(\d+)", shown["rest"]) if shown else None
+        check("the controls inside the page show a Quality button (the 'shown' line names its place)", bool(mq), "shown line %s" % (shown["rest"][:120] if shown else None))
+        self.shot("iq-0-controls")
+        if mq:
+            qx, qy = int(mq.group(1)), int(mq.group(2))
+            m3 = self.log.size(); self.ph.tap(qx, qy); time.sleep(2.0)
+            rows = ev("inline", "quality-rows", m3)
+            check("a tap on the Quality button opens the list ('inline quality-open')", bool(ev("inline", "quality-open", m3)), "inline lines %s" % [e["ev"] for e in health_events(self.log.since(m3), "inline")][:6])
+            pts = re.findall(r"(\d+),(\d+)", rows[-1]["rest"]) if rows else []
+            nums.append("list rows at %s" % pts)
+            self.shot("iq-1-list")
+            check("the list has the Automatic row and the stream's two pictures (3 rows)", len(pts) >= 3, "rows %s" % pts)
+            if len(pts) >= 3:
+                m4 = self.log.size(); self.ph.tap(int(pts[2][0]), int(pts[2][1])); time.sleep(3.0)
+                pk = ev("inline", "quality", m4)
+                check("a tap on a row picks that picture ('inline quality <picture>')", bool(pk), "quality lines %s, inline lines %s" % ([e["rest"][:50] for e in pk], [e["ev"] for e in health_events(self.log.since(m4), "inline")][:6]))
+                check("the list closed and the film plays on (no 'inline stop')", bool(ev("inline", "quality-closed", m4)) and not ev("inline", "stop", m4), "closed %d, stop lines %s" % (len(ev("inline", "quality-closed", m4)), [e["rest"][:60] for e in ev("inline", "stop", m4)]))
+                nums.append("picked: %s" % [e["rest"][:50] for e in pk])
+            # Back with the list open closes ONLY the list (the film plays on); a second Back ends the film
+            shown2 = show_controls()
+            mq2 = re.search(r"quality at (\d+),(\d+)", shown2["rest"]) if shown2 else None
+            if mq2:
+                m5 = self.log.size(); self.ph.tap(int(mq2.group(1)), int(mq2.group(2))); time.sleep(2.0)
+                reopened = bool(ev("inline", "quality-open", m5))
+                m6 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2.0)
+                check("Back with the list open closes only the list: the film plays on ('quality-closed', no 'inline stop')", reopened and bool(ev("inline", "quality-closed", m6)) and not ev("inline", "stop", m6), "reopened %s, closed %d, stop lines %s" % (reopened, len(ev("inline", "quality-closed", m6)), [e["rest"][:60] for e in ev("inline", "stop", m6)]))
+            else:
+                check("the Quality button was still there for a second opening", False, "shown line %s" % (shown2["rest"][:100] if shown2 else None))
+        m7 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+        check("the next Back ends the film inside the page", any(e["rest"].startswith("Back") for e in ev("inline", "stop", m7)), "stop lines %s" % [e["rest"][:60] for e in ev("inline", "stop", m7)])
+        # ANS60d: the playback meter wrote its line for the film
+        st = ev("inline", "stats", m1)
+        nums.append("stats line: %s" % (st[-1]["rest"][:200] if st else None))
+        check("ANS60d: the film's playback was measured ('inline ready' and a 'stats' line with the start-up time)", bool(ev("inline", "ready", m1)) and bool(st) and "playable after" in st[-1]["rest"], "ready lines %d, stats lines %s" % (len(ev("inline", "ready", m1)), [e["rest"][:100] for e in st]))
+        self.iq_nums = nums
+        self.iq_results = checks
+        self.record({"kind": "inline-quality", "name": "quality-inside-the-page", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks, "numbers": nums})
+        self.check_alive("quality-inside-the-page")
 
     # ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a PRIVATE tab): the engine forgets private logins when its last private
     # session closes, and the memory handling used to put the tab in front to sleep (close its session) when Android asked the app for memory after it was left. Page /pv: its login is a session cookie and it reports
@@ -2774,15 +2933,18 @@ class Soak:
         # ---- a PRIVATE tab
         m, rm = self.log.size(), self.lab.size()
         self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp" % self.lab_base); time.sleep(9)
+        pid = (ev("lab", "privtab", m) or [{"kv": {}}])[-1]["kv"].get("tab")          # the new tab's id (the app says it: `tab=N`)
         r1 = cookie_rows(rm, "pvp")
         check("the private tab loaded the login page and was logged out the first time (no cookie yet)", bool(r1) and str(r1[-1].get("had")) == "0", "cookie rows %s" % [(r.get("had")) for r in r1])
         check("a private session anchor was opened with the first private tab ('tabs private-anchor opened')", any("opened" in e["rest"] for e in ev("tabs", "private-anchor", m)), "anchor lines %s" % [e["rest"][:40] for e in ev("tabs", "private-anchor", m)])
         self.shot("pv-1-private-logged-in")
         m2, rm2 = self.log.size(), self.lab.size()
         away_and_back("private")
-        kept = ev("tabs", "private-kept", m2); slept = ev("tabs", "hibernate", m2)
+        # (another, regular tab may be put to sleep by the live-tab budget: only THIS tab's id counts)
+        slept = [e for e in ev("tabs", "hibernate", m2) if e["kv"].get("tab") == pid]
+        trims = ev("mem", "trim", m2)
         r2 = cookie_rows(rm2, "pvp")
-        check("the app was left and Android asked for memory: the private tab was NOT put to sleep ('tabs private-kept', no 'tabs hibernate')", bool(kept) and not slept, "private-kept %d, hibernate %d, trim lines %s" % (len(kept), len(slept), [e["rest"][:40] for e in ev("mem", "trim", m2)][:3]))
+        check("the app was left and Android asked for memory (trim 20 / 60 / 80): the private tab (id %s) was NOT put to sleep (no 'tabs hibernate' line for it)" % pid, bool(pid) and len(trims) >= 3 and not slept, "private tab id %s, hibernate lines for it %d, trim lines %s" % (pid, len(slept), [e["rest"][:40] for e in trims][:3]))
         check("back in the app the private page was not reloaded (no second load) and so still logged in", not r2, "the page loaded again: cookie rows %s" % [(r.get("had")) for r in r2])
         self.shot("pv-2-private-after-trim")
         # a reload by the person: the cookie is still there (the engine kept the private login)
@@ -2793,12 +2955,14 @@ class Soak:
         # ---- ANS59 (owner message 59: "It should work for regular tabs in addition to private tabs"): a NORMAL tab is not put to sleep or reloaded by a quick trip to another app either
         m4, rm4 = self.log.size(), self.lab.size()
         self.ph.debug("normtab", "%s/pv?v=pv&tag=pvn" % self.lab_base); time.sleep(9)
+        nid = (ev("lab", "normtab", m4) or [{"kv": {}}])[-1]["kv"].get("tab")
         rn1 = cookie_rows(rm4, "pvn")
         check("a regular tab loaded the login page", bool(rn1), "no cookie rows")
         m5, rm5 = self.log.size(), self.lab.size()
         away_and_back("normal")
         rn2 = cookie_rows(rm5, "pvn")
-        check("ANS59: a REGULAR tab is not put to sleep either by a trip to another app (no 'tabs hibernate' line) and is not reloaded on return", not ev("tabs", "hibernate", m5) and not rn2, "hibernate lines %d, the page loaded again: cookie rows %s" % (len(ev("tabs", "hibernate", m5)), [(r.get("had")) for r in rn2]))
+        slept_n = [e for e in ev("tabs", "hibernate", m5) if e["kv"].get("tab") == nid]
+        check("ANS59: a REGULAR tab (id %s) is not put to sleep either by a trip to another app (no 'tabs hibernate' line for it) and is not reloaded on return" % nid, bool(nid) and not slept_n and not rn2, "tab id %s, hibernate lines for it %d, the page loaded again: cookie rows %s" % (nid, len(slept_n), [(r.get("had")) for r in rn2]))
         self.shot("pv-3-normal-after-trim")
         self.pv_results = checks
         self.record({"kind": "private-tab", "name": "private-tab-keeps-its-login", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
@@ -3206,6 +3370,17 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.pv_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
+            L.append("")
+        if self.iq_results:
+            L.append("## The quality list inside the page (ANS60c, owner message 60), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.iq_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
+            L.append("")
+            for n in self.iq_nums:
+                L.append("- numbers: %s" % n[:400])
             L.append("")
         if self.gp_results:
             L.append("## VLC-style gestures in Kestrel's players (ANS57, owner message 57), on the real engine")
@@ -3766,6 +3941,8 @@ def main():
             s.ip_scene()                                     # (ANS55f: the film inside the page)
         if a.suite in ("gp", "gv", "vp"):
             s.gp_scene()                                     # (ANS57: VLC-style gestures)
+        if a.suite in ("ip", "gp", "gv", "vp"):
+            s.iq_scene()                                     # (ANS60c: the quality list inside the page)
         if a.suite in ("pv", "gv", "vp"):
             s.pv_scene()                                     # (ANS58c: a private tab keeps its login when the app is left)
         if a.suite == "yh":

@@ -42,6 +42,10 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         fun toPage(e: MotionEvent)
         /** A finger rested on the picture (a long press, LP1): the download options of the film open, as for a long press on the page's own video. */
         fun onLongPress()
+        /** ANS60c: the quality button was pressed: show these rows (the host draws the list over the page area and gives the pick to [pickQuality]); [closeQuality] ends it. */
+        fun openQuality(rows: List<QualitySheet.Row>)
+        fun closeQuality()
+        fun qualityOpen(): Boolean
     }
 
     var host: Listener? = null
@@ -49,6 +53,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val surface = SurfaceView(ctx).apply { setZOrderMediaOverlay(true) }   // above the engine's own surface (a regular one), still below the window's own views
     private val controls = PlayerControlsView(ctx).apply { inline = true }
     private var player: ExoPlayer? = null
+    private var quality: PlayerQuality? = null            // ANS60c: the quality list (the same rules as the full-screen player's)
+    private var meter: PlaybackMeter? = null              // ANS60d: what the playback really did (start-up, waits, link speed), one line per film
     private val model = PlayerModel(this)
     private var priv = false
     var url = ""; private set
@@ -67,10 +73,12 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private var passing = false
     private var downCopy: MotionEvent? = null
     private var longFired = false
-    // ANS57 (owner message 57): VLC-style gestures. In the page a plain drag scrolls the PAGE, so every gesture here needs the long press first (VideoGestures holdFirst)
+    // ANS57 + ANS60a (owner messages 57 and 60): VLC-style gestures with NO long press: a sideways drag on the film seeks, a vertical drag at its left / right side changes the brightness / volume, and a vertical drag that begins
+    // in its middle strip is the PAGE's (it scrolls; so does a drag on the page around the film). Settings > "Gestures inside the page need a long press" brings the older rule back (a plain drag is the page's, gestures need the rest first).
     private var gestures: VideoGestures? = null
     private fun gesturesOrNull(): VideoGestures? {
-        if (!app.kestrel.browser.data.Prefs.get(context.applicationContext).videoGestures) return null
+        val prefs = app.kestrel.browser.data.Prefs.get(context.applicationContext)
+        if (!prefs.videoGestures) return null
         gestures?.let { return it }
         val a = context as? android.app.Activity ?: return null
         val g = VideoGestures(a, object : VideoGestures.Surface {
@@ -87,7 +95,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             override fun gestureChanged(active: Boolean) { if (active) { model.gestureBegan() } }
             override fun passThrough() { startPass() }
             override fun longHold() { if (!longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
-        }, holdFirst = true, edgeDp = 6f)
+        }, holdFirst = prefs.videoGesturesHold, middlePasses = true, edgeDp = 6f)
         gestures = g
         return g
     }
@@ -125,13 +133,18 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         if (player != null) stop("a new film")
         this.url = url; this.priv = priv
         ack = 0; muted = false; firstPictureAt = 0L; playingSince = 0L; picW = 0; picH = 0; pixelRatio = 1f; pausedByEdge = false; passing = false
+        gestures = null                                                            // (the rules are read from Settings again for every film)
         startedAt = SystemClock.uptimeMillis()
         place(box)
         var p: ExoPlayer? = null
         try {
             val built = PlayerFactory.create(context, url, headerLines)
             p = built.player
-            PlayerFactory.applyCap(p, capH)
+            val prefs = app.kestrel.browser.data.Prefs.get(context.applicationContext)
+            val q = PlayerQuality(priv, { prefs.inlineMaxH }, { prefs.inlineMaxH = it }, { e, t -> say(e, t) })       // (the person's own pick inside the page is remembered apart from the full-screen player's)
+            quality = q
+            q.begin(p, capH, null, false)                                                                            // Automatic, at most capH (480 in a small box) unless the person picked a size before
+            controls.showQuality = false
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) { sample() }
                 override fun onPlayerError(error: PlaybackException) {
@@ -147,7 +160,9 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                         fit()
                     }
                 }
+                override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { controls.showQuality = q.onTracks(p, tracks) }       // one picture only (a plain file): no button
             })
+            meter = PlaybackMeter(priv) { e, t -> say(e, t) }.also { p.addAnalyticsListener(it) }
             p.addAnalyticsListener(object : AnalyticsListener {
                 override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                     val hw = try { MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.firstOrNull { it.name == decoderName }?.isHardwareAccelerated } catch (e: Throwable) { null }
@@ -190,9 +205,12 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     fun stop(why: String, fullscreen: Boolean = false, failed: Boolean = false) {
         val p = player ?: return
         player = null
+        quality = null; controls.showQuality = false
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
         gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
+        try { meter?.finish(p) } catch (e: Throwable) { /* gone */ }
+        meter = null
         try {
             pos = p.currentPosition.coerceAtLeast(0L)
             val dc = p.videoDecoderCounters
@@ -295,7 +313,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     override fun cancelControls() { main.removeCallbacks(controlsTick) }
     override fun applyControls(shown: Boolean, animate: Boolean) {
         controls.show(shown, animate)
-        if (!priv) { val b = controls.buttonCentres(); say(if (shown) "shown" else "hidden", if (shown) "close at ${b[0]},${b[1]} full screen at ${b[2]},${b[3]} (screen pixels)" else "at once") }
+        if (!priv) { val b = controls.buttonCentres(); say(if (shown) "shown" else "hidden", if (shown) "close at ${b[0]},${b[1]} full screen at ${b[2]},${b[3]} (screen pixels), quality at ${b[4]},${b[5]}" else "at once") }
     }
     override fun changed() { controls.update(model.view()) }
     override fun feedback(zone: PlayerRules.Zone, burst: Int) { controls.flash(zone, burst) }
@@ -310,6 +328,20 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     override fun onSeek(fraction: Double) { model.seekFraction(fraction); flush() }
     override fun onPin(on: Boolean) { model.pin(on) }
     override fun onFullscreen() { stop("the full-screen button", fullscreen = true) }
+    /** ANS60c (owner message 60): the quality list in the regular player size. */
+    override fun onQuality() {
+        val p = player ?: return; val q = quality ?: return
+        if (host?.qualityOpen() == true) { host?.closeQuality(); return }
+        val rows = q.rows(p)
+        if (rows.isEmpty()) return
+        model.pin(true)
+        host?.openQuality(rows)
+        say("quality-open", "${rows.size} row(s)")
+    }
+    /** A row of the list was picked (the host's sheet says so): that picture, and the list closes. */
+    fun pickQuality(row: QualitySheet.Row) { val p = player ?: return; quality?.pick(p, row); host?.closeQuality() }
+    /** The list closed (a pick, the x, a tap outside, Back, the end of the film). */
+    fun qualityClosed() { if (player != null) { model.pin(false); say("quality-closed", "the list closed") } }
 
     // ---------------------------------------------------------------------------------------- touch
 
@@ -334,7 +366,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         return true
     }
 
-    /** ANS57: the touch through the gesture rules: a tap is the controls', the long press arms the precise seek, a drag that moves BEFORE the hold is the page's (it scrolls), a second finger is the page's (it zooms). */
+    /** ANS57 + ANS60a: the touch through the gesture rules: a tap is the controls', a sideways drag seeks, a vertical drag at a side is the brightness / volume, a vertical drag in the middle strip is the page's (it scrolls; with the long-press-first setting every plain drag is), a second finger is the page's (it zooms). */
     private fun onGestureTouch(g: VideoGestures, e: MotionEvent): Boolean {
         if (passing) {
             host?.toPage(e)
@@ -356,6 +388,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private fun startPass() {
         passing = true
         main.removeCallbacks(longPressRun)
+        gestures?.abandon()                                                        // (the page has the finger now: no hint, no rest timer of ours)
         downCopy?.let { host?.toPage(it); it.recycle() }                   // the page never saw the finger go down: it is told now, then it gets every move
         downCopy = null
     }

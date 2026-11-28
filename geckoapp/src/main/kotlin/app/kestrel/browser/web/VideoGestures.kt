@@ -6,15 +6,17 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import app.kestrel.core.player.GestureHint
 import app.kestrel.core.player.GestureMath
 import app.kestrel.core.player.PlayerGestures
 
 /**
  * ANS57 (owner message 57; research/ANS57_VLC_GESTURES.md): the Android side of the film's touch rules ([PlayerGestures], pure, in core): it turns the finger's events into the engine's calls, rings the long-press
- * timer, changes the real volume and brightness ([VideoLevels]) and tells the view what to show. One per player; the player says where the film is and carries out the seek. [holdFirst] = the player inside the page,
- * where a plain drag scrolls the PAGE: every gesture needs the long press first.
+ * timer, changes the real volume and brightness ([VideoLevels]) and tells the view what to show. One per player; the player says where the film is and carries out the seek.
+ * ANS60a (owner message 60): no long press is needed any more. [middlePasses] = the player inside the page: a vertical drag that begins in the middle strip is the PAGE's (it scrolls). [holdFirst] = the older rule
+ * (Settings > Gestures inside the page need a long press): a plain drag is the page's and every gesture needs the long press first.
  */
-class VideoGestures(private val activity: Activity, private val s: Surface, private val holdFirst: Boolean, private val edgeDp: Float = 24f) : PlayerGestures.Host {
+class VideoGestures(private val activity: Activity, private val s: Surface, private val holdFirst: Boolean, private val middlePasses: Boolean = false, private val edgeDp: Float = 24f) : PlayerGestures.Host {
     interface Surface {
         val viewWidth: Int
         val viewHeight: Int
@@ -44,7 +46,8 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     val levels = VideoLevels(activity)
     private val engine = PlayerGestures(this, config())
     private val holdRun = Runnable { engine.hold() }
-    private val clearInfo = Runnable { s.showInfo(null) }
+    private var pillWaiting = false                        // the jump text of the last seek is on the picture and clears itself after RESULT_MS
+    private val clearInfo = Runnable { pillWaiting = false; s.showInfo(null) }
     private var vol = -1f
     private var br = -1f
     private var committed = false
@@ -53,7 +56,7 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     private fun config(): PlayerGestures.Config {
         val xdpi = if (dm.xdpi in 40f..800f) dm.xdpi else dm.densityDpi.toFloat()
         val range = Math.min(dm.widthPixels, dm.heightPixels).toFloat()
-        return PlayerGestures.Config(s.viewWidth.toFloat(), s.viewHeight.toFloat(), xdpi, ViewConfiguration.get(activity).scaledTouchSlop.toFloat(), edgeDp * dm.density, range, holdFirst)
+        return PlayerGestures.Config(s.viewWidth.toFloat(), s.viewHeight.toFloat(), xdpi, ViewConfiguration.get(activity).scaledTouchSlop.toFloat(), edgeDp * dm.density, range, holdFirst, middlePasses)
     }
 
     /** True while a gesture of ours has the touch. */
@@ -63,14 +66,20 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     fun onTouch(e: MotionEvent): Boolean {
         val was = engine.active
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { main.removeCallbacks(clearInfo); if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y, e.eventTime) }       // (a touch whose end was lost: its info goes)
+            MotionEvent.ACTION_DOWN -> {
+                if (pillWaiting) { main.removeCallbacks(clearInfo); clearInfo.run() }              // a new touch within 0.9 s of a seek: the old jump text goes now (a tap or a page scroll never calls finished(), which would have cleared it: review of alpha61)
+                if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y, e.eventTime)       // (a touch whose end was lost: its info goes)
+            }
             MotionEvent.ACTION_MOVE -> engine.move(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_UP -> engine.up(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_CANCEL -> engine.cancel()
-            MotionEvent.ACTION_POINTER_DOWN -> if (engine.active) engine.cancel()           // a second finger ends our gesture (a pinch is not ours)
+            MotionEvent.ACTION_POINTER_DOWN -> { main.removeCallbacks(holdRun); engine.cancel() }      // a second finger ends our gesture, also a rest that was still undecided (a pinch is not ours)
         }
         return was || engine.active
     }
+
+    /** The touch was given to the page: our timer and our judgement of it end (no hint may appear over a page scroll). */
+    fun abandon() { main.removeCallbacks(holdRun); engine.cancel() }
 
     /** The view is going away or the film ended: nothing is left running. */
     fun stop() {
@@ -86,22 +95,31 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun scheduleHold(ms: Long) { main.removeCallbacks(holdRun); main.postDelayed(holdRun, ms) }
     override fun cancelHold() { main.removeCallbacks(holdRun) }
     override fun tap(xFraction: Double) { s.tap(xFraction) }
-    override fun armed() { s.haptic(); s.showInfo(HINT); s.note("gesture-armed", "the long press armed the precise seek (xdpi ${"%.0f".format(engine.cfg.xdpi)}, view ${s.viewWidth}x${s.viewHeight}, range ${engine.cfg.rangePx.toInt()} px)"); if (!began) { began = true; s.gestureChanged(true) } }
+    private var hintShown = false
+    override fun hint(hint: GestureHint?, armed: Boolean) {
+        if (hint == null) { if (hintShown) { hintShown = false; s.showInfo(null) }; return }
+        hintShown = true
+        if (armed) { s.haptic(); beginOnce() }                                          // the long-press-first rule: the rest armed the gestures
+        s.showInfo(GestureMath.hintText(hint))
+        s.note(if (armed) "gesture-armed" else "gesture-hint", "${hint.name.lowercase()}: ${GestureMath.hintText(hint)} (xdpi ${"%.0f".format(engine.cfg.xdpi)}, view ${s.viewWidth}x${s.viewHeight}, range ${engine.cfg.rangePx.toInt()} px)")
+    }
+    private fun beginOnce() { if (!began) { began = true; s.gestureChanged(true) } }
     override fun longHold() { s.longHold() }
     override fun positionMs() = s.positionMs()
     override fun lengthMs() = s.lengthMs()
-    override fun seekPreview(jumpMs: Long, targetMs: Long, coef: Double) { s.showInfo(GestureMath.infoText(jumpMs, targetMs, coef)) }
+    override fun seekPreview(jumpMs: Long, targetMs: Long, coef: Double) { beginOnce(); s.showInfo(GestureMath.infoText(jumpMs, targetMs, coef)) }
     override fun seekCommit(jumpMs: Long) {
         committed = true
+        val target = (s.positionMs() + jumpMs).coerceAtLeast(0L)                          // (BEFORE the seek: afterwards the player already reports the target as its position, review of alpha61 found the pill saying twice the jump)
         s.seekBy(jumpMs)
-        s.showInfo(GestureMath.infoText(jumpMs, (s.positionMs() + jumpMs).coerceAtLeast(0L), 1.0).substringBefore(" x"))
+        s.showInfo(GestureMath.infoText(jumpMs, target, 1.0).substringBefore(" x"))
     }
     override fun seekCancel() { s.showInfo(null) }
-    override fun seekUnavailable() { s.showInfo("This film cannot be moved") }
+    override fun seekUnavailable() { beginOnce(); s.showInfo("This film cannot be moved") }
     override fun passThrough() { s.passThrough() }
 
     override fun level(level: GestureMath.Level, delta: Double) {
-        if (!began) { began = true; s.gestureChanged(true) }
+        beginOnce()
         when (level) {
             GestureMath.Level.VOLUME -> { if (vol < 0f) vol = levels.volume(); vol = (vol + delta.toFloat()).coerceIn(0f, 1f); levels.setVolume(vol); s.showLevel(level, vol); noteLevel(level, vol) }
             GestureMath.Level.BRIGHTNESS -> { if (br < 0f) br = levels.brightness(); br = (br + delta.toFloat()).coerceIn(0.01f, 1f); levels.setBrightness(br); s.showLevel(level, br); noteLevel(level, br) }
@@ -122,14 +140,13 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun finished() {
         lastKind?.let { k -> val pct = Math.round(lastFrac * 100); if (pct != notedPct) s.note("gesture-level", "${k.name.lowercase()} $pct %") }
         lastKind = null; notedPct = -100
-        vol = -1f; br = -1f; began = false
-        if (committed) { committed = false; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
+        vol = -1f; br = -1f; began = false; hintShown = false
+        if (committed) { committed = false; pillWaiting = true; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
         else s.showInfo(null)
         s.gestureChanged(false)
     }
 
     private companion object {
-        const val HINT = "Slide left or right to seek"
         const val RESULT_MS = 900L
     }
 }

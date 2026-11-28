@@ -239,6 +239,7 @@ jobs:
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 
@@ -289,6 +290,7 @@ jobs:
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 
@@ -336,6 +338,7 @@ jobs:
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 

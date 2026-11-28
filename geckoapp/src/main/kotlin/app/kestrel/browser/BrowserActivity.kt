@@ -492,6 +492,7 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("start", "heap", "java heap limit ${Runtime.getRuntime().maxMemory() shr 20} MB, memory class ${getSystemService(ActivityManager::class.java)?.memoryClass ?: -1} MB") // (a lab run died of a 16 MB heap limit: the limit is on record now)
         window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()
+        debugTouch = app.kestrel.browser.web.DebugTouch.attach(this)                // DEBUG builds only: the emulator lab plays a finger path through a broadcast (web/DebugTouch)
         prefs = Prefs.get(this)
         coldStartClear()
         Shields.init(this)
@@ -595,6 +596,7 @@ open class BrowserActivity : Activity(), DockListener {
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
+        if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
         Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) // AO4: old update files, stale cache, closed tabs' pictures; due about once a day and after an update
     }
 
@@ -657,9 +659,11 @@ open class BrowserActivity : Activity(), DockListener {
     private var lastTouchAt = 0L
     /** ANS54e: when the person last ended a tap (a short touch that did not drag) or pressed a key that plays; 0 = not yet. A page's script can fake the gate's question, not a finger (core WebHandOver.pressWindowMs). */
     @Volatile internal var lastPressAt = 0L
+    private var decodersWarmed = false                       // ANS60d: Android's codec list was asked once in the idle time (PlayerFactory.warm)
     /** ANS54e: did this touch end inside the page view (not in the toolbar, a sheet or a menu)? */
     private fun tapInPage(ev: android.view.MotionEvent): Boolean {
         if (!::geckoView.isInitialized || !geckoView.isShown) return false
+        if (::inline.isInitialized && inline.sheet.isOpen) return false                                         // ANS60c: a tap on the film's quality list is no tap on the page
         if (::inline.isInitialized && inline.active && inline.covers(ev.rawX, ev.rawY)) return false          // a tap on the film's own buttons is no tap on the page: it must not renew the press window
         val loc = IntArray(2); geckoView.getLocationOnScreen(loc)
         return ev.rawX >= loc[0] && ev.rawX <= loc[0] + geckoView.width && ev.rawY >= loc[1] && ev.rawY <= loc[1] + geckoView.height
@@ -794,6 +798,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     override fun onDestroy() {
+        app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
         if (::inline.isInitialized) inline.stop("closing")
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
         if (::player.isInitialized) player.fullscreen(false)
@@ -807,7 +812,10 @@ open class BrowserActivity : Activity(), DockListener {
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }; privateAnchor = null
         super.onDestroy()
-        if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit() } // swiped away: leave unless a download is still running
+        Health.log("life", "destroy", "finishing=$isFinishing config=$isChangingConfigurations")      // ANS58/59: tells a swipe-away from the system taking the screen away (Diagnostics)
+        // swiped away (finishing): leave after 2 s unless a download is still running. A screen the SYSTEM destroyed (not finishing, not a turn) is not a quit: the person may be on their way back, so the process stays two
+        // minutes (the next onCreate cancels the exit); it used to end itself 2 s later and the way back was a cold start (every tab reloaded, session logins gone)
+        if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit(if (isFinishing) 2000L else 120_000L) }
     }
 
     /**
@@ -881,8 +889,9 @@ open class BrowserActivity : Activity(), DockListener {
             "exitfs" -> Io.main.post { Health.log("lab", "exitfs", "fullscreenOn=$fullscreenOn"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("lab", "exitfs-failed", e.toString().take(80)) } }
             "vfmt" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); val p = arg.split(','); prefs.videoCodecs = (p.getOrNull(0)?.toIntOrNull() ?: 0).coerceIn(0, 2); prefs.videoFps30 = p.getOrNull(1) == "1"; DeviceVideo.labLimits = if (p.getOrNull(2) == "tablet") app.kestrel.core.media.VideoLimits.Limits.decode("2048x1088@522000;2048x1088@522000;2048x1088@244800;-") else null; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vfmt", app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs)) } // ANS52g: the lab plays the owner's two settings and (tablet) the chip limits of the real tablet: the emulator has no hardware decoders
             "webmode" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); prefs.webVideoMode = arg; Health.log("lab", "webmode", "mode $arg (0 Kestrel's player whenever it can = the default, 1 only in full screen, 2 the page's own player)") }   // ANS54e lab: where web videos play
-            "privtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = true); show(t); navigateTo(t, u); Health.log("lab", "privtab", "a private tab opened") } }   // ANS58c lab: a private tab on this address
-            "normtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = false); show(t); navigateTo(t, u); Health.log("lab", "normtab", "a normal tab opened") } }
+            "gesturehold" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoGesturesHold = arg == "1"; Health.log("lab", "gesturehold", "gestures inside the page need a long press: ${prefs.videoGesturesHold}") }   // ANS60a lab: the Settings switch
+            "privtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = true); show(t); navigateTo(t, u); Health.log("lab", "privtab", "a private tab opened tab=${t.id}") } }   // ANS58c lab: a private tab on this address
+            "normtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = false); show(t); navigateTo(t, u); Health.log("lab", "normtab", "a normal tab opened tab=${t.id}") } }
             "webinline" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.webInline = arg != "0"; Health.log("lab", "webinline", "inside the page: ${prefs.webInline}") }   // ANS55f lab: Settings > Play web videos inside the page
             "fsturn" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 1; i.removeExtra("kestrel_arg"); prefs.fullscreenTurn = arg; Health.log("lab", "fsturn", "mode $arg (0 automatic, 1 follow the tablet = the default, 2 off)") }   // ANS54e.1 lab: the full-screen turn mode
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
@@ -962,6 +971,7 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         inline = app.kestrel.browser.web.InlineHost(this, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
         content.addView(inline.view, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.LEFT))
+        content.addView(inline.sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))   // ANS60c: the quality list of the film inside the page, over it
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -1291,6 +1301,7 @@ open class BrowserActivity : Activity(), DockListener {
     // the anchor, stays open while any private tab exists: a session that has to be replaced (the page's process was killed while the app was away) can then never be the last one. It loads nothing and is never shown;
     // it closes when the last private tab is gone (the engine then forgets what was private, as before).
     private var privateAnchor: GeckoSession? = null
+    private var debugTouch: android.content.BroadcastReceiver? = null
     private fun syncPrivateAnchor() {
         val need = tabs.any { it.isPrivateTab }
         if (need && privateAnchor == null) {
