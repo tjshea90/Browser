@@ -118,11 +118,14 @@ class ProxyLinkTest {
 
     @Test fun theRenewalKeepsItOpenPastTheFirstArming() {
         val ph = phone(); val web = site()
-        val link = ProxyLink({ client(ph) }, { true }, { }, rearmEveryMs = 100)
+        // ONE client for the link and for the check at the end: the phone rejects a repeated timestamp of the same key as a replay, each client keeps its own timestamps strictly increasing, and two clients
+        // racing at 100 ms renewals can pick the same millisecond on a loaded machine (FLK1: CourierException AUTH now and then in the full suite, seen on GitHub's runner 2026-11-14)
+        val shared = client(ph)
+        val link = ProxyLink({ shared }, { true }, { }, rearmEveryMs = 100)
         link.start(); cleanups.add { link.stop() }
         await("active") { link.state is ProxyLink.State.Active }
         Thread.sleep(500)                                                           // several renewals later
         assertTrue(proxyAnswers(ph.proxyPort, web))
-        assertTrue("still one tablet armed, not one per renewal", client(ph).status().proxy!!.armed == 1)
+        assertTrue("still one tablet armed, not one per renewal", shared.status().proxy!!.armed == 1)
     }
 }

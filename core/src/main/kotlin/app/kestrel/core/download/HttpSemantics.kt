@@ -226,6 +226,8 @@ class Config(
     val outageBaseMs: Long = 10_000,
     val outageCapMs: Long = 60_000,
     val outageGiveUpMs: Long = 30 * 60_000,
+    /** RX3-D1: a part that ran out of tries means an OUTAGE (the whole download waits) only when no byte arrived for this long; while other parts still bring bytes it just gets another round. */
+    val outageQuietMs: Long = 8_000,
     /** A connection counts as "the extra one the server refuses" only when another connection moved bytes this long AFTER it began failing (a dip that hits them all is not a refusal), and recently. */
     val refusedEvidenceMs: Long = 2000,
     val refusedFreshMs: Long = 8000,

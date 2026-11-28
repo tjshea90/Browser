@@ -38,4 +38,34 @@ class JumpGuardTest {
         assertEquals(2500L, JumpGuard.TAP_WINDOW_MS)
         assertEquals(150L, JumpGuard.WAIT_MS)
     }
+
+    // ---- RX3-G6: a scripted jump to a host the lists block as an ad or tracker is stopped at ANY delay
+
+    private val adHostUri = "https://ads.adnetwork.example/landing"
+
+    @Test fun aJumpToAListedAdHostLongAfterTheLastTouchIsStopped() {
+        assertEquals("play, wait 5 s, the page jumps to an ad", Verdict.STOP, JumpGuard.decide(true, 5000, true, 5000, "", adHostUri, adHost = true))
+        assertEquals(Verdict.STOP, JumpGuard.decide(true, 600_000, false, 600_000, "", adHostUri, adHost = true))
+        assertEquals("the same jump to a host that is not listed is still not this guard's business", Verdict.ALLOW, JumpGuard.decide(true, 5000, true, 5000, "", adHostUri, adHost = false))
+    }
+
+    @Test fun aTapOnALinkToExactlyThatAddressStillOpensIt() {
+        assertEquals(Verdict.ALLOW, JumpGuard.decide(true, 40, true, 30, adHostUri, adHostUri, adHost = true))
+        assertEquals(Verdict.ALLOW, JumpGuard.decide(true, 40, true, 30, "$adHostUri#x", adHostUri, adHost = true))
+        assertEquals("a tap on another link does not excuse it", Verdict.STOP, JumpGuard.decide(true, 40, true, 30, "https://news.example/story", adHostUri, adHost = true))
+        assertEquals("a tap that was not on a link does not either", Verdict.STOP, JumpGuard.decide(true, 40, true, 30, "", adHostUri, adHost = true))
+    }
+
+    @Test fun aTapThatIsTooOldDoesNotExcuseTheJump() {
+        assertEquals(Verdict.STOP, JumpGuard.decide(true, 100, true, 2600, adHostUri, adHostUri, adHost = true))   // the report belongs to an earlier touch
+        assertEquals(Verdict.STOP, JumpGuard.decide(true, 3000, true, 3000, adHostUri, adHostUri, adHost = true))
+    }
+
+    @Test fun withATouchJustNowTheJumpToAnAdHostWaitsForTheTapReport() {
+        assertEquals(Verdict.WAIT, JumpGuard.decide(true, 30, false, 5000, "", adHostUri, adHost = true))
+    }
+
+    @Test fun aJumpWithinTheSameSiteIsNeverJudgedEvenWhenThatHostIsListed() {
+        assertEquals(Verdict.ALLOW, JumpGuard.decide(false, 5000, true, 5000, "", adHostUri, adHost = true))
+    }
 }

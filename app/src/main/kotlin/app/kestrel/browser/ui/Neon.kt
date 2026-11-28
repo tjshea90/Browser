@@ -112,7 +112,7 @@ object Neon {
         if (mode == OFF) return "off (Settings > Neon glow)"
         if (mode == STATIC) return "steady (Settings > Neon glow is set to Steady)"
         val why = ArrayList<String>()
-        if (busy) why.add("keyboard up or page just started loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
+        if (busy) why.add("keyboard up, page just started loading, or a video is playing"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
         if (covered) why.add("a full-screen page covers them")
         val running = pulsers.count { it.running }
         return if (why.isEmpty()) "pulsing ($running glows running, $steps steps, last alpha ${"%.2f".format(lastAlpha)})" else "holding still: " + why.joinToString(", ")

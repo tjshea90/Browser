@@ -11,6 +11,8 @@ class GeckoTabData {
     var stateWritten: GeckoSession.SessionState? = null // the state object whose text is in tabstate/<id>.json now (the same object is not written twice)
     var stateWrittenUrl: String? = null // the address the tab showed when that file was written: a different address with no newer state = the file is out of date
     var delegates: TabDelegates? = null
+    /** RX3-S1: the page's video is playing (the engine's media session said PLAY and has not said pause / stop / end since): the neon glow holds still meanwhile. UI thread. */
+    var videoPlaying = false
     var fieldInput: app.kestrel.browser.PageFieldInput? = null // AU3: sees the page's text field gain and lose focus; the mini keyboard types through it
 }
 

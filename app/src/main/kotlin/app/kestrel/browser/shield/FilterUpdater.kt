@@ -17,7 +17,15 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-class ListSource(val id: String, val url: String, val category: Int)
+/** RX3-Y1: the one-line account of what the last list compile did with the scriptlet lines (stored, trusted-only, skipped and why). Diagnostics only: a missing file is fine. */
+object ScriptletSummary {
+    private fun file(ctx: android.content.Context) = File(File(ctx.filesDir, "filters"), "scriptlets.txt")
+    fun write(ctx: android.content.Context, text: String) { try { file(ctx).writeText(text) } catch (e: Exception) { /* Diagnostics only */ } }
+    fun read(ctx: android.content.Context): String = try { file(ctx).takeIf { it.isFile }?.readText()?.trim().orEmpty() } catch (e: Exception) { "" }
+}
+
+/** [trusted] (RX3-B1): the list's maintainers also write the scriptlet semantics, so its `trusted-*` scriptlets (they rewrite a site's own answers, set cookies) may be used. False unless said otherwise. */
+class ListSource(val id: String, val url: String, val category: Int, val trusted: Boolean = false)
 
 /** Where the lists come from. HTTPS only. One host family where possible so a single TLS connection can serve several lists. */
 object FilterSources {
@@ -25,16 +33,34 @@ object FilterSources {
     val DEFAULT = listOf(
         ListSource("easylist", "https://easylist.to/easylist/easylist.txt", Category.ADS),
         ListSource("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt", Category.PRIVACY),
-        ListSource("ubo-filters", UBO + "filters.min.txt", Category.ADS),
-        ListSource("ubo-privacy", UBO + "privacy.min.txt", Category.PRIVACY),
+        ListSource("ubo-filters", UBO + "filters.min.txt", Category.ADS, trusted = true),
+        ListSource("ubo-privacy", UBO + "privacy.min.txt", Category.PRIVACY, trusted = true),
         // AdGuard/uBO "URL Tracking Protection": $removeparam rules for top-level navigations (AA3-3b), ~177 KB, no minified edition exists
-        ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY),
-        ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE),
-        ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS),
+        ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY, trusted = true),
+        ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE, trusted = true),
+        ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS, trusted = true),
         // AW1e: "Quick fixes" - the sites' newest ad / anti-adblock changes (YouTube-style player data, news-site walls), refreshed by uBO every few hours; ~86 KB, a 304 when nothing changed
-        ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS),
+        ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS, trusted = true),
         ListSource("easylist-cookies", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", Category.ANNOYANCE),
     )
+
+    /**
+     * RX3-B2 (research/ADBLOCK_ENGINE.md section 6, research/REVIEW-EXTERNAL-3.md B2): two more lists, on unless the owner switches "Extra tracker lists" off. Never trusted (no `trusted-*` scriptlets).
+     * HaGeZi Light (GPL-3.0): ~2.2 MB, 90k `||host^` rules, mostly cookie-sync and tracker hosts. AdGuard Tracking Protection (GPL-3.0) is taken from its four SOURCE sections in the AdguardFilters repository
+     * (~560 KB together): the composite file at filters.adtidy.org is 15 MB (it carries the cosmetic and scriptlet parts too), more than [FilterUpdater]'s 14 MB cap and far too much for the hotspot and the tablet.
+     * All six come from raw.githubusercontent.com, so one TLS connection serves them. Measured with the real files (2026-11-14): 111,988 -> 210,598 network rules, canaries unchanged.
+     */
+    private const val RAW_ADGUARD = "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/SpywareFilter/sections/"
+    val EXTRA = listOf(
+        ListSource("hagezi-light", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/light.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-servers", RAW_ADGUARD + "tracking_servers.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-firstparty", RAW_ADGUARD + "tracking_servers_firstparty.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-general", RAW_ADGUARD + "general_url.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-specific", RAW_ADGUARD + "specific.txt", Category.PRIVACY),
+    )
+
+    /** What the daily update fetches and compiles: the standard lists, and the extra tracker lists when the owner has them on. */
+    fun active(extraTrackerLists: Boolean): List<ListSource> = if (extraTrackerLists) DEFAULT + EXTRA else DEFAULT
 }
 
 sealed class FetchResult {
@@ -129,14 +155,14 @@ object FilterUpdater {
     fun run(
         ctx: Context,
         manual: Boolean,
-        sources: List<ListSource> = FilterSources.DEFAULT,
+        sources: List<ListSource>? = null,                         // null = what the owner's switches say ([FilterSources.active])
         fetcher: Fetcher = HttpFetcher(),
         online: () -> Boolean = { isOnline(ctx) },
         metered: () -> Boolean = { isMetered(ctx) },
     ): Result = synchronized(lock) {
         cancelled = false
         val prefs = Prefs.get(ctx)
-        val result = try { runLocked(ctx, prefs, manual, sources, fetcher, online, metered) } catch (t: Throwable) {
+        val result = try { runLocked(ctx, prefs, manual, sources ?: FilterSources.active(prefs.extraTrackerLists), fetcher, online, metered) } catch (t: Throwable) {
             Log.w(Io.TAG, "filter update crashed", t)
             Result.Failed("Update failed: ${t.javaClass.simpleName}")
         }
@@ -185,6 +211,11 @@ object FilterUpdater {
         // (every list answers 304). The marker survives until a compiled set was actually installed.
         val pending = File(srcDir, "needs-compile")
         if (changed > 0) pending.writeText("1")
+        // RX3-B2: the set of lists that went into the installed compile; a different set (the owner switched the extra tracker lists) needs a compile even when every list answers 304
+        val setFile = File(dir, "sources.txt")
+        val setNow = sources.map { it.id }.sorted().joinToString(",")
+        val setBefore = setFile.takeIf { it.isFile }?.readText()?.trim() ?: FilterSources.DEFAULT.map { it.id }.sorted().joinToString(",")   // an install from before this file existed had the standard lists
+        if (compiled.isFile && setBefore != setNow) pending.writeText("1")
         if (changed == 0 && compiled.isFile && !pending.exists()) {
             return if (failures.isEmpty()) Result.Unchanged("Up to date ($summary)") else Result.Failed("Some lists could not be checked: ${failures.joinToString("; ")}")
         }
@@ -196,14 +227,16 @@ object FilterUpdater {
         // ---- compile from the cached sources and install atomically
         val builder = FilterSetBuilder()
         try {
-            for (s in sources) File(srcDir, s.id + ".txt").bufferedReader(Charsets.UTF_8).use { r -> builder.addAbpList(s.id, s.category, r.lineSequence()) }
+            for (s in sources) File(srcDir, s.id + ".txt").bufferedReader(Charsets.UTF_8).use { r -> builder.addAbpList(s.id, s.category, r.lineSequence(), s.trusted) }
         } catch (oom: OutOfMemoryError) {
             return Result.Failed("Not enough memory to build the lists; kept the current ones")
         }
         val fs = builder.build()
         val active = Engine.peek()
         val previous = active?.meta?.totalNetwork ?: 0
-        if (!sane(fs, previous)) return Result.Failed("The new lists looked incomplete (${fs.meta.totalNetwork} rules); kept the current ones")
+        // a deliberately different set of lists (the owner switched the extra tracker lists off) is smaller on purpose: only the absolute minimum is checked then
+        val deliberate = setBefore != setNow
+        if (!sane(fs, if (deliberate) 0 else previous)) return Result.Failed("The new lists looked incomplete (${fs.meta.totalNetwork} rules); kept the current ones")
         Canaries.problem(active, fs)?.let { return Result.Failed("The new lists were rejected ($it); kept the current ones") }
         val data = FilterSetCodec.write(fs)
         FilterSetCodec.read(data) // must round-trip, or it never ships
@@ -211,6 +244,8 @@ object FilterUpdater {
         tmp.writeBytes(data)
         if (!tmp.renameTo(compiled)) { compiled.delete(); tmp.renameTo(compiled) }
         pending.delete()
+        try { setFile.writeText(setNow) } catch (e: Exception) { /* the next run compiles again: harmless */ }
+        ScriptletSummary.write(ctx, builder.report.scriptletSummary()) // RX3-Y1: what this compile did with the scriptlet lines, for Diagnostics
         Engine.swap(fs, "updated list")
         return Result.Updated("Updated: $summary, ${"%,d".format(fs.meta.totalNetwork)} network rules")
     }

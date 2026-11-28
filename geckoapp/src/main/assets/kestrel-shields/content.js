@@ -193,13 +193,51 @@
       } catch (x) { /* ignore */ }
       return '';
     }
+    // RX3-V1 (research/FINDER_LAB.md section 1): what this element is FOR. Facts only, as small whole numbers; the app decides (core VideoRoleRules). muted 1, loop 2, autoplay 4, controls 8, visible 16, ad 32.
+    // controls = the attribute OR a known player's own control bar around the element; ad = an ancestor (8 levels, never body) whose class or id holds ad / ads / advert / advertisement / adslot as a WHOLE word
+    // (split at every character that is not a letter or digit: ad-container, banner-ad, adslot-3, jw-flag-ads, vjs-ad-playing, ima-ad-container, plyr__ads, ad-showing; not address, headline, download, shadow).
+    var OWN_CONTROLS = ['jwplayer', 'video-js', 'plyr', 'mejs__container', 'flowplayer', 'shaka-video-container', 'html5-video-player', 'fp-player'];
+    var AD_WORDS = { ad: 1, ads: 1, advert: 1, advertisement: 1, adslot: 1 };
+    function hasAdWord(s) {
+      if (!s || typeof s !== 'string') return false;
+      var t = s.toLowerCase().split(/[^a-z0-9]+/);
+      for (var i = 0; i < t.length; i++) if (AD_WORDS[t[i]] === 1) return true;
+      return false;
+    }
+    function factsOf(v) {
+      var f = 0, controls = !!v.controls, ad = false;
+      try {
+        if (v.muted) f |= 1;
+        if (v.loop) f |= 2;
+        if (v.autoplay) f |= 4;
+        var n = v.parentNode, i = 0;
+        while (n && n.nodeType === 1 && i < 8 && n !== document.body && n !== document.documentElement) {
+          var cl = n.classList;
+          if (cl && !controls) for (var k = 0; k < OWN_CONTROLS.length; k++) if (cl.contains(OWN_CONTROLS[k])) { controls = true; break; }
+          if (!ad) ad = hasAdWord(n.getAttribute('class')) || hasAdWord(n.id);
+          n = n.parentNode; i++;
+        }
+        if (controls) f |= 8;
+        if (ad) f |= 32;
+        var r = v.getBoundingClientRect(), rw = Math.round(r.width), rh = Math.round(r.height), vp = 0;
+        var cs = window.getComputedStyle(v);
+        if (rw > 0 && rh > 0 && cs.visibility !== 'hidden' && cs.display !== 'none') f |= 16;
+        if (r.width > 0 && r.height > 0) {
+          var vw = window.innerWidth || document.documentElement.clientWidth || 0, vh = window.innerHeight || document.documentElement.clientHeight || 0;
+          var ix = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)), iy = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+          vp = Math.max(0, Math.min(100, Math.round(100 * ix * iy / (r.width * r.height))));
+        }
+        return { f: f, rw: Math.max(0, Math.min(20000, rw)), rh: Math.max(0, Math.min(20000, rh)), vp: vp };
+      } catch (e) { return { f: f, rw: 0, rh: 0, vp: 0 }; }
+    }
     function report(v) {
       var src = v.currentSrc || v.src || '';
       if (!src || src.indexOf('http') !== 0) return;
       var key = src + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
       if (sent[key]) return;
       sent[key] = true;
-      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href }).catch(function () {});
+      var x = factsOf(v);
+      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
   } catch (e) { /* never break the page */ }
@@ -220,6 +258,50 @@
     }
     window.addEventListener('scroll', function () { if (!timer) timer = setTimeout(report, 300); }, { passive: true });
     window.addEventListener('load', function () { if (!timer) timer = setTimeout(report, 800); }, false);
+    // RX3-BK2: the page is being left (a link, Back, a typed address): its place goes to the app NOW, not 300 ms after the last scroll, so that the next Back knows where the owner left it.
+    window.addEventListener('pagehide', function () { if (timer) { clearTimeout(timer); timer = 0; } report(); }, false);
+  } catch (e) { /* never break the page */ }
+})();
+
+// RX3-BK1 / RX3-BK2 (research/REVIEW-EXTERNAL-3.md section 3; top frame only). Back and Forward: (1) tell the app what kind of show this was (the engine's cache, or loaded again, and what the page's file cost)
+// so the real hit rate is measured (the Back lab); (2) when the engine loaded the page again, ask the app for the place the owner left it at and scroll there if the engine did not get there (pages that change
+// height after the load, pages that restore their own place). Five looks in 3 s, each acts only when the page is more than 4 px off, none once the owner touched the page. One question per page load, a number back.
+(function () {
+  try {
+    if (window.top !== window) return;
+    var touched = false, asked = false, evs = ['touchstart', 'wheel', 'keydown', 'mousedown'], i;
+    function drop() { for (var j = 0; j < evs.length; j++) window.removeEventListener(evs[j], touch, true); }
+    function touch() { touched = true; drop(); }
+    for (i = 0; i < evs.length; i++) window.addEventListener(evs[i], touch, { capture: true, passive: true });
+    function place() { return Math.round(window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0); }
+    function moveTo(y) {
+      try { window.scrollTo({ top: y, left: 0, behavior: 'instant' }); } catch (e) { try { window.scrollTo(0, y); } catch (e2) { /* ignore */ } }
+    }
+    function pull() {
+      if (asked) { drop(); return; }
+      asked = true;
+      browser.runtime.sendMessage({ k: 'bk', p: location.href }).then(function (r) {
+        var y = parseInt(r, 10), at = [0, 250, 700, 1500, 3000], n = 0;
+        if (!(y > 0) || touched) { drop(); return; }
+        (function look() {
+          if (touched) return;
+          var room = (document.documentElement ? document.documentElement.scrollHeight : 0) - window.innerHeight;
+          var lastLook = n === at.length - 1;
+          if (Math.abs(place() - y) > 4 && (room >= y - 4 || lastLook)) moveTo(y);
+          n++;
+          if (n < at.length) setTimeout(look, at[n] - at[n - 1]); else drop();
+        })();
+      }, function () { drop(); });
+    }
+    window.addEventListener('pageshow', function (e) {
+      try {
+        var kept = !!(e && e.persisted), nt = '', ts = 0;
+        try { var nav = performance.getEntriesByType('navigation')[0]; if (nav) { nt = String(nav.type || ''); ts = Math.round(nav.transferSize || 0); } } catch (x) { /* an older engine */ }
+        if (!kept && nt !== 'back_forward') { drop(); return; } // a normal visit: nothing to report, nothing to ask
+        browser.runtime.sendMessage({ k: 'bf', p: location.href, ps: kept ? 1 : 0, nt: nt, ts: kept ? 0 : ts, y: place() }).catch(function () {});
+        if (kept) drop(); else pull();
+      } catch (x) { /* never break the page */ }
+    }, false);
   } catch (e) { /* never break the page */ }
 })();
 
@@ -231,9 +313,110 @@
     var wanted = true, topHost = '';
     function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1|' + topHost : '0' })); } catch (e) { /* ignore */ } }
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
+    // What the page-side guard may REPORT through this event: it refused something. A `tap` (the evidence that lets a jump through) or a `vmenu` arriving through it is never believed: any script of the
+    // page can dispatch the same event itself (RX3-G2). The owner's real taps are recorded below, here in the isolated world, from trusted events only.
+    var KINDS = { open: 1, click: 1, overlay: 1, form: 1, redirect: 1 };
     document.addEventListener(POP, function (e) {
-      try { browser.runtime.sendMessage({ k: 'pop', d: String(e.detail).slice(0, 700), p: location.href }).catch(function () {}); } catch (x) { /* ignore */ }
+      try {
+        var d = String(e.detail).slice(0, 700), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d;
+        if (!Object.prototype.hasOwnProperty.call(KINDS, kind)) return;
+        browser.runtime.sendMessage({ k: 'pop', d: d, p: location.href }).catch(function () {});
+      } catch (x) { /* ignore */ }
     }, true);
+    var lastTapHref = null, lastTapAt = 0;
+    function anchorHref(el) { try { for (var n = el; n && n !== document; n = n.parentNode) if (n.tagName === 'A' && n.href) return String(n.href); } catch (x) { /* ignore */ } return ''; }
+    function realTap(e) {
+      try {
+        if (!e.isTrusted) return; // a script's own click or pointer event is no tap
+        var href = anchorHref(e.target), now = Date.now();
+        if (lastTapHref === href && now - lastTapAt < 700) return; // the pointerup of a tap and the click that follows it are one tap
+        lastTapHref = href; lastTapAt = now;
+        browser.runtime.sendMessage({ k: 'pop', d: 'tap|' + href.slice(0, 600), p: location.href }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }
+    // A tap is the PRIMARY button, up within 500 ms (Android's long press, which opens the menu, starts there) and within 12 px of where it went down: a long press, a right click, a drag and a swipe are no
+    // taps. The click of a mouse or a finger follows the same rule (a keyboard click has no press before it); a page that cancels the click still gets its tap counted through pointerup.
+    var down = { t: 0, x: 0, y: 0 };
+    window.addEventListener('pointerdown', function (e) { if (e.isTrusted) { down.t = Date.now(); down.x = e.clientX; down.y = e.clientY; } }, { capture: true, passive: true });
+    window.addEventListener('click', function (e) {
+      if (e.detail > 0 && down.t && Date.now() - down.t > 500) return;
+      realTap(e);
+    }, true);
+    window.addEventListener('pointerup', function (e) {
+      if (!e.isTrusted || e.button !== 0 || !down.t) return;
+      if (Date.now() - down.t > 500 || Math.abs(e.clientX - down.x) > 12 || Math.abs(e.clientY - down.y) > 12) return;
+      realTap(e);
+    }, { capture: true, passive: true });
+
+    // RX3-G3: the assist of a player inside a FRAME (the guard's one-press-plays help). The guard in the page says "go" with no parameters; THIS script decides, from the owner's own trusted press (recorded
+    // above): the press must be fresh (2 s), the frame and the place are worked out from THAT press, never from the event, and at most five per press. The background page relays to the frame
+    // (tabs.sendMessage: a channel a web page cannot reach) and the frame's own copy of this script plays its video or presses through (below). Same-frame help stays in the guard.
+    var ASSIST = '__kst_assist_v1', assistN = 0, assistFor = 0;
+    document.addEventListener(ASSIST, function () {
+      try {
+        if (!wanted || !down.t || Date.now() - down.t > 2000) return;
+        if (assistFor !== down.t) { assistFor = down.t; assistN = 0; }
+        if (assistN >= 5) return;
+        var list = document.elementsFromPoint ? document.elementsFromPoint(down.x, down.y) : [], f = null, i;
+        for (i = 0; i < list.length && i < 14 && !f; i++) if (list[i].tagName === 'IFRAME') { var r = list[i].getBoundingClientRect(); if (r.width >= 120 && r.height >= 80) f = list[i]; }
+        if (!f) return;
+        assistN++;
+        var rr = f.getBoundingClientRect();
+        browser.runtime.sendMessage({ k: 'assist', x: Math.round(down.x - rr.left), y: Math.round(down.y - rr.top), s: String(f.src || '').slice(0, 600) }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
+
+    // the frame's own part: the extension asks (only the background page can) to play the frame's video, or to press at a place when the player has no video yet. Never on a link or a form control.
+    function playingNow() {
+      try { var l = document.getElementsByTagName('video'); for (var i = 0; i < l.length; i++) { var v = l[i]; if (!v.paused && !v.ended && v.readyState > 2 && v.currentTime > 0) return true; } } catch (e) { /* ignore */ }
+      return false;
+    }
+    function hasSource(v) { try { return !!(v.currentSrc || v.getAttribute('src') || v.srcObject || (v.querySelector && v.querySelector('source[src]'))); } catch (e) { return false; } }
+    function bestVideo() {
+      var best = null, area = 0;
+      try {
+        var l = document.getElementsByTagName('video');
+        for (var i = 0; i < l.length; i++) {
+          var r = l[i].getBoundingClientRect();
+          var w = Math.min(r.right, innerWidth) - Math.max(r.left, 0), h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+          if (w >= 120 && h >= 80 && w * h > area) { area = w * h; best = l[i]; }
+        }
+      } catch (e) { /* ignore */ }
+      return best;
+    }
+    function startMedia(v) {
+      try {
+        var p = v.play();
+        // a frame that was not pressed itself may be refused sound: start it muted rather than not at all
+        if (p && p.catch) p.catch(function () { try { v.muted = true; var q = v.play(); if (q && q.catch) q.catch(function () { /* ignore */ }); } catch (e) { /* ignore */ } });
+      } catch (e) { /* ignore */ }
+    }
+    function pressThrough(x, y) {
+      try {
+        var el = document.elementFromPoint(x, y);
+        if (!el || el === document.body || el === document.documentElement) return;
+        for (var n = el; n && n !== document; n = n.parentNode) { if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA|LABEL|OPTION|FORM|SUMMARY)$/.test(n.tagName) || n.isContentEditable) return; }
+        var init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, buttons: 1 };
+        var seq = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+        for (var i = 0; i < seq.length; i++) {
+          var type = seq[i];
+          el.dispatchEvent((type.indexOf('pointer') === 0 && window.PointerEvent) ? new PointerEvent(type, init) : new MouseEvent(type, init));
+        }
+      } catch (e) { /* ignore */ }
+    }
+    browser.runtime.onMessage.addListener(function (m) {
+      try {
+        if (!m || m.k !== 'assist' || window.top === window || !wanted) return undefined;
+        var x = Math.round(m.x), y = Math.round(m.y);
+        if (!(x >= 0 && y >= 0 && x < 10000 && y < 10000)) return undefined; // not a number: the comparison fails
+        if (playingNow()) return undefined;
+        var v = bestVideo();
+        if (v && !hasSource(v)) v = null; // a player that only builds its video after the first press: that press has to go through instead
+        if (v) { if (v.paused && !v.ended) startMedia(v); return undefined; }
+        pressThrough(x, y);
+      } catch (e) { /* ignore */ }
+      return undefined;
+    });
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();

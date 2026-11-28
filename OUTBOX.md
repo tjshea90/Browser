@@ -2025,3 +2025,57 @@
 >
 > A new session starts with `bash tools/resume.sh`, then reads `CHECKPOINT.md` "Do this next".
 <!-- sha:cb3448a4dc9d -->
+
+## 2026-11-14T22:01:34Z
+> **Kestrel G alpha41 is built and published.** GitHub's tests and builds all passed, and the file is signed with your usual certificate, so it installs over alpha40.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha41
+>
+> **What changed**
+> 1. **Back keeps your place.** Kestrel remembers where you were on each page and puts you back there when you press Back. Pages the engine still has in memory come back instantly, exactly as you left them. Pages it has to reload are shown as a picture of where you were until the real page is at the same spot. Menu > Diagnostics has a new "Back:" line counting how often Back was instant, came from the cache or came from the network.
+> 2. **YouTube ad skipping.** Kestrel mutes and fast-forwards ads, presses "Skip", closes banner ads and removes the "ad blockers aren't allowed" box. It is one switch in Settings, "Skip ads inside video players", **on by default**. The lists' full YouTube rules also run now. Diagnostics shows a "YouTube ads" line, so you can see whether it skipped anything.
+> 3. **Safer lists.** Only the uBlock lists may rewrite a page's contents. The other lists can't.
+> 4. **Tap forging is blocked.** A page can no longer fake your tap or click inside frames it embeds.
+> 5. **The pop-up guard is there from the first page.** That includes the first page after a cold start.
+>
+> **What I tested, and what I didn't**
+> - **Emulator (real Firefox engine):** Back returned to the same place with kept, reloaded and re-fetched pages. The pop-up guard was present from the first page. The tap-through into a frame to start its video worked.
+> - **Test browsers:** the tap-forging block, the list rewrites and the ad skipper (on a mock player built from YouTube's real page markup). The lists' YouTube rules ran cleanly on the real m.youtube.com and www.youtube.com, and the videos played.
+> - **Not run on your tablet at all.** Speed and timings are unknown. The ad skipper has never seen a real YouTube ad, because my test browser gets none when signed out. Its button names are the long-standing public ones, but unconfirmed.
+>
+> **YouTube screenshot you sent:** the "Video unavailable, not available on your mobile browser" page was YouTube's own refusal. It was a Movies & TV "preview only" listing. Plain Chrome gets the same refusal, so Kestrel wasn't blocking it. If you meant something else by it, tell me.
+>
+> **Still waiting on you**
+> 1. **Back for "no copy" pages (yes/no).** Banks, mail and some shops tell the browser not to keep a copy, so Back has to ask the site again, which is slow on the hotspot. I can make Back instant on sites you pick, but then a copy of those pages stays on the tablet. Do you want that, and for which sites?
+> 2. **Separate keyboard app (yes/no).** Do you want the keyboard as a system keyboard app for all your apps?
+> 3. **Tablet feedback.** How do the long press and slide from alpha40 feel? Does Back keep your place, and does YouTube skip ads, in alpha41?
+>
+> **Next:** skipping ads in other video players, then cleaning false videos out of the download list.
+<!-- sha:c339a938d337 -->
+
+## 2026-11-14T23:23:52Z
+> **Kestrel G alpha42 is built and published.** GitHub's tests and builds all passed. It's signed with your usual certificate, so it installs over alpha41.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha42
+>
+> **What changed**
+> 1. **Ad skipping now works in other video players too**, not only YouTube. It covers JW Player, Video.js, Plyr and the Google ad players that many sites use. It uses the same Settings switch, "Skip ads inside video players". Diagnostics has its own new line, "Other players' ads".
+> 2. **The download list stops counting things that aren't videos.**
+>    - Hover previews, silent looping banner videos, thumbnail-sized videos and ads no longer count toward the download badge.
+>    - They stay in the list under "Other files on this page", and a long press on one still brings it up.
+>    - A link to a video file that you can't see playing only counts once Kestrel has asked the site how big the file is. That is one tiny question for up to three links, and only on pages with no confirmed video.
+>
+> **A fix you should know about:** in alpha41 the Diagnostics line "YouTube ads" could stay at "none seen yet" even when ads were skipped. The numbers were being dropped, mostly on the first page after starting the app. The emulator test found it and alpha42 fixes it. The skipping itself was not affected.
+>
+> **What I tested, and what I didn't**
+> - **Emulator (real Firefox engine):** five test players. Ads from the other players ran about 12 times faster (about 1 second instead of 12) and their skip button was pressed. A test page full of ads and previews ended up with 1 real video counted out of 4. Two links to video files ended up with 1 counted out of 2.
+> - **Test browsers:** all the rules and the player class names (I read those from the players' own public source code), plus the full test suites.
+> - **Not run on your tablet at all, and no real ad from a real site was available to me.** The new Diagnostics lines will show what actually happens.
+>
+> **Still waiting on you**
+> 1. **Back for "no copy" pages (yes/no).** Banks, mail and some shops tell the browser not to keep a copy, so Back has to ask the site again. I can make Back instant on sites you pick, but then a copy of those pages stays on the tablet. Do you want that, and for which sites?
+> 2. **Separate keyboard app (yes/no).** Do you want the keyboard as a system keyboard app for all your apps?
+> 3. **Tablet feedback.** How do the long press and slide from alpha40 feel? Does Back keep your place, and do ads get skipped, in alpha41 and alpha42?
+>
+> **Next:** leaving advertising out of downloaded video streams before it is fetched. The first part is written and tested here, but it isn't in alpha42.
+<!-- sha:c703eeb60dc6 -->

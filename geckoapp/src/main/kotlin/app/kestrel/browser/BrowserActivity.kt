@@ -73,6 +73,8 @@ import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.update.UpdateNotifier
 import app.kestrel.browser.ui.LastLook
 import app.kestrel.browser.ui.ThumbStore
+import app.kestrel.core.session.BackLab
+import app.kestrel.core.session.BackScrollRules
 import app.kestrel.core.session.LastLookMeta
 import app.kestrel.core.session.LastLookRules
 import app.kestrel.browser.ui.BottomDock
@@ -117,6 +119,8 @@ import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.SlowScriptResponse
 import org.mozilla.geckoview.StorageController
 import java.io.File
+
+private typealias PopupVerdict = app.kestrel.core.guard.PopupGuard.Verdict
 
 /**
  * The browser window: owns the tab list, swaps what is shown (new-tab page / WebView / error screen), and implements everything the
@@ -380,7 +384,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f -> video.info(p, u, w, h, d, l, f) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -920,6 +924,7 @@ open class BrowserActivity : Activity(), DockListener {
         s.promptDelegate = d
         s.permissionDelegate = d
         s.contentBlockingDelegate = d
+        s.setMediaSessionDelegate(d)   // RX3-S1: whether the page's video plays
         // AU3: the mini keyboard types into the page's own text field: this wrapper keeps the system keyboard down while the mini one is up and tells the panel when a field gains or loses focus
         val input = PageFieldInput(s, s.textInput.delegate, held = { ::miniNav.isInitialized && miniNav.keyboardShowing }, changed = { Io.main.post { if (::miniNav.isInitialized) miniNav.pageFieldChanged() } })
         s.textInput.setDelegate(input) // (a setter and getter of different nullability: Kotlin has no property for it)
@@ -987,7 +992,7 @@ open class BrowserActivity : Activity(), DockListener {
     // Most Back presses are answered by the engine's own back/forward cache and are instant. A page that forbids caching (webmail, banking, anything with Cache-Control: no-store) or one the
     // cache no longer holds is LOADED again; until it paints, a recent picture of it covers the page area. The picture is taken at the moment the page is left (as the owner last saw it).
     private var lastLeaveShotAt = 0L
-    private class BackArm(val tab: Tab, val fromUrl: String, val picture: android.graphics.Bitmap)
+    private class BackArm(val tab: Tab, val fromUrl: String, val picture: android.graphics.Bitmap, val savedY: Int)
     private var backTarget: BackArm? = null
     private var backBusyUntil = 0L
     private val backPictureShow = Runnable {
@@ -999,7 +1004,8 @@ open class BrowserActivity : Activity(), DockListener {
         val stillThere = BackPictures.keyOf(t.url) == BackPictures.keyOf(b.fromUrl)
         if (t !== current || t.error != null || t.showHome || restoringTab != null || !stillThere) { Health.log("tabs", "back-picture-skipped", "same-page=$stillThere cover=${restoringTab != null}"); return@Runnable }
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
-        showRestoring(t, false, "", b.picture, 0x33) // stays until the page paints, its load ends or an error replaces it (20 s at most): taking it away earlier would show the page the owner just left again
+        showRestoring(t, false, "", b.picture, 0x33) // stays until the page is painted AND back at its place (backCheck, 20 s at most): taking it away earlier would show the page the owner just left, or the top of this one
+        backCover = BackCover(t, b.savedY)
     }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
@@ -1014,15 +1020,20 @@ open class BrowserActivity : Activity(), DockListener {
         if (i !in 0 until st.size) { Health.log("tabs", "back-arm", "index $i of ${st.size}"); return }
         val url = st[i].uri ?: return
         val pic = BackPictures.get(t.id, url)
-        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()}")
+        val savedY = t.scrollByUrl.get(url)
+        val why = if (t.isPrivateTab) "" else backLab.notKeptWhy(url)
+        val notKept = why.isNotEmpty()
+        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=${why.ifEmpty { "no" }}")
         // a second Back within two seconds: the engine's history index has not moved yet, so the page this one leads to is not known from here - show nothing rather than the wrong picture
         val now = SystemClock.uptimeMillis()
         val rapid = now < backBusyUntil
         backBusyUntil = now + 2_000
         if (rapid) { if (restoringTab === t) hideRestoring("second-back"); return }
+        // RX3-BK1: the lab counts the press (never for a private tab). The place itself is answered from the tab's memory when the page asks (backPlaceFor): it does not depend on this press having found its target
+        if (!t.isPrivateTab) { backLab.press(now, url, delta > 0, savedY ?: -1); Io.main.removeCallbacks(backLabClose) }
         if (pic == null) return
-        backTarget = BackArm(t, t.url, pic)
-        Io.main.postDelayed(backPictureShow, 150) // a cache hit is done by then; a page that has to load shows its picture
+        backTarget = BackArm(t, t.url, pic, savedY ?: 0)
+        Io.main.postDelayed(backPictureShow, BackScrollRules.pictureDelayMs(notKept)) // a cache hit is done by then; a page that has to load shows its picture (at once when the engine cannot have kept it)
     }
 
     /** A navigation of the page in front is about to start (called before the engine loads [toUrl]): take its picture now, the way it is on screen, for a later Back. */
@@ -1030,11 +1041,70 @@ open class BrowserActivity : Activity(), DockListener {
         // Not required: that the page has finished loading. What is on screen when the user leaves is what Back should show (a page that is still loading, or keeps loading for ever, is the common case on a slow link).
         if (tab !== current || tab.isNewTab || tab.error != null || tab.showHome || !tab.url.startsWith("http")) { Health.log("tabs", "leave-skip", "loading=${tab.loading}"); return }
         if (BackPictures.keyOf(toUrl) == BackPictures.keyOf(tab.url)) return // a reload or a #fragment: the same page
+        if (!tab.isPrivateTab) backLab.left(tab.url, tab.loading, tab.media.hasStream()) // RX3-BK2: whether the engine can have kept the page that is being left (still loading, a stream player, no-store)
         val now = SystemClock.uptimeMillis()
         if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
         lastLeaveShotAt = now
         Health.log("tabs", "leave-shot", "tab=${tab.id} from=${UrlParts.hostOf(tab.url)}")
         captureThumb(tab, forBack = true)
+    }
+
+    // ---------------------------------------------------------------- RX3-Y2: the YouTube ad skipper's numbers (youtube.js reports differences; never an address; private tabs are dropped before)
+    private val adSkipStats = app.kestrel.core.media.AdSkipStats()
+    /** RX3-G7: the same numbers from the script for video players other than YouTube (players.js sends w = "p"). */
+    private val playerSkipStats = app.kestrel.core.media.AdSkipStats("Other players' ads")
+    private fun onAdSkips(m: org.json.JSONObject) {
+        val others = m.optString("w") == "p"
+        (if (others) playerSkipStats else adSkipStats).add(m.optInt("a"), m.optInt("s"), m.optInt("c"), m.optInt("o"), m.optInt("d"), m.optInt("f"), m.optInt("g"), m.optString("r"))
+        val tag = if (others) "playerads" else "ytads"
+        Health.count("$tag.reports")
+        Health.log(tag, "report", "ads=${m.optInt("a")} skipped=${m.optInt("s")} buttons=${m.optInt("c")} overlays=${m.optInt("o")} dialogs=${m.optInt("d")} jumps=${m.optInt("f")} gaveUp=${m.optInt("g")} ${m.optString("r")}".trim())
+    }
+
+    // ---------------------------------------------------------------- RX3-BK1 / RX3-BK2: Back keeps the place (research/REVIEW-EXTERNAL-3.md section 3, research/BACK_SCROLL.md)
+    /** What every Back / Forward press turned out to be (kept by the engine, loaded again from the cache or the network, time to the first paint, whether the place was reached). UI thread; never fed from a private tab. */
+    private val backLab = BackLab { Health.log("back", "press", it) }
+    private class BackCover(val tab: Tab, val savedY: Int) { var paintAt = 0L }
+    private var backCover: BackCover? = null
+    private val backCheckTick = Runnable { backCheck("tick") }
+    private val backLabClose = Runnable { backLab.finish(SystemClock.uptimeMillis()) }
+
+    /** The back picture is up and the page painted: it goes once the page is at the place it was left at (1.5 s after the paint at the latest). */
+    private fun backPainted(why: String = "paint") {
+        val c = backCover ?: return
+        if (c.paintAt == 0L) c.paintAt = SystemClock.uptimeMillis()
+        backCheck(why)
+    }
+
+    private fun backCheck(why: String) {
+        val c = backCover ?: return
+        val painted = c.paintAt != 0L
+        val since = if (painted) SystemClock.uptimeMillis() - c.paintAt else 0L
+        if (BackScrollRules.coverGoes(painted, c.savedY, c.tab.scrollY, since)) { hideRestoring("back-$why y=${c.tab.scrollY}/${c.savedY} after=${since}ms"); return }
+        if (painted) { Io.main.removeCallbacks(backCheckTick); Io.main.postDelayed(backCheckTick, maxOf(50L, LastLookRules.AFTER_PAINT_MS - since)) } // the engine may paint before it has scrolled: look again at the latest 1500 ms after the paint
+    }
+
+    /**
+     * A page the engine loaded again for a history move (its content script asks only then) asks where the owner left it (worker thread): the place this tab's memory holds for the page's own address, as text,
+     * or "" when it holds none (then the engine's own place stands). It does not depend on the app's copy of the engine's history, which can lag behind a quick Back.
+     */
+    private fun backPlaceFor(page: String): String {
+        var y = -1
+        try { for (t in tabs.toTypedArray()) { val p = t.scrollByUrl.get(page) ?: -1; if (p > 0) { y = p; break } } } catch (e: Exception) { /* the list changed under us: no answer, the engine's own place stands */ }
+        if (y > 0) Health.count("back.pull")
+        return if (y > 0) y.toString() else ""
+    }
+
+    /** The engine committed [url] in the tab (UI thread): the first sighting of the target's address after a press is the lab's "address showed" time. */
+    internal fun backLocated(url: String) { if (backLab.openKey() == BackScrollRules.keyOf(url)) backLab.located(SystemClock.uptimeMillis()) }
+
+    /** The content script of the page in front reported a Back / Forward show (UI thread). */
+    private fun onBackShown(page: String, kept: Boolean, navType: String, transfer: Long, y: Int) {
+        // the engine's cache restored the page: it is up and at its exact place, and a picture put up for it (the guess "cannot have been kept" was wrong) goes at once. A kept page has no first paint to wait for
+        if (kept) backCover?.let { c -> if (BackScrollRules.keyOf(c.tab.url) == BackScrollRules.keyOf(page)) hideRestoring("back-kept") }
+        if (backLab.openKey() != BackScrollRules.keyOf(page)) return
+        backLab.pageshow(SystemClock.uptimeMillis(), page, kept, navType, transfer, y)
+        Io.main.removeCallbacks(backLabClose); Io.main.postDelayed(backLabClose, BackLab.CLOSE_AFTER_MS)
     }
 
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
@@ -1749,6 +1819,11 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
+        out.add(backLab.stats.line())
+        out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
+        out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
+        out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
+        Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
@@ -2037,8 +2112,10 @@ open class BrowserActivity : Activity(), DockListener {
         if (t?.loading != true) loadSeen = null
         else if (loadSeen !== t) { loadSeen = t; loadSeenAt = now; Io.main.postDelayed({ updateNeonBusy() }, 3100) }
         val heavyLoad = t?.loading == true && now - loadSeenAt < 3000
-        Neon.busy(heavyLoad || kbTopScreen > 0 || keyboardComing)
+        Neon.busy(app.kestrel.core.session.NeonRules.busy(heavyLoad, kbTopScreen > 0, keyboardComing, t?.gecko?.videoPlaying == true))   // RX3-S1: a playing video holds the glow still too
     }
+    /** RX3-S1: the page's video started or stopped; only the tab in front matters for the glow. UI thread (the engine's delegates run there). */
+    internal fun videoStateChanged(tab: Tab) { Health.log("neon", "video", "playing=${tab.gecko.videoPlaying} front=${tab === current}"); if (tab === current) updateNeonBusy() }
     private var loadSeen: Tab? = null
     private var loadSeenAt = 0L
 
@@ -2088,29 +2165,52 @@ open class BrowserActivity : Activity(), DockListener {
         val to = UrlParts.hostOf(uri)
         if (!prefs.blockPopups || from == null || to == null || !Shields.effective(prefs, from).shieldsUp) return app.kestrel.core.guard.JumpGuard.Verdict.ALLOW
         val now = SystemClock.uptimeMillis()
-        return app.kestrel.core.guard.JumpGuard.decide(
-            crossSite = !app.kestrel.core.filter.Psl.default.isSameSite(from, to),
+        val cross = !app.kestrel.core.filter.Psl.default.isSameSite(from, to)
+        val listed = cross && listedAdHost(from, to)
+        val v = app.kestrel.core.guard.JumpGuard.decide(
+            crossSite = cross,
             touchAgeMs = now - lastTouchAt,
             tapArrived = tab.lastTapAt >= lastTouchAt - 50,
             tapAgeMs = now - tab.lastTapAt,
             tapHref = tab.lastTapHref,
             uri = uri,
+            adHost = listed,
         )
+        if (cross) Health.log("guard", "jump-judged", "to=$to listed=$listed touchAge=${now - lastTouchAt} ms -> $v")
+        return v
+    }
+
+    /** RX3-G6: is [host] (a destination the page wants to jump to, third-party to [pageHost]) one the block lists name as an ad or tracker host? Host rules only: one hash lookup, no page address, no query. */
+    private fun listedAdHost(pageHost: String, host: String): Boolean {
+        val fs = app.kestrel.browser.shield.Engine.peek() ?: return false
+        return try { app.kestrel.core.filter.Verdict.isBlocked(fs.check("https://$host/", pageHost, app.kestrel.core.filter.RequestType.SCRIPT)) } catch (e: Exception) { false }
     }
 
     /**
-     * A page asks for a NEW window (a link with target=_blank, window.open): true = refuse it. The page-side guard (guard-main.js) already refuses what a script opens without a real tap on that very link; this
-     * is the second wall for what reaches the engine anyway: a window with no tap behind it (the engine's own blocker lets one open for several seconds after any tap) or one that a `$popup` rule names.
+     * A page asks for a NEW window (a link with target=_blank, window.open). The page-side guard (guard-main.js) already refuses what a script opens without a real tap on that very link; this is the second wall
+     * for what reaches the engine anyway (an iframe race, the guard not yet in a frame). RX3-G5: it uses the same evidence ([app.kestrel.core.guard.PopupGuard]): the same site, a sign-in / payment host, or a real
+     * tap on a link to exactly this address; before, ANY window that came within 2.5 s of ANY touch (the play press) was allowed. The verdict is STOP (the caller shows the blocked-window icon and refuses) or WAIT
+     * (the tap report is still on its way through the extension: ask again for at most [app.kestrel.core.guard.PopupGuard.WAIT_MS]). A `$popup` rule of the lists stops it in every case.
      */
-    internal fun refusePopup(tab: Tab, uri: String, hasUserGesture: Boolean): Boolean {
-        if (!prefs.blockPopups) return false
+    internal fun judgePopup(tab: Tab, uri: String): app.kestrel.core.guard.PopupGuard.Verdict {
+        if (!prefs.blockPopups) return PopupVerdict.ALLOW
         val host = tab.topHost
-        if (!Shields.effective(prefs, host).shieldsUp) return false
-        // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
-        if (SystemClock.uptimeMillis() - lastTouchAt > 2500) { onPopupBlocked(tab.url, "open", uri); return true }
+        if (!Shields.effective(prefs, host).shieldsUp) return PopupVerdict.ALLOW
+        val to = UrlParts.hostOf(uri) ?: return PopupVerdict.ALLOW
         val fs = Engine.peek()
-        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) { onPopupBlocked(tab.url, "open", uri); return true }
-        return false
+        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) return PopupVerdict.STOP
+        // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
+        val now = SystemClock.uptimeMillis()
+        return app.kestrel.core.guard.PopupGuard.decide(
+            sameSite = host != null && app.kestrel.core.filter.Psl.default.isSameSite(host, to),
+            touchAgeMs = now - lastTouchAt,
+            tapArrived = tab.lastTapAt >= lastTouchAt - 50,
+            tapAgeMs = now - tab.lastTapAt,
+            tapHref = tab.lastTapHref,
+            uri = uri,
+            authHost = app.kestrel.core.guard.PopupGuard.isAuthHost(to),
+            guardReady = true,   // the guard is declared in the manifest since RX3-G1: it is in every document from its first script; the app has no per-page signal to ask
+        )
     }
 
     internal fun errorChanged(tab: Tab) {
@@ -2121,7 +2221,10 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun pageFinished(tab: Tab, real: Boolean = true) {
         if (tab === current) StartTimeline.mark("stop")
         flushCounters()
-        if (real && tab === restoringTab) hideRestoring("page-stop") // the load ended (a page that never reported its first paint must not keep the preview up)
+        if (real && tab === restoringTab) {
+            // the load ended (a page that never reported its first paint must not keep the preview up). The back cover (RX3-BK2) counts the end of the load as the paint and then still waits for the place: it never goes at the end of the load alone
+            if (tab === backCover?.tab) backPainted("stop") else hideRestoring("page-stop")
+        }
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
@@ -2196,7 +2299,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
-        Io.main.removeCallbacks(restoreTimeout)
+        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); backCover = null
         if (lookTab != null) { Health.count("look.hide"); Health.log("tabs", "look-hide", "tab=${lookTab?.id} why=$why") }
         restoringTab = null
         restoreOverlay.hide()
@@ -2240,9 +2343,13 @@ open class BrowserActivity : Activity(), DockListener {
      * The page (top frame) says where it is scrolled (UI thread; the page sends it 300 ms after its last scroll and once after its load, so a place the engine restored by itself is reported too). While a look is
      * up this is the live page moving to its place; otherwise it arms the "settled" capture (700 ms after the last scroll in all).
      */
-    private fun lookScrolled(tab: Tab, y: Int) {
+    private fun lookScrolled(tab: Tab, y: Int, page: String) {
+        tab.scrollByUrl.put(page, y) // RX3-BK2: where the owner is on this page. The key is the report's OWN address, so a late report of the page that was just left never lands on the next page
+        if (!LastLookRules.samePage(page, tab.url)) return // a late report of another page: not the place of the page in front
         tab.scrollY = y
+        if (backLab.openKey() == BackScrollRules.keyOf(page)) backLab.scrolled(SystemClock.uptimeMillis(), y) // RX3-BK1
         if (tab !== current) return
+        if (backCover?.tab === tab) { backCheck("scroll"); return }
         if (lookTab === tab) { lookCheck("scroll"); return }
         if (!prefs.lastLook) return
         lookScrollAt = SystemClock.uptimeMillis() - LastLookRules.PAGE_DEBOUNCE_MS
@@ -2282,7 +2389,8 @@ open class BrowserActivity : Activity(), DockListener {
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
         if (tab === current) StartTimeline.mark("paint")
-        if (tab === restoringTab) { if (tab === lookTab) lookPainted() else hideRestoring("first-paint") }
+        if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
+        if (tab === restoringTab) { if (tab === lookTab) lookPainted() else if (tab === backCover?.tab) backPainted() else hideRestoring("first-paint") }
     }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)

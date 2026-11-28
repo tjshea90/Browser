@@ -154,9 +154,9 @@ object SeedLists {
     @JvmStatic
     fun build(): FilterSet {
         val b = FilterSetBuilder()
-        b.addAbpList("kestrel-seed-ads", Category.ADS, ADS.lineSequence())
-        b.addAbpList("kestrel-seed-trackers", Category.PRIVACY, TRACKERS.lineSequence())
-        b.addAbpList("kestrel-seed-cosmetic", Category.ADS, COSMETIC.lineSequence())
+        b.addAbpList("kestrel-seed-ads", Category.ADS, ADS.lineSequence(), trusted = true)
+        b.addAbpList("kestrel-seed-trackers", Category.PRIVACY, TRACKERS.lineSequence(), trusted = true)
+        b.addAbpList("kestrel-seed-cosmetic", Category.ADS, COSMETIC.lineSequence(), trusted = true)
         return b.build(0L)
     }
 }
