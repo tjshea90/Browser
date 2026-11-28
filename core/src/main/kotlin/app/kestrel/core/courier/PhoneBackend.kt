@@ -119,7 +119,7 @@ class PhoneBackend(
     /** Takes a download over if the phone should do it: returns the row's id, or null (the caller then downloads it on the tablet). */
     fun offload(src: Source): Long? {
         val mode = modeOf()
-        if (mode == PhoneMode.OFF || src.priv || src.destKind != DEST_PUBLIC) return null
+        if (mode == PhoneMode.OFF || src.priv || src.destKind != DEST_PUBLIC || src.fetcher == FETCHER_ONE_SHOT) return null // PDL1: a file the page makes itself exists only in this tablet's engine
         val u = try { URL(src.url) } catch (e: Exception) { return null }
         if (u.protocol != "http" && u.protocol != "https") return null
         if (clientFor() == null) return null

@@ -341,6 +341,11 @@ object DownloadController {
     private fun isStream(id: Long) = streams?.owns(id) == true
 
     /** The downloads the user sees (the Downloads screen, "Delete old installers"): not the app's own update file. */
+    /** PDL1: a download is being saved from the browser engine's own stream (a page is feeding it): the tab of that page must not be put to sleep. */
+    fun handedRunning(): Boolean = engine?.handedRunning() ?: false
+    /** PDL1: the phone took this download over, so the engine's own stream of it is not needed. */
+    fun isPhoneRow(id: Long): Boolean = isPhone(id)
+
     fun views(): List<DownloadView> = allViews().filter { it.kind != DEST_APP_PRIVATE }
     /** Everything the engines hold, update downloads included (the service notification, the updater). */
     fun allViews(): List<DownloadView> {
